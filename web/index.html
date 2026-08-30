@@ -56,10 +56,10 @@
   <!-- 菜单面板：HTML/CSS 重建，不是截图。尺寸与色值取自应用的 Design
        token；width / background 是内联的读数（数据，不是样式），这样
        JS 没跑时也是正确的最终状态，JS 只负责从 0 动到这个值。 -->
-  <div class="qb qb-panel desktop__panel" role="img"
-       aria-label="QuotaBar 菜单面板：Codex 的 7 天窗口已用 36%，5 天 16 小时后重置">
+  <div class="qb qb-panel desktop__panel" role="group"
+       aria-label="QuotaBar 菜单面板">
     <div class="qb-grid">
-      <div class="qb-tile">
+      <button class="qb-tile" type="button" data-id="overview" aria-pressed="false">
         <span class="qb-tile__glyph" aria-hidden="true">
           <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
             <rect x="1" y="1" width="6" height="6" rx="1.6"/><rect x="9" y="1" width="6" height="6" rx="1.6"/>
@@ -68,26 +68,27 @@
         </span>
         总览
         <span class="qb-tile__meter"><span class="qb-tile__fill" style="width:86%;background:#E6361C"></span></span>
-      </div>
-      <div class="qb-tile is-on" data-used="36">
+      </button>
+      <button class="qb-tile is-on" type="button" data-id="codex" aria-pressed="true" data-used="36">
         <img src="assets/logos/codex.png?v=1" alt="">
         Codex
         <span class="qb-tile__meter"><span class="qb-tile__fill" style="width:36%;background:#34C759"></span></span>
-      </div>
-      <div class="qb-tile" data-used="58">
+      </button>
+      <button class="qb-tile" type="button" data-id="claude" aria-pressed="false" data-used="58">
         <img src="assets/logos/claude.png?v=1" alt="">
         Claude
         <span class="qb-tile__meter"><span class="qb-tile__fill" style="width:58%;background:#6EC02F"></span></span>
-      </div>
-      <div class="qb-tile" data-used="86">
+      </button>
+      <button class="qb-tile" type="button" data-id="cursor" aria-pressed="false" data-used="86">
         <img src="assets/logos/cursor.png?v=1" alt="">
         Cursor
         <span class="qb-tile__meter"><span class="qb-tile__fill" style="width:86%;background:#E6361C"></span></span>
-      </div>
+      </button>
     </div>
 
     <div class="qb-sep"></div>
 
+    <div class="qb-detail" id="qbDetail">
     <div class="qb-head">
       <img src="assets/logos/codex.png?v=1" alt="">
       <span class="qb-head__name">Codex</span>
@@ -138,6 +139,10 @@
     <div class="qb-note">更新于 刚刚</div>
 
     <div class="qb-sep"></div>
+
+    </div>
+
+    <span class="qb-hint" id="qbHint">点上面的图标切换服务商</span>
 
     <div class="qb-foot">
       每 1 分钟刷新

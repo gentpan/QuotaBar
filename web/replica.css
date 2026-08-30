@@ -23,6 +23,7 @@
 
 /* ── 菜单面板 ─────────────────────────────────────────────────────── */
 .qb-panel {
+  position: relative;   /* 供「点一下试试」的提示定位 */
   width: 380px;
   padding: 12px;                 /* Design.space3 */
   background: var(--qb-bg);
@@ -173,3 +174,55 @@
   }
   .qb-foot__icons svg:first-child { animation: none !important; }
 }
+
+/* ── 切换服务商 ───────────────────────────────────────────────────── */
+.qb-tile {
+  border: 0;
+  cursor: pointer;
+  font: inherit;
+  transition: background-color 160ms ease-out, color 160ms ease-out;
+}
+.qb-tile:hover:not(.is-on) { background: var(--qb-surface-2); }
+.qb-tile:focus-visible { outline: 2px solid #0a84ff; outline-offset: 2px; }
+
+/* 详情区在切换时淡出、换内容、再淡入；高度也跟着走，因为不同服务商的
+   窗口数不同 —— 这正是应用本身的行为（面板按内容定高，不是钉死的）。 */
+.qb-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  overflow: hidden;
+  transition: height 340ms cubic-bezier(.2, .8, .25, 1),
+              opacity 170ms ease-out,
+              transform 170ms ease-out;
+}
+.qb-detail.is-swapping { opacity: 0; transform: translateY(6px); }
+
+/* 「点一下试试」的提示，交互一次后消失 */
+.qb-hint {
+  position: absolute;
+  left: 50%;
+  bottom: -26px;
+  transform: translateX(-50%);
+  white-space: nowrap;
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.55);
+  transition: opacity 300ms ease-out;
+}
+.qb-hint.is-gone { opacity: 0; }
+
+@media (prefers-reduced-motion: reduce) {
+  .qb-detail { transition: none !important; }
+  .qb-detail.is-swapping { opacity: 1; transform: none; }
+}
+
+/* 总览：每行一个服务商 */
+.qb-ovrow {
+  display: grid;
+  grid-template-columns: 22px 1fr auto;
+  align-items: center;
+  gap: 4px 10px;
+}
+.qb-ovrow img { width: 20px; height: 20px; object-fit: contain; }
+.qb-ovrow__name { font-size: 14px; font-weight: 500; }
+.qb-ovrow .qb-bar { grid-column: 1 / -1; margin-top: 2px; }
