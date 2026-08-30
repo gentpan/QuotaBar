@@ -23,7 +23,9 @@
 
 /* ── 菜单面板 ─────────────────────────────────────────────────────── */
 .qb-panel {
-  position: relative;   /* 供「点一下试试」的提示定位 */
+  /* 不要在这里写 position —— hero 里 .desktop__panel 已经是 absolute，而它
+     本身就是后代绝对定位的包含块。在这里加 relative 会因为 replica.css 后
+     加载、特异度又相同而盖掉它，面板会掉回文档流。 */
   width: 380px;
   padding: 12px;                 /* Design.space3 */
   background: var(--qb-bg);
@@ -226,3 +228,67 @@
 .qb-ovrow img { width: 20px; height: 20px; object-fit: contain; }
 .qb-ovrow__name { font-size: 14px; font-weight: 500; }
 .qb-ovrow .qb-bar { grid-column: 1 / -1; margin-top: 2px; }
+
+/* ── 停靠条的悬停卡片 ─────────────────────────────────────────────────
+ * 规格直接抄自 Sources/QuotaBar/ProviderRing.swift 的 ProviderCallout：
+ * 260pt 宽、12pt 内边距、12pt 圆角（radiusCard + 2）、纯黑底、行距 12，
+ * 每行是「标题 + 重置时间」一行、5pt 表条、「已用 NN%」一行。
+ * 它在应用里是独立面板，永远贴在条子左侧 8pt 处。
+ */
+/* 这里刻意不写 position —— hero 里 .desktop__strip 已经是 absolute，本身就是
+   后代绝对定位的包含块；在这里加 relative 会因为 replica.css 后加载、特异度
+   相同而盖掉它，条子会掉回文档流。上一次就是这样把首屏搞坏的。 */
+
+.qb-callout {
+  position: absolute;
+  right: calc(100% + 8px);          /* Design.space2 */
+  width: 260px;
+  padding: 12px;                    /* Design.space3 */
+  border-radius: 12px;              /* Design.radiusCard + 2 */
+  background: #000;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  pointer-events: none;             /* 纯提示，不抢下面的点击 */
+  opacity: 0;
+  transform: translateX(6px);
+  transition: opacity 160ms ease-out, transform 160ms ease-out;
+  z-index: 30;
+}
+.qb-callout.is-on { opacity: 1; transform: none; }
+
+.qb-callout__head { display: flex; align-items: center; gap: 8px; }
+.qb-callout__head img {
+  width: 15px; height: 15px; object-fit: contain;
+  filter: brightness(0) invert(1);
+}
+.qb-callout__head img.is-colour { filter: none; }
+.qb-callout__head span {
+  font-size: 13px; font-weight: 600; color: #fff;
+}
+
+.qb-crow { display: flex; flex-direction: column; gap: 5px; }
+.qb-crow__top { display: flex; align-items: baseline; gap: 8px; }
+.qb-crow__title {
+  font-size: 11px; color: #fff;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.qb-crow__reset {
+  margin-left: auto; font-size: 11px;
+  color: rgba(255, 255, 255, 0.55); white-space: nowrap;
+}
+.qb-crow__meter {
+  display: block; height: 5px; border-radius: 999px;
+  background: rgba(255, 255, 255, 0.16); overflow: hidden;
+}
+.qb-crow__fill { display: block; height: 100%; border-radius: 999px; }
+.qb-crow__used { font-size: 11px; color: rgba(255, 255, 255, 0.55); }
+
+/* 悬停时那一格微微亮起，和应用里的选中标记同一个语气 */
+.qb-ring { border-radius: 10px; padding: 2px 0; transition: background-color 160ms ease-out; }
+.qb-ring.is-hot { background: rgba(255, 255, 255, 0.08); }
+
+@media (prefers-reduced-motion: reduce) {
+  .qb-callout { transition: none; }
+}
+@media (max-width: 900px) { .qb-callout { display: none; } }

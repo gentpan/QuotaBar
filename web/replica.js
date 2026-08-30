@@ -74,6 +74,28 @@
     },
   };
 
+  /* ── 停靠条悬停卡片的内容 ────────────────────────────────────────
+   * 行标题取 scope ?? title，和 ProviderCallout.row 一致：有作用域就显示
+   * 作用域名（Fable），否则显示窗口名（周窗口）。
+   */
+  var CALLOUT = {
+    codex: { name: "Codex", logo: "codex.png", rows: [
+      { title: "周窗口", used: 36, reset: "5 天 16 小时后重置" },
+      { title: "GPT-5.3-Codex-Spark", used: 0, reset: "4 小时 59 分后重置" },
+    ]},
+    claude: { name: "Claude", logo: "claude.png", colour: true, rows: [
+      { title: "5 小时窗口", used: 18, reset: "2 小时 41 分后重置" },
+      { title: "周窗口", used: 58, reset: "4 天 9 小时后重置" },
+      { title: "Fable", used: 10, reset: "4 天 9 小时后重置" },
+    ]},
+    cursor: { name: "Cursor", logo: "cursor.png", rows: [
+      { title: "月度套餐", used: 86, reset: "9 天 2 小时后重置", detail: "$17.20 / $20.00" },
+    ]},
+    "opencode-go": { name: "OpenCode Go", logo: "opencode-go.png", rows: [
+      { title: "周窗口", used: 84, reset: "3 天 4 小时后重置" },
+    ]},
+  };
+
   function esc(v) { return String(v).replace(/[<>&]/g, ""); }
 
   function winMarkup(w) {
@@ -268,4 +290,64 @@
       });
     }, 3200);
   }
+
+  /* ── 停靠条的悬停卡片 ───────────────────────────────────────────── */
+  var dock = document.querySelector(".qb-dock");
+  if (dock) {
+    var callout = document.createElement("div");
+    callout.className = "qb-callout";
+    callout.setAttribute("aria-hidden", "true");
+    dock.appendChild(callout);
+
+    function calloutMarkup(id) {
+      var d = CALLOUT[id];
+      if (!d) return "";
+      return '<div class="qb-callout__head">' +
+          '<img class="' + (d.colour ? "is-colour" : "") + '" src="' + LOGO + d.logo + '" alt="">' +
+          "<span>" + esc(d.name) + " 用量</span>" +
+        "</div>" +
+        d.rows.map(function (r) {
+          var c = rampHex(r.used);
+          return '<div class="qb-crow">' +
+            '<div class="qb-crow__top">' +
+              '<span class="qb-crow__title">' + esc(r.title) + "</span>" +
+              '<span class="qb-crow__reset">' + esc(r.reset) + "</span>" +
+            "</div>" +
+            '<span class="qb-crow__meter"><span class="qb-crow__fill" style="width:' +
+              Math.max(3, r.used) + "%;background:" + c + '"></span></span>' +
+            '<span class="qb-crow__used">' +
+              (r.detail ? esc(r.detail) + " · " : "") + "已用 " + r.used + "%</span>" +
+          "</div>";
+        }).join("");
+    }
+
+    var rings = dock.querySelectorAll(".qb-ring[data-id]");
+    function show(ring) {
+      var id = ring.getAttribute("data-id");
+      callout.innerHTML = calloutMarkup(id);
+      // 垂直居中对齐这一格，和应用里把气泡对准圆环中心是同一件事
+      var top = ring.offsetTop + ring.offsetHeight / 2;
+      callout.style.top = top + "px";
+      callout.style.transform = "translateY(-50%)";
+      callout.classList.add("is-on");
+      Array.prototype.forEach.call(rings, function (r) {
+        r.classList.toggle("is-hot", r === ring);
+      });
+    }
+    function hide() {
+      callout.classList.remove("is-on");
+      Array.prototype.forEach.call(rings, function (r) { r.classList.remove("is-hot"); });
+    }
+
+    Array.prototype.forEach.call(rings, function (ring) {
+      ring.addEventListener("mouseenter", function () { show(ring); });
+      ring.addEventListener("focus", function () { show(ring); });
+      ring.setAttribute("tabindex", "0");
+    });
+    dock.addEventListener("mouseleave", hide);
+    dock.addEventListener("focusout", function (e) {
+      if (!dock.contains(e.relatedTarget)) hide();
+    });
+  }
+
 })();

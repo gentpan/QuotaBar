@@ -9,10 +9,10 @@
 <meta property="og:title" content="QuotaBar — 每个 AI 编码额度，都在菜单栏">
 <meta property="og:description" content="用了多少、什么时候重置，一眼看完。本地读取，数据不出本机。">
 <meta property="og:type" content="website">
-<link rel="icon" href="assets/icon.png?v=6f4d0352">
-<link rel="apple-touch-icon" href="assets/icon.png?v=6f4d0352">
-<link rel="stylesheet" href="styles.css?v=6f4d0352">
-<link rel="stylesheet" href="replica.css?v=6f4d0352">
+<link rel="icon" href="assets/icon.png?v=3948be27">
+<link rel="apple-touch-icon" href="assets/icon.png?v=3948be27">
+<link rel="stylesheet" href="styles.css?v=3948be27">
+<link rel="stylesheet" href="replica.css?v=3948be27">
 </head>
 <body>
 
@@ -70,17 +70,17 @@
         <span class="qb-tile__meter"><span class="qb-tile__fill" style="width:86%;background:#E6361C"></span></span>
       </button>
       <button class="qb-tile is-on" type="button" data-id="codex" aria-pressed="true" data-used="36">
-        <img src="assets/logos/codex.png?v=6f4d0352" alt="">
+        <img src="assets/logos/codex.png?v=3948be27" alt="">
         Codex
         <span class="qb-tile__meter"><span class="qb-tile__fill" style="width:36%;background:#34C759"></span></span>
       </button>
       <button class="qb-tile" type="button" data-id="claude" aria-pressed="false" data-used="58">
-        <img src="assets/logos/claude.png?v=6f4d0352" alt="">
+        <img src="assets/logos/claude.png?v=3948be27" alt="">
         Claude
         <span class="qb-tile__meter"><span class="qb-tile__fill" style="width:58%;background:#6EC02F"></span></span>
       </button>
       <button class="qb-tile" type="button" data-id="cursor" aria-pressed="false" data-used="86">
-        <img src="assets/logos/cursor.png?v=6f4d0352" alt="">
+        <img src="assets/logos/cursor.png?v=3948be27" alt="">
         Cursor
         <span class="qb-tile__meter"><span class="qb-tile__fill" style="width:86%;background:#E6361C"></span></span>
       </button>
@@ -90,7 +90,7 @@
 
     <div class="qb-detail" id="qbDetail">
     <div class="qb-head">
-      <img src="assets/logos/codex.png?v=6f4d0352" alt="">
+      <img src="assets/logos/codex.png?v=3948be27" alt="">
       <span class="qb-head__name">Codex</span>
       <span class="qb-badge">Pro</span>
       <span class="qb-head__acct">you@example.com</span>
@@ -157,47 +157,47 @@
   <!-- 边缘停靠条：同样是重建，不是截图 -->
   <div class="qb qb-dock desktop__strip" role="img"
        aria-label="边缘停靠条：四个服务商的环形读数，36%、58%、86%、84%">
-    <div class="qb-ring" data-used="36">
+    <div class="qb-ring" data-id="codex" data-used="36">
       <span class="qb-ring__disc">
         <svg viewBox="0 0 46 46" aria-hidden="true">
           <circle class="qb-ring__track" cx="23" cy="23" r="21"/>
           <circle class="qb-ring__arc" cx="23" cy="23" r="21"
                   style="stroke:#34C759;stroke-dasharray:132;stroke-dashoffset:84.5"/>
         </svg>
-        <span class="qb-ring__mark"><img src="assets/logos/codex.png?v=6f4d0352" alt=""></span>
+        <span class="qb-ring__mark"><img src="assets/logos/codex.png?v=3948be27" alt=""></span>
       </span>
       <span class="qb-ring__pct">36%</span>
     </div>
-    <div class="qb-ring" data-used="58">
+    <div class="qb-ring" data-id="claude" data-used="58">
       <span class="qb-ring__disc">
         <svg viewBox="0 0 46 46" aria-hidden="true">
           <circle class="qb-ring__track" cx="23" cy="23" r="21"/>
           <circle class="qb-ring__arc" cx="23" cy="23" r="21"
                   style="stroke:#6EC02F;stroke-dasharray:132;stroke-dashoffset:55.4"/>
         </svg>
-        <span class="qb-ring__mark"><img class="is-colour" src="assets/logos/claude.png?v=6f4d0352" alt=""></span>
+        <span class="qb-ring__mark"><img class="is-colour" src="assets/logos/claude.png?v=3948be27" alt=""></span>
       </span>
       <span class="qb-ring__pct">58%</span>
     </div>
-    <div class="qb-ring" data-used="86">
+    <div class="qb-ring" data-id="cursor" data-used="86">
       <span class="qb-ring__disc">
         <svg viewBox="0 0 46 46" aria-hidden="true">
           <circle class="qb-ring__track" cx="23" cy="23" r="21"/>
           <circle class="qb-ring__arc" cx="23" cy="23" r="21"
                   style="stroke:#E6361C;stroke-dasharray:132;stroke-dashoffset:18.5"/>
         </svg>
-        <span class="qb-ring__mark"><img src="assets/logos/cursor.png?v=6f4d0352" alt=""></span>
+        <span class="qb-ring__mark"><img src="assets/logos/cursor.png?v=3948be27" alt=""></span>
       </span>
       <span class="qb-ring__pct">86%</span>
     </div>
-    <div class="qb-ring" data-used="84">
+    <div class="qb-ring" data-id="opencode-go" data-used="84">
       <span class="qb-ring__disc">
         <svg viewBox="0 0 46 46" aria-hidden="true">
           <circle class="qb-ring__track" cx="23" cy="23" r="21"/>
           <circle class="qb-ring__arc" cx="23" cy="23" r="21"
                   style="stroke:#E6421A;stroke-dasharray:132;stroke-dashoffset:21.1"/>
         </svg>
-        <span class="qb-ring__mark"><img src="assets/logos/opencode-go.png?v=6f4d0352" alt=""></span>
+        <span class="qb-ring__mark"><img src="assets/logos/opencode-go.png?v=3948be27" alt=""></span>
       </span>
       <span class="qb-ring__pct">84%</span>
     </div>
@@ -228,7 +228,7 @@
     <span class="dock__tile" style="background:linear-gradient(160deg,#8e7bff,#4f3ad6)" title="浏览器"></span>
     <span class="dock__sep"></span>
     <a class="dock__tile dock__tile--app" href="https://github.com/gentpan/quotabar/releases/latest" title="QuotaBar">
-      <img src="assets/icon.png?v=6f4d0352" alt="QuotaBar">
+      <img src="assets/icon.png?v=3948be27" alt="QuotaBar">
     </a>
   </div>
 
@@ -284,7 +284,7 @@
       <div class="cards">
         <div class="card">
           <div class="card__art">
-            <img src="assets/notch.png?v=6f4d0352" alt="刘海条：数字分列刘海两侧，各带重置倒计时" style="max-width:88%">
+            <img src="assets/notch.png?v=3948be27" alt="刘海条：数字分列刘海两侧，各带重置倒计时" style="max-width:88%">
           </div>
           <div class="card__body">
             <h3>不止菜单栏</h3>
@@ -318,7 +318,7 @@
         <p>十一个服务商各自的登录方式、图标样式、提醒阈值、更新源——都在一个窗口里。</p>
       </div>
       <div class="showcase">
-        <img src="assets/settings.png?v=6f4d0352" alt="QuotaBar 设置窗口：左侧黑色导航，右侧服务商列表">
+        <img src="assets/settings.png?v=3948be27" alt="QuotaBar 设置窗口：左侧黑色导航，右侧服务商列表">
       </div>
     </div>
   </section>
@@ -367,7 +367,7 @@
 
 <footer class="footer">
   <div class="shell">
-    <img class="footer__icon" src="assets/icon.png?v=6f4d0352" alt="">
+    <img class="footer__icon" src="assets/icon.png?v=3948be27" alt="">
     <div class="footer__links">
       <a href="https://github.com/gentpan/quotabar/releases/latest">下载</a>
       <a href="https://github.com/gentpan/quotabar">源码</a>
@@ -381,7 +381,7 @@
   </div>
 </footer>
 
-<script src="app.js?v=6f4d0352"></script>
-<script src="replica.js?v=6f4d0352"></script>
+<script src="app.js?v=3948be27"></script>
+<script src="replica.js?v=3948be27"></script>
 </body>
 </html>
