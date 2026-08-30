@@ -200,8 +200,7 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
   position: absolute;
   top: 36px;
   right: 26px;
-  width: min(310px, 25vw);
-  border-radius: 12px;
+  /* 宽度由组件自己定（380px，与应用一致）；这里只管位置和落影 */
   z-index: 15;
   box-shadow: rgba(0, 0, 0, 0.62) 0 22px 60px 0, rgba(255, 255, 255, 0.1) 0 0 0 1px;
   animation: drop 720ms cubic-bezier(0.2, 0.9, 0.25, 1) both 300ms;
@@ -217,9 +216,7 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
   /* 低于面板 —— 两者都贴右缘，挤在同一高度会互相压住 */
   top: 70%;
   right: 0;
-  width: 54px;
   z-index: 14;
-  border-radius: 12px 0 0 12px;
   box-shadow: rgba(0, 0, 0, 0.5) -10px 0 30px 0;
   animation: slidein 700ms cubic-bezier(0.2, 0.9, 0.25, 1) both 620ms;
 }
@@ -466,8 +463,9 @@ section { position: relative; }
   .band { padding-block: var(--s-16); }
   .showcase { padding: var(--s-6) var(--s-6) 0; }
   /* 窄屏上停靠条和面板会压住文案，收掉；桌面的意象由菜单栏和 Dock 撑住 */
+  /* 窄屏放不下 380px 的面板和 74px 的条子，整体缩一档 */
   .desktop__strip { display: none; }
-  .desktop__panel { width: 190px; top: 34px; right: 12px; }
+  .desktop__panel { top: 34px; right: 8px; transform: scale(.68); transform-origin: top right; }
   .menubar { gap: 13px; padding-inline: 11px; font-size: 12px; }
   .menubar__menu:nth-of-type(n + 3) { display: none; }
   .menubar__clock { display: none; }

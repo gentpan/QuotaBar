@@ -1,0 +1,175 @@
+/* QuotaBar 界面的活体重建
+ *
+ * 不是截图 —— 尺寸、圆角、间距、色值直接取自应用的 Design token
+ * （4/8/12/16 间距，8/10/14 圆角，面板宽 380pt），所以改了应用就改这里，
+ * 不会像 PNG 那样悄悄过期。用量颜色走的是应用里同一条连续色标。
+ */
+
+.qb {
+  --qb-bg: #f2f2f2;          /* Design.panelBackground（浅色） */
+  --qb-ink: #111114;
+  --qb-dim: rgba(0, 0, 0, 0.5);
+  --qb-faint: rgba(0, 0, 0, 0.35);
+  --qb-surface: rgba(0, 0, 0, 0.05);      /* Design.surface */
+  --qb-surface-2: rgba(0, 0, 0, 0.08);    /* Design.surfaceStrong */
+  --qb-track: rgba(0, 0, 0, 0.15);        /* Design.track */
+  --qb-accent: #3f3f46;                   /* Design.accent（浅色） */
+  --qb-on-accent: #ffffff;                /* Design.ink */
+
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC", sans-serif;
+  color: var(--qb-ink);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ── 菜单面板 ─────────────────────────────────────────────────────── */
+.qb-panel {
+  width: 380px;
+  padding: 12px;                 /* Design.space3 */
+  background: var(--qb-bg);
+  border-radius: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.qb-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;                      /* Design.space2 */
+}
+
+.qb-tile {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  padding: 10px 4px 8px;
+  border-radius: 8px;            /* Design.radiusTile */
+  background: var(--qb-surface);
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1.1;
+  text-align: center;
+  color: var(--qb-ink);
+}
+.qb-tile.is-on { background: var(--qb-accent); color: var(--qb-on-accent); }
+.qb-tile img { width: 18px; height: 18px; object-fit: contain; }
+.qb-tile.is-on img { filter: brightness(0) invert(1); }
+.qb-tile__glyph {
+  width: 18px; height: 18px;
+  display: grid; place-items: center;
+  color: currentColor; opacity: 0.75;
+}
+.qb-tile__meter {
+  /* block：宽高在非替换型行内元素上不生效，这两条是 <span> */
+  display: block;
+  width: 100%; height: 3px;
+  border-radius: 2px;
+  background: var(--qb-track);
+  overflow: hidden;
+}
+.qb-tile.is-on .qb-tile__meter { background: rgba(255, 255, 255, 0.25); }
+.qb-tile__fill { display: block; height: 100%; border-radius: 2px; width: 0; }
+
+.qb-sep { height: 1px; background: rgba(0, 0, 0, 0.1); }
+
+.qb-head { display: flex; align-items: center; gap: 8px; }
+.qb-head img { width: 22px; height: 22px; object-fit: contain; }
+.qb-head__name { font-size: 17px; font-weight: 600; letter-spacing: -0.01em; }
+.qb-badge {
+  font-size: 11px; font-weight: 500;
+  padding: 2px 8px; border-radius: 999px;
+  background: rgba(10, 132, 255, 0.14); color: #0a68d0;
+}
+.qb-head__acct { margin-left: auto; font-size: 12px; color: var(--qb-faint); }
+
+/* 趋势折线 */
+.qb-spark { display: flex; flex-direction: column; gap: 4px; }
+.qb-spark__box {
+  height: 44px; border-radius: 6px;
+  background: var(--qb-surface); position: relative; overflow: hidden;
+}
+.qb-spark__box svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+.qb-spark__box path {
+  fill: none; stroke: #0a84ff; stroke-width: 1.5;
+  stroke-linecap: round; stroke-linejoin: round;
+}
+.qb-spark__cap { font-size: 11px; color: var(--qb-faint); }
+
+/* 额度窗口 */
+.qb-win { display: flex; flex-direction: column; gap: 6px; }
+.qb-win__top { display: flex; align-items: center; gap: 8px; }
+.qb-pill {
+  font-size: 11px; font-weight: 600;
+  padding: 3px 9px; border-radius: 999px;
+  background: rgba(10, 132, 255, 0.13); color: #0a68d0;
+}
+.qb-pill--active { background: rgba(10, 132, 255, 0.13); color: #0a68d0; }
+.qb-win__scope { font-size: 13px; }
+.qb-win__pct {
+  margin-left: auto; font-size: 15px; font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.qb-bar { height: 5px; border-radius: 3px; background: var(--qb-track); overflow: hidden; }
+.qb-bar__fill { display: block; height: 100%; border-radius: 3px; width: 0; }
+.qb-win__meta { font-size: 11px; color: var(--qb-faint); text-align: right; }
+.qb-win__pace {
+  display: flex; align-items: center; gap: 6px;
+  font-size: 12px; font-weight: 500; color: #c2410c;
+}
+
+/* 页脚 */
+.qb-row { display: flex; align-items: center; gap: 8px; font-size: 13px; }
+.qb-row__val { margin-left: auto; font-weight: 600; color: #0a68d0; }
+.qb-note { font-size: 11px; color: var(--qb-faint); }
+.qb-foot { display: flex; align-items: center; font-size: 11px; color: var(--qb-faint); }
+.qb-foot__icons { margin-left: auto; display: flex; gap: 14px; color: var(--qb-dim); }
+
+/* ── 边缘停靠条 ───────────────────────────────────────────────────── */
+.qb-dock {
+  width: 74px;
+  padding: 16px 0;               /* Design.space4 */
+  background: #000;
+  border-radius: 20px 0 0 20px;
+  display: flex; flex-direction: column; align-items: center;
+  gap: 12px;                     /* Design.space3 */
+}
+.qb-ring { display: flex; flex-direction: column; align-items: center; gap: 5px; }
+.qb-ring__disc { display: block; position: relative; width: 46px; height: 46px; }
+.qb-ring__disc svg { width: 46px; height: 46px; transform: rotate(-90deg); }
+.qb-ring__disc circle { fill: none; stroke-width: 3; }
+.qb-ring__track { stroke: rgba(255, 255, 255, 0.14); }
+.qb-ring__arc { stroke-linecap: round; }
+.qb-ring__mark {
+  position: absolute; inset: 0; display: grid; place-items: center;
+}
+.qb-ring__mark img {
+  width: 19px; height: 19px; object-fit: contain;
+  filter: brightness(0) invert(1);      /* 单色标在黑底上必须反白 */
+}
+.qb-ring__mark img.is-colour { filter: none; }
+.qb-ring__pct {
+  display: block;
+  font-size: 12px; font-weight: 600; color: #fff;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── 动画 ─────────────────────────────────────────────────────────── */
+.qb-bar__fill, .qb-tile__fill { transition: width 1100ms cubic-bezier(.2,.8,.25,1); }
+.qb-ring__arc { transition: stroke-dashoffset 1200ms cubic-bezier(.2,.8,.25,1); }
+.qb-spark__box path {
+  stroke-dasharray: var(--len); stroke-dashoffset: var(--len);
+  transition: stroke-dashoffset 1400ms ease-out;
+}
+.qb.is-live .qb-spark__box path { stroke-dashoffset: 0; }
+
+/* 刷新时轻轻脉冲一下，说明它是活的 */
+@keyframes qb-tick { 0%, 100% { opacity: 1 } 50% { opacity: 0.45 } }
+.qb-foot__icons svg:first-child { animation: qb-tick 2.4s ease-in-out infinite 3s; }
+
+@media (prefers-reduced-motion: reduce) {
+  .qb-bar__fill, .qb-tile__fill, .qb-ring__arc, .qb-spark__box path {
+    transition: none !important;
+  }
+  .qb-foot__icons svg:first-child { animation: none !important; }
+}
