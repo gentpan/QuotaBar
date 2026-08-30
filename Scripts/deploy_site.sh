@@ -1,0 +1,48 @@
+#!/bin/bash
+# Publishes web/ to quota.bar.
+#
+# The ?v= token on every asset URL is derived from the *content* of the files
+# it guards, so changing a file changes its URL. This is not a nicety: the site
+# tells Cloudflare to cache static assets for a day, so a redeploy that reuses
+# the token leaves the public site on the old copy while the origin is correct
+# — which looks exactly like a deploy that worked. That happened twice before
+# this script existed, hence the verification step at the end.
+set -euo pipefail
+cd "$(dirname "$0")/.."
+
+HOST="${SITE_HOST:-root@5.9.73.228}"
+KEY="${SITE_KEY:-$HOME/.ssh/gentpan.pem}"
+ROOT="${SITE_ROOT:-/var/www/quota.bar}"
+
+# One token for all assets: simpler than per-file hashes, and a redeploy that
+# touches anything is cheap enough to re-fetch the rest.
+STAMP="$(cat web/styles.css web/replica.css web/app.js web/replica.js \
+         | shasum -a 256 | cut -c1-8)"
+echo "内容指纹 v=$STAMP"
+
+# Rewrite every ?v=… in the HTML, and the font URL the stylesheet carries.
+/usr/bin/sed -i '' -E "s/\?v=[A-Za-z0-9]+/?v=$STAMP/g" web/index.html
+/usr/bin/sed -i '' -E "s/(Sora-VariableFont_wght\.ttf)\?v=[A-Za-z0-9]+/\1?v=$STAMP/" web/styles.css
+
+rsync -az --delete -e "ssh -i $KEY -o BatchMode=yes" web/ "$HOST:$ROOT/"
+ssh -i "$KEY" -o BatchMode=yes "$HOST" "chown -R www-data:www-data $ROOT"
+echo "已同步"
+
+# Verify what the public actually gets, not what the origin holds. A stale CDN
+# copy is the failure this script exists to prevent, so it is checked, not
+# assumed.
+fail=0
+for f in styles.css replica.css app.js replica.js; do
+  want=$(stat -f%z "web/$f")
+  got=$(curl -s -o /dev/null -w '%{size_download}' --max-time 20 "https://quota.bar/$f?v=$STAMP")
+  if [ "$want" = "$got" ]; then
+    printf "  ✅ %-14s %s B\n" "$f" "$got"
+  else
+    printf "  ❌ %-14s 线上 %s B ≠ 本地 %s B\n" "$f" "$got" "$want"
+    fail=1
+  fi
+done
+html=$(curl -s --max-time 20 "https://quota.bar/" | grep -c "?v=$STAMP" || true)
+[ "$html" -gt 0 ] && printf "  ✅ %-14s 引用 %s 处新指纹\n" "index.html" "$html" \
+                  || { printf "  ❌ %-14s 仍在引用旧指纹\n" "index.html"; fail=1; }
+exit $fail
