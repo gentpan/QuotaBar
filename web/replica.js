@@ -9,7 +9,9 @@
 (function () {
   "use strict";
 
-  var reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  // 现取，不缓存：用户中途打开「减弱动态效果」时才不会读到过期的判断。
+  var motion = window.matchMedia("(prefers-reduced-motion: reduce)");
+  function reduced() { return motion.matches; }
 
   /* ── 用量色标（与 Sources/QuotaCore/UsageRamp.swift 同一份数据）──── */
   var STOPS = ["34C759", "4FC447", "82B91F", "A8A81E", "BF961C",
@@ -37,7 +39,10 @@
   }
 
   /* ── 每个服务商的面板内容 ────────────────────────────────────────── */
+  // 指纹由 deploy_site.sh 统一改写（和 index.html、styles.css 里的字体一样）。
+  // 写死 ?v=1 的话，指纹一升级，JS 渲染出的这些图不会跟着刷新。
   var LOGO = "assets/logos/";
+  var LOGOV = "?v=9af75c8c";
   var DATA = {
     codex: {
       name: "Codex", logo: "codex.png", plan: "Pro", acct: "you@example.com",
@@ -120,11 +125,12 @@
 
   function detailMarkup(id) {
     var d = DATA[id];
+    if (!d) return "";          // 同 calloutMarkup：DATA 比 CALLOUT 少一项
     if (d.overview) {
       return d.rows.map(function (r) {
         var c = rampHex(r.used);
         return '<div class="qb-ovrow" data-used="' + r.used + '">' +
-          '<img src="' + LOGO + r.logo + '?v=1" alt="">' +
+          '<img src="' + LOGO + r.logo + LOGOV + '" alt="">' +
           '<span class="qb-ovrow__name">' + esc(r.name) + "</span>" +
           '<span class="qb-win__pct" style="color:' + c + '">' + Math.round(r.used) + "%</span>" +
           '<div class="qb-bar"><span class="qb-bar__fill" style="width:' + r.used +
@@ -133,7 +139,7 @@
       }).join("");
     }
     return '<div class="qb-head">' +
-        '<img src="' + LOGO + d.logo + '?v=1" alt="">' +
+        '<img src="' + LOGO + d.logo + LOGOV + '" alt="">' +
         '<span class="qb-head__name">' + esc(d.name) + "</span>" +
         (d.plan ? '<span class="qb-badge">' + esc(d.plan) + "</span>" : "") +
         '<span class="qb-head__acct">' + esc(d.acct) + "</span>" +
@@ -190,7 +196,7 @@
   }
 
   function animateIn() {
-    if (reduced) { settle(); return; }
+    if (reduced()) { settle(); return; }
     readings.forEach(function (r) { paint(r.el, 0); });
     void document.body.offsetHeight;
     settle();
@@ -215,7 +221,7 @@
       t.setAttribute("aria-pressed", on ? "true" : "false");
     });
 
-    if (reduced) {
+    if (reduced()) {
       detail.innerHTML = detailMarkup(id);
       collect();
       settle();
@@ -248,7 +254,7 @@
 
   /* 访客未必知道这几个格子能点，所以先自己演一遍；一旦有人动手就停下，
      不再跟用户抢方向盘。 */
-  if (!reduced && detail && tiles.length) {
+  if (!reduced() && detail && tiles.length) {
     var order = ["claude", "cursor", "overview", "codex"];
     var step = 0;
     cycle = setInterval(function () {
@@ -259,7 +265,7 @@
   }
 
   /* ── 首次进入视口时再跑，滚到才看得见 ───────────────────────────── */
-  if (reduced) {
+  if (reduced()) {
     settle();
   } else if ("IntersectionObserver" in window && readings.length) {
     var io = new IntersectionObserver(function (entries) {
@@ -279,7 +285,7 @@
    * 在各自基准值附近 ±3 个百分点晃，不是单调爬升 —— 页面开着不动的话，
    * 爬升会让每一条最后都顶到红色，反倒比静态更不像真的。
    */
-  if (!reduced) {
+  if (!reduced()) {
     setInterval(function () {
       if (document.hidden) return;
       readings.forEach(function (r) {

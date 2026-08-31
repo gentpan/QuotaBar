@@ -181,7 +181,10 @@
 .qb-tile {
   border: 0;
   cursor: pointer;
-  font: inherit;
+  /* 只继承字族。写 font 简写会把上面 .qb-tile 的 font-size: 11px /
+     font-weight: 500 / line-height: 1.1 一起重置掉（特异度相同、这条在后），
+     标签会变成继承来的 16px/400。 */
+  font-family: inherit;
   transition: background-color 160ms ease-out, color 160ms ease-out;
 }
 .qb-tile:hover:not(.is-on) { background: var(--qb-surface-2); }

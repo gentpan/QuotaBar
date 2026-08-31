@@ -2,14 +2,22 @@
 (function () {
   "use strict";
 
-  var reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  /* 每次用的时候现取。只在加载时取一次的话，用户中途打开「减弱动态效果」，
+     CSS 那边的 transition: none 立刻生效，而这边还在等一个永远不会来的
+     transitionend。 */
+  var motion = window.matchMedia("(prefers-reduced-motion: reduce)");
+  function reduced() { return motion.matches; }
 
   /* ── FAQ 手风琴 ───────────────────────────────────────────────────
    * <details> 自带开合但没有过渡。这里接管：把面板高度从 0 动到实测
    * 高度，收起时反过来，并把 open 属性的移除推迟到动画结束——否则
    * 内容会在第一帧就消失，动画等于没有。
    */
-  Array.prototype.forEach.call(document.querySelectorAll(".qa"), function (qa) {
+  var accordions = document.querySelectorAll(".qa");
+  // 只有真的接管了，才让 CSS 把答案折起来（见 styles.css 的 .qa-anim）。
+  if (accordions.length) document.documentElement.classList.add("qa-anim");
+
+  Array.prototype.forEach.call(accordions, function (qa) {
     var summary = qa.querySelector(".qa__q");
     var panel = qa.querySelector(".qa__a");
     var animating = false;
@@ -18,35 +26,57 @@
       return panel.firstElementChild.getBoundingClientRect().height + "px";
     }
 
+    /* transitionend 不保证到达 —— 减弱动态效果会让时长归零，后台标签页也
+       可能从不合成。没有兜底，animating 会永远停在 true，这一条本次会话
+       就再也点不开了。 */
+    function onSettled(fn) {
+      var fired = false;
+      function once() {
+        if (fired) return;
+        fired = true;
+        clearTimeout(timer);
+        panel.removeEventListener("transitionend", once);
+        fn();
+      }
+      var timer = setTimeout(once, 420);
+      panel.addEventListener("transitionend", once);
+    }
+
+    /* <details> 也会被浏览器自己展开：页内查找命中隐藏文字、锚点定位都会。
+       那条路径不经过下面的点击处理器，面板高度还停在 0，答案就成了隐形的。 */
+    qa.addEventListener("toggle", function () {
+      if (animating) return;
+      panel.style.height = qa.open ? "auto" : "0px";
+    });
+    if (qa.open) panel.style.height = "auto";
+
     summary.addEventListener("click", function (event) {
       event.preventDefault();
       if (animating) return;
 
-      if (reduced) {
+      if (reduced()) {
         qa.open = !qa.open;
         panel.style.height = qa.open ? "auto" : "0px";
         return;
       }
 
       if (!qa.open) {
+        animating = true;             // 先立起来，好让下面的 toggle 监听器让路
         qa.open = true;
         panel.style.height = "0px";
         // 强制回流，否则起始值和目标值在同一帧里，浏览器不会插值
         void panel.offsetHeight;
-        animating = true;
         panel.style.height = heightOf();
-        panel.addEventListener("transitionend", function done() {
-          panel.removeEventListener("transitionend", done);
+        onSettled(function () {
           panel.style.height = "auto";   // 之后内容变高也能跟上
           animating = false;
         });
       } else {
+        animating = true;
         panel.style.height = heightOf();
         void panel.offsetHeight;
-        animating = true;
         panel.style.height = "0px";
-        panel.addEventListener("transitionend", function done() {
-          panel.removeEventListener("transitionend", done);
+        onSettled(function () {
           qa.open = false;              // 收完再撤 open，内容才不会提前消失
           animating = false;
         });
@@ -76,7 +106,7 @@
       el.style.transitionDelay = (i % 3) * 70 + "ms";
     });
 
-    if (reduced || !("IntersectionObserver" in window)) {
+    if (reduced() || !("IntersectionObserver" in window)) {
       showAll();
     } else {
       document.documentElement.classList.add("reveal");
@@ -100,7 +130,7 @@
    * 距离用图标中心算，两格以外不再受影响。
    */
   var dock = document.getElementById("dock");
-  if (dock && !reduced && window.matchMedia("(hover: hover)").matches) {
+  if (dock && !reduced() && window.matchMedia("(hover: hover)").matches) {
     var tiles = dock.querySelectorAll(".dock__tile");
 
     dock.addEventListener("mousemove", function (event) {

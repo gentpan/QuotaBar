@@ -49,7 +49,7 @@
 
 @font-face {
   font-family: "Sora";
-  src: url("assets/fonts/Sora-VariableFont_wght.ttf?v=4dab940b") format("truetype-variations");
+  src: url("assets/fonts/Sora-VariableFont_wght.ttf?v=9af75c8c") format("truetype-variations");
   font-weight: 100 800;
   font-display: swap;
 }
@@ -199,15 +199,26 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
 .desktop__panel {
   position: absolute;
   top: 36px;
-  right: 26px;
+  /* 停靠条 74px 宽、贴右缘，面板也贴右缘，两者必然叠在一起 —— 视口高度不到
+     993px 时一直重叠，压住的正是面板右侧的重置时间和底部那两个按钮。
+     74 + 18 的间隙，让面板整体让开条子。 */
+  right: 92px;
   /* 宽度由组件自己定（380px，与应用一致）；这里只管位置和落影 */
   z-index: 15;
+  /* 缩放一律走这个变量、由 drop 的关键帧读出去。本元素带 animation，而动画
+     产生的值压过普通声明 —— 直接写 transform: scale() 会被 to 帧的
+     transform 覆盖掉，窄屏那档缩放就是这么失效的。 */
+  --panel-scale: 1;
+  transform-origin: top right;
+  /* 同一个值也要静态写一份：prefers-reduced-motion 会把 animation 整个关掉，
+     只活在关键帧里的 transform 会一起消失，窄屏那档缩放就没了。 */
+  transform: scale(var(--panel-scale));
   box-shadow: rgba(0, 0, 0, 0.62) 0 22px 60px 0, rgba(255, 255, 255, 0.1) 0 0 0 1px;
   animation: drop 720ms cubic-bezier(0.2, 0.9, 0.25, 1) both 300ms;
 }
 @keyframes drop {
-  from { opacity: 0; transform: translateY(-16px) scale(0.98); }
-  to { opacity: 1; transform: none; }
+  from { opacity: 0; transform: translateY(-16px) scale(calc(var(--panel-scale) * 0.98)); }
+  to { opacity: 1; transform: scale(var(--panel-scale)); }
 }
 
 /* 停靠条贴右缘 */
@@ -221,6 +232,9 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
      就是独立的置顶面板。 */
   z-index: 20;
   box-shadow: rgba(0, 0, 0, 0.5) -10px 0 30px 0;
+  /* 同上：垂直居中不能只写在 slidein 的关键帧里，否则关掉动画后条子会
+     整体掉下去半个身位。 */
+  transform: translateY(-50%);
   animation: slidein 700ms cubic-bezier(0.2, 0.9, 0.25, 1) both 620ms;
 }
 @keyframes slidein {
@@ -269,6 +283,8 @@ h1 {
 }
 
 .hero__sub {
+  /* 不超过标题的宽度：文案块的右缘由它决定，越宽越早顶到面板底下 */
+  max-width: 420px;
   margin: var(--s-6) 0 0;
   font-size: 17px;
   line-height: 1.6;
@@ -298,6 +314,9 @@ h1 {
   backdrop-filter: blur(28px) saturate(180%);
   -webkit-backdrop-filter: blur(28px) saturate(180%);
   box-shadow: rgba(0, 0, 0, 0.42) 0 12px 34px 0, rgba(255, 255, 255, 0.2) 0 1px 0 0 inset;
+  /* 水平居中同样不能只写在 dockup 的关键帧里：关掉动画后 Dock 会整体右移
+     半个身位，窄屏还会顶出视口。 */
+  transform: translateX(-50%);
   animation: dockup 700ms cubic-bezier(0.2, 0.9, 0.25, 1) both 480ms;
 }
 @keyframes dockup {
@@ -433,13 +452,18 @@ section { position: relative; }
   transition: transform 220ms ease-out;
 }
 .qa[open] .qa__q::after { transform: rotate(-135deg) translate(-2px, -2px); }
-.qa__a {
+/* 折叠只在 JS 已经接管（<html class="qa-anim">）时生效。无条件写
+   height: 0 的话，脚本没跑到时 <details> 原生展开也是零高度 —— 箭头照常
+   翻转，答案永远是空的。与上面 .reveal 是同一个原则：内容不能挂在脚本上。 */
+.qa-anim .qa__a {
   overflow: hidden;
   height: 0;
+  transition: height 260ms cubic-bezier(0.2, 0.9, 0.25, 1);
+}
+.qa__a {
   font-size: 14px;
   line-height: 1.6;
   color: var(--body);
-  transition: height 260ms cubic-bezier(0.2, 0.9, 0.25, 1);
 }
 .qa__a > div { padding-bottom: 20px; max-width: 62ch; }
 .qa__a code {
@@ -458,6 +482,15 @@ section { position: relative; }
 .footer__links a:hover { color: #fff; }
 .footer__fine { margin-top: var(--s-6); font-size: 12px; line-height: 1.7; color: var(--muted); }
 
+/* ── 首屏：中等宽度下让开面板 ───────────────────────────────────────
+ * 文案居中于整个视口，面板贴右缘 —— 视口越窄，两者靠得越近，1400 以下
+ * 文案右缘就伸到面板底下了（1200 时压进去 56px，字直接被挡住）。
+ * 这里把面板那一列从文案的可用宽度里扣掉，让文案在剩下的空间里居中。
+ */
+@media (max-width: 1400px) {
+  .desktop__copy { padding-right: 470px; }
+}
+
 /* ── 响应式：768 以下单列 ───────────────────────────────────────────── */
 @media (max-width: 900px) {
   .faq { grid-template-columns: 1fr; gap: var(--s-6); }
@@ -465,15 +498,32 @@ section { position: relative; }
   .cards { grid-template-columns: 1fr; }
   .band { padding-block: var(--s-16); }
   .showcase { padding: var(--s-6) var(--s-6) 0; }
-  /* 窄屏上停靠条和面板会压住文案，收掉；桌面的意象由菜单栏和 Dock 撑住 */
-  /* 窄屏放不下 380px 的面板和 74px 的条子，整体缩一档 */
-  .desktop__strip { display: none; }
-  .desktop__panel { top: 34px; right: 8px; transform: scale(.68); transform-origin: top right; }
+  /* 窄屏上停靠条和面板会压住文案，收掉；桌面的意象由菜单栏和 Dock 撑住。
+     多加一级 .desktop：这两个元素同时挂着 .qb-dock / .qb-panel，那两条
+     规则特异度相同却在 replica.css 里后加载 —— 单写 .desktop__strip 会被
+     .qb-dock 的 display: flex 压掉，窄屏根本没收起来过。 */
+  .desktop .desktop__strip { display: none; }
+  /* 窄屏放不下 380px 的面板和 74px 的条子，整体缩一档，并让文案落到面板下面 */
+  .desktop .desktop__panel { top: 34px; right: 8px; --panel-scale: .52; }
+  .desktop__copy { justify-content: flex-end; padding: 30px 24px 120px; }
   .menubar { gap: 13px; padding-inline: 11px; font-size: 12px; }
-  .menubar__menu:nth-of-type(n + 3) { display: none; }
+  /* nth-of-type 数的是所有 <a> 兄弟，而第 1 个 <a> 是 wordmark「QuotaBar」。
+     写 n+3 会从第 2 个菜单项开始隐藏，窄屏顶栏只剩「功能」一项。 */
+  .menubar__menu:nth-of-type(n + 4) { display: none; }
   .menubar__clock { display: none; }
   .dock__tile { width: 40px; height: 40px; }
 }
+
+/* 矮视口（横放的手机、带浏览器界面的小笔记本）：面板、文案、Dock 三段
+   在 780px 高以下叠不下，面板再缩一档，文案也往下压一点。 */
+@media (max-width: 900px) and (max-height: 780px) {
+  .desktop .desktop__panel { --panel-scale: .40; }
+  .desktop__copy { padding-bottom: 96px; }
+}
+
+/* 再矮就真排不下了（横过来的手机）：面板也收掉，桌面的意象剩菜单栏和 Dock */
+@media (max-width: 900px) and (max-height: 700px) {
+  .desktop .desktop__panel { display: none; }
 }
 
 /* ── 进场 ────────────────────────────────────────────────────────────

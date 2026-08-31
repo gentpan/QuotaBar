@@ -6,13 +6,29 @@
 <title>QuotaBar — 每个 AI 编码额度，都在菜单栏</title>
 <meta name="description" content="QuotaBar 把 Codex、Claude、Cursor 等 11 个 AI 编码服务的额度和重置时间放进 macOS 菜单栏。本地读取，不经服务器。">
 <meta name="theme-color" content="#101112">
+<link rel="canonical" href="https://quota.bar/">
 <meta property="og:title" content="QuotaBar — 每个 AI 编码额度，都在菜单栏">
 <meta property="og:description" content="用了多少、什么时候重置，一眼看完。本地读取，数据不出本机。">
 <meta property="og:type" content="website">
-<link rel="icon" href="assets/icon.png?v=4dab940b">
-<link rel="apple-touch-icon" href="assets/icon.png?v=4dab940b">
-<link rel="stylesheet" href="styles.css?v=4dab940b">
-<link rel="stylesheet" href="replica.css?v=4dab940b">
+<meta property="og:url" content="https://quota.bar/">
+<meta property="og:site_name" content="QuotaBar">
+<meta property="og:locale" content="zh_CN">
+<!-- 1200×630 首屏截图。没有这张，分享到微信 / Slack / X 全是纯文字卡片。 -->
+<meta property="og:image" content="https://quota.bar/assets/og.jpg?v=9af75c8c">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="QuotaBar 的菜单栏面板与边缘停靠条">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="QuotaBar — 每个 AI 编码额度，都在菜单栏">
+<meta name="twitter:description" content="用了多少、什么时候重置，一眼看完。本地读取，数据不出本机。">
+<meta name="twitter:image" content="https://quota.bar/assets/og.jpg?v=9af75c8c">
+<link rel="icon" type="image/png" sizes="256x256" href="assets/icon.png?v=9af75c8c">
+<link rel="icon" sizes="48x48" href="/favicon.ico">
+<!-- 单独一张 180×180 且不透明：iOS 会把透明区合成到黑底，直接复用带 alpha 的
+     256×256 主图标会得到一圈黑边。 -->
+<link rel="apple-touch-icon" sizes="180x180" href="assets/apple-touch-icon.png?v=9af75c8c">
+<link rel="stylesheet" href="styles.css?v=9af75c8c">
+<link rel="stylesheet" href="replica.css?v=9af75c8c">
 <!-- 自建统计。defer，不阻塞渲染；跨域脚本不参与本站的 ?v= 指纹。 -->
 <script defer src="https://tongji.giantaccel.com/script.js" data-website-id="8085631e-cc5d-4563-819f-ddd04c1bdcfa"></script>
 </head>
@@ -24,7 +40,8 @@
 <header class="desktop" id="top">
   <div class="desktop__wall"></div>
 
-  <div class="menubar">
+  <!-- 这一条既是「桌面」的菜单栏，也是本站唯一的导航 -->
+  <nav class="menubar" aria-label="站点导航">
     <svg class="menubar__apple" viewBox="0 0 14 17" fill="currentColor" aria-hidden="true">
       <path d="M11.5 9c0-1.9 1.5-2.8 1.6-2.9-.9-1.3-2.2-1.5-2.7-1.5-1.1-.1-2.2.7-2.8.7-.6 0-1.5-.7-2.4-.6-1.2 0-2.4.7-3 1.8-1.3 2.2-.3 5.4 1 7.2.6.8 1.3 1.8 2.2 1.7.9 0 1.2-.6 2.2-.6 1 0 1.3.6 2.2.5.9 0 1.5-.8 2.1-1.7.7-1 .9-1.9.9-1.9s-1.8-.7-1.8-2.7zM9.7 3.2c.5-.6.8-1.4.7-2.2-.7 0-1.6.5-2.1 1.1-.5.6-.9 1.4-.8 2.2.8.1 1.7-.4 2.2-1.1z"/>
     </svg>
@@ -53,7 +70,7 @@
       </span>
       <span class="menubar__clock">周六 05:48</span>
     </div>
-  </div>
+  </nav>
 
   <!-- 菜单面板：HTML/CSS 重建，不是截图。尺寸与色值取自应用的 Design
        token；width / background 是内联的读数（数据，不是样式），这样
@@ -63,7 +80,7 @@
     <div class="qb-grid">
       <button class="qb-tile" type="button" data-id="overview" aria-pressed="false">
         <span class="qb-tile__glyph" aria-hidden="true">
-          <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+          <svg aria-hidden="true" width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
             <rect x="1" y="1" width="6" height="6" rx="1.6"/><rect x="9" y="1" width="6" height="6" rx="1.6"/>
             <rect x="1" y="9" width="6" height="6" rx="1.6"/><rect x="9" y="9" width="6" height="6" rx="1.6"/>
           </svg>
@@ -72,17 +89,17 @@
         <span class="qb-tile__meter"><span class="qb-tile__fill" style="width:86%;background:#E6361C"></span></span>
       </button>
       <button class="qb-tile is-on" type="button" data-id="codex" aria-pressed="true" data-used="36">
-        <img src="assets/logos/codex.png?v=4dab940b" alt="">
+        <img src="assets/logos/codex.png?v=9af75c8c" alt="">
         Codex
         <span class="qb-tile__meter"><span class="qb-tile__fill" style="width:36%;background:#34C759"></span></span>
       </button>
       <button class="qb-tile" type="button" data-id="claude" aria-pressed="false" data-used="58">
-        <img src="assets/logos/claude.png?v=4dab940b" alt="">
+        <img src="assets/logos/claude.png?v=9af75c8c" alt="">
         Claude
-        <span class="qb-tile__meter"><span class="qb-tile__fill" style="width:58%;background:#6EC02F"></span></span>
+        <span class="qb-tile__meter"><span class="qb-tile__fill" style="width:58%;background:#6EBD2F"></span></span>
       </button>
       <button class="qb-tile" type="button" data-id="cursor" aria-pressed="false" data-used="86">
-        <img src="assets/logos/cursor.png?v=4dab940b" alt="">
+        <img src="assets/logos/cursor.png?v=9af75c8c" alt="">
         Cursor
         <span class="qb-tile__meter"><span class="qb-tile__fill" style="width:86%;background:#E6361C"></span></span>
       </button>
@@ -92,10 +109,13 @@
 
     <div class="qb-detail" id="qbDetail">
     <div class="qb-head">
-      <img src="assets/logos/codex.png?v=4dab940b" alt="">
+      <img src="assets/logos/codex.png?v=9af75c8c" alt="">
       <span class="qb-head__name">Codex</span>
       <span class="qb-badge">Pro</span>
-      <span class="qb-head__acct">you@example.com</span>
+      <!-- email_off：Cloudflare 的邮箱混淆会把这串占位地址改写成
+           <a href="/cdn-cgi/l/email-protection">[email protected]</a>，
+           在面板里凭空多出一个链接，没跑 JS 的访客看到的就是那行乱码。 -->
+      <span class="qb-head__acct"><!--email_off-->you@example.com<!--/email_off--></span>
     </div>
 
     <div class="qb-spark">
@@ -116,7 +136,7 @@
       <div class="qb-bar"><span class="qb-bar__fill" style="width:36%;background:#34C759"></span></div>
       <div class="qb-win__meta">5 天 16 小时后重置</div>
       <div class="qb-win__pace">
-        <svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M6.5 1.5 12 11.5H1z"/><path d="M6.5 5.5v2.2"/><circle cx="6.5" cy="9.6" r=".7" fill="currentColor" stroke="none"/></svg>
+        <svg aria-hidden="true" width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M6.5 1.5 12 11.5H1z"/><path d="M6.5 5.5v2.2"/><circle cx="6.5" cy="9.6" r=".7" fill="currentColor" stroke="none"/></svg>
         预计 2 天 13 小时后耗尽
       </div>
     </div>
@@ -134,7 +154,7 @@
     <div class="qb-sep"></div>
 
     <div class="qb-row">
-      <svg width="15" height="15" viewBox="0 0 15 15" fill="none" stroke="#0a68d0" stroke-width="1.5" stroke-linecap="round"><circle cx="7.5" cy="7.5" r="6"/><path d="M7.5 4.2v3.6l2.4 1.4"/></svg>
+      <svg aria-hidden="true" width="15" height="15" viewBox="0 0 15 15" fill="none" stroke="#0a68d0" stroke-width="1.5" stroke-linecap="round"><circle cx="7.5" cy="7.5" r="6"/><path d="M7.5 4.2v3.6l2.4 1.4"/></svg>
       限额重置额度
       <span class="qb-row__val">1 次可用</span>
     </div>
@@ -149,16 +169,20 @@
     <div class="qb-foot">
       每 1 分钟刷新
       <span class="qb-foot__icons" aria-hidden="true">
-        <svg width="15" height="15" viewBox="0 0 15 15" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M13 7.5a5.5 5.5 0 1 1-1.6-3.9"/><path d="M13 1.5v3.4H9.6"/></svg>
-        <svg width="15" height="15" viewBox="0 0 15 15" fill="none" stroke="currentColor" stroke-width="1.4"><circle cx="7.5" cy="7.5" r="2.2"/><path d="M7.5 1v1.8M7.5 12.2V14M14 7.5h-1.8M2.8 7.5H1M12.1 2.9l-1.3 1.3M4.2 10.8l-1.3 1.3M12.1 12.1l-1.3-1.3M4.2 4.2 2.9 2.9"/></svg>
-        <svg width="15" height="15" viewBox="0 0 15 15" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><path d="M7.5 1.6v6"/><path d="M11.6 3.6a5.5 5.5 0 1 1-8.2 0"/></svg>
+        <svg aria-hidden="true" width="15" height="15" viewBox="0 0 15 15" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M13 7.5a5.5 5.5 0 1 1-1.6-3.9"/><path d="M13 1.5v3.4H9.6"/></svg>
+        <svg aria-hidden="true" width="15" height="15" viewBox="0 0 15 15" fill="none" stroke="currentColor" stroke-width="1.4"><circle cx="7.5" cy="7.5" r="2.2"/><path d="M7.5 1v1.8M7.5 12.2V14M14 7.5h-1.8M2.8 7.5H1M12.1 2.9l-1.3 1.3M4.2 10.8l-1.3 1.3M12.1 12.1l-1.3-1.3M4.2 4.2 2.9 2.9"/></svg>
+        <svg aria-hidden="true" width="15" height="15" viewBox="0 0 15 15" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><path d="M7.5 1.6v6"/><path d="M11.6 3.6a5.5 5.5 0 1 1-8.2 0"/></svg>
       </span>
     </div>
   </div>
 
   <!-- 边缘停靠条：同样是重建，不是截图 -->
-  <div class="qb qb-dock desktop__strip" role="img"
-       aria-label="边缘停靠条：四个服务商的环形读数，36%、58%、86%、84%">
+  <!-- group 而不是 img：环是可聚焦的（focus 会弹出悬停卡片），role="img"
+       会把整棵子树呈现化，键盘用户只会得到四个什么都不播报的停靠点。
+       标签里也不再写死百分比 —— paint() 每 3.2 秒改一次读数，写死的数字
+       几秒后就和屏幕上的对不上了。读数由环自己的文字播报，永远是准的。 -->
+  <div class="qb qb-dock desktop__strip" role="group"
+       aria-label="边缘停靠条：各服务商的环形读数">
     <div class="qb-ring" data-id="codex" data-used="36">
       <span class="qb-ring__disc">
         <svg viewBox="0 0 46 46" aria-hidden="true">
@@ -166,7 +190,7 @@
           <circle class="qb-ring__arc" cx="23" cy="23" r="21"
                   style="stroke:#34C759;stroke-dasharray:132;stroke-dashoffset:84.5"/>
         </svg>
-        <span class="qb-ring__mark"><img src="assets/logos/codex.png?v=4dab940b" alt=""></span>
+        <span class="qb-ring__mark"><img src="assets/logos/codex.png?v=9af75c8c" alt="Codex"></span>
       </span>
       <span class="qb-ring__pct">36%</span>
     </div>
@@ -175,9 +199,9 @@
         <svg viewBox="0 0 46 46" aria-hidden="true">
           <circle class="qb-ring__track" cx="23" cy="23" r="21"/>
           <circle class="qb-ring__arc" cx="23" cy="23" r="21"
-                  style="stroke:#6EC02F;stroke-dasharray:132;stroke-dashoffset:55.4"/>
+                  style="stroke:#6EBD2F;stroke-dasharray:132;stroke-dashoffset:55.4"/>
         </svg>
-        <span class="qb-ring__mark"><img class="is-colour" src="assets/logos/claude.png?v=4dab940b" alt=""></span>
+        <span class="qb-ring__mark"><img class="is-colour" src="assets/logos/claude.png?v=9af75c8c" alt="Claude"></span>
       </span>
       <span class="qb-ring__pct">58%</span>
     </div>
@@ -188,7 +212,7 @@
           <circle class="qb-ring__arc" cx="23" cy="23" r="21"
                   style="stroke:#E6361C;stroke-dasharray:132;stroke-dashoffset:18.5"/>
         </svg>
-        <span class="qb-ring__mark"><img src="assets/logos/cursor.png?v=4dab940b" alt=""></span>
+        <span class="qb-ring__mark"><img src="assets/logos/cursor.png?v=9af75c8c" alt="Cursor"></span>
       </span>
       <span class="qb-ring__pct">86%</span>
     </div>
@@ -199,7 +223,7 @@
           <circle class="qb-ring__arc" cx="23" cy="23" r="21"
                   style="stroke:#E6421A;stroke-dasharray:132;stroke-dashoffset:21.1"/>
         </svg>
-        <span class="qb-ring__mark"><img src="assets/logos/opencode-go.png?v=4dab940b" alt=""></span>
+        <span class="qb-ring__mark"><img src="assets/logos/opencode-go.png?v=9af75c8c" alt="OpenCode Go"></span>
       </span>
       <span class="qb-ring__pct">84%</span>
     </div>
@@ -209,7 +233,7 @@
     <span class="eyebrow">macOS 14+ · <b>11</b> 个服务商 · 开源</span>
     <h1>每个额度<br>都在菜单栏</h1>
     <p class="hero__sub">
-      Codex、Claude、Cursor、Gemini…… 用了多少、什么时候重置，<br>
+      Codex、Claude、Cursor、Gemini……用了多少、什么时候重置，<br>
       点一下菜单栏就看完。不用打开任何网页。
     </p>
     <div class="hero__cta">
@@ -230,12 +254,12 @@
     <span class="dock__tile" style="background:linear-gradient(160deg,#8e7bff,#4f3ad6)" title="浏览器"></span>
     <span class="dock__sep"></span>
     <a class="dock__tile dock__tile--app" href="https://github.com/gentpan/quotabar/releases/latest" title="QuotaBar">
-      <img src="assets/icon.png?v=4dab940b" alt="QuotaBar">
+      <img src="assets/icon.png?v=9af75c8c" alt="QuotaBar">
     </a>
   </div>
 
   <a class="desktop__scroll" href="#features" aria-label="向下">
-    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6l4 4 4-4"/></svg>
+    <svg aria-hidden="true" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6l4 4 4-4"/></svg>
   </a>
 </header>
 
@@ -250,17 +274,17 @@
       <div class="features">
         <div class="feature">
           <div class="feature__icon">
-            <svg width="19" height="19" viewBox="0 0 19 19" fill="none" stroke="#6ee02b" stroke-width="1.6" stroke-linecap="round">
+            <svg aria-hidden="true" width="19" height="19" viewBox="0 0 19 19" fill="none" stroke="#6ee02b" stroke-width="1.6" stroke-linecap="round">
               <rect x="1" y="4" width="17" height="4.4" rx="2.2"/><rect x="2.6" y="5.4" width="7" height="1.6" rx="0.8" fill="#6ee02b" stroke="none"/>
               <rect x="1" y="10.6" width="17" height="4.4" rx="2.2"/><rect x="2.6" y="12" width="12" height="1.6" rx="0.8" fill="#6ee02b" stroke="none"/>
             </svg>
           </div>
           <h3>一个图标，读得出刻度</h3>
-          <p>九种菜单栏样式，分段式的格子可以数——不是靠估。短周期和长周期分两行，哪个先见底一眼看到。</p>
+          <p>十一种菜单栏样式，分段式的格子可以数——不是靠估。双层的两种把短周期和长周期分两行，哪个先见底一眼看到。</p>
         </div>
         <div class="feature">
           <div class="feature__icon">
-            <svg width="19" height="19" viewBox="0 0 19 19" fill="none" stroke="#6ee02b" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+            <svg aria-hidden="true" width="19" height="19" viewBox="0 0 19 19" fill="none" stroke="#6ee02b" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
               <path d="M4 8a5.5 5.5 0 0 1 11 0c0 4 1.5 5 1.5 5h-14S4 12 4 8z"/><path d="M8 16.2a1.8 1.8 0 0 0 3 0"/>
             </svg>
           </div>
@@ -269,12 +293,12 @@
         </div>
         <div class="feature">
           <div class="feature__icon">
-            <svg width="19" height="19" viewBox="0 0 19 19" fill="none" stroke="#6ee02b" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+            <svg aria-hidden="true" width="19" height="19" viewBox="0 0 19 19" fill="none" stroke="#6ee02b" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
               <path d="M9.5 2v15"/><path d="M13 5.2H7.8a2.3 2.3 0 0 0 0 4.6h3.4a2.3 2.3 0 0 1 0 4.6H6"/>
             </svg>
           </div>
           <h3>花了多少</h3>
-          <p>直接读 CLI 自己的会话日志，按官方标价本地估算。缓存命中和重复计费都算对了。</p>
+          <p>直接读 CLI 自己的会话日志，对着公开的模型价格目录在本地估算。缓存命中和重复计费都算对了。</p>
         </div>
       </div>
     </div>
@@ -286,7 +310,7 @@
       <div class="cards">
         <div class="card">
           <div class="card__art">
-            <img src="assets/notch.png?v=4dab940b" alt="刘海条：数字分列刘海两侧，各带重置倒计时" style="max-width:88%">
+            <img src="assets/notch.png?v=9af75c8c" alt="刘海条：数字分列刘海两侧，各带重置倒计时" style="max-width:88%" loading="lazy" decoding="async">
           </div>
           <div class="card__body">
             <h3>不止菜单栏</h3>
@@ -305,7 +329,7 @@
           </div>
           <div class="card__body">
             <h3>数据不出这台 Mac</h3>
-            <p>没有服务器，没有分析，没有追踪。自动型服务商复用你 CLI 已有的登录会话；手动填的凭据进 macOS 钥匙串，不写进任何文件。</p>
+            <p>应用没有服务器，不做分析，不做追踪。自动型服务商复用你 CLI 已有的登录会话；手动填的凭据进 macOS 钥匙串，不写进任何文件。</p>
           </div>
         </div>
       </div>
@@ -317,10 +341,10 @@
     <div class="shell">
       <div class="section-head">
         <h2>该配的都能配</h2>
-        <p>十一个服务商各自的登录方式、图标样式、提醒阈值、更新源——都在一个窗口里。</p>
+        <p>11 个服务商各自的登录方式、图标样式、提醒阈值、更新源——都在一个窗口里。</p>
       </div>
       <div class="showcase">
-        <img src="assets/settings.png?v=4dab940b" alt="QuotaBar 设置窗口：左侧黑色导航，右侧服务商列表">
+        <img src="assets/settings.png?v=9af75c8c" alt="QuotaBar 设置窗口：左侧黑色导航，右侧服务商列表" loading="lazy" decoding="async">
       </div>
     </div>
   </section>
@@ -336,7 +360,7 @@
         </details>
         <details class="qa">
           <summary class="qa__q">支持哪些服务商？</summary>
-          <div class="qa__a"><div>Codex、Claude、Cursor、Gemini、Grok、OpenCode Go、Kimi Code、z.ai、MiniMax、Manus、DeepSeek，共十一个。你只启用自己在用的那几个。</div></div>
+          <div class="qa__a"><div>Codex、Claude、Cursor、Gemini、Grok、OpenCode Go、Kimi Code、z.ai、MiniMax、Manus、DeepSeek，共 11 个。你只启用自己在用的那几个。</div></div>
         </details>
         <details class="qa">
           <summary class="qa__q">需要填 API Key 吗？</summary>
@@ -344,7 +368,7 @@
         </details>
         <details class="qa">
           <summary class="qa__q">我的凭据安全吗？</summary>
-          <div class="qa__a"><div>手动填写的凭据只存 macOS 登录钥匙串，不会写进配置文件。自动型服务商根本不存——每次直接读你 CLI 已有的会话。整个应用没有任何联网上报：它只和各服务商自己的接口通信。</div></div>
+          <div class="qa__a"><div>手动填写的凭据只存 macOS 登录钥匙串，不会写进配置文件。自动型服务商根本不存——每次直接读你 CLI 已有的会话。整个应用不向我们上报任何数据——我们没有服务器。除各服务商自己的接口外，它只会去 GitHub 取新版本和价格目录。</div></div>
         </details>
         <details class="qa">
           <summary class="qa__q">费用数字准不准？</summary>
@@ -352,7 +376,7 @@
         </details>
         <details class="qa">
           <summary class="qa__q">怎么安装？</summary>
-          <div class="qa__a"><div>下载 <code>.dmg</code> 拖进「应用程序」，或者 <code>brew tap gentpan/tap</code> 然后 <code>brew install --cask quotabar</code>。已用 Developer ID 签名并通过 Apple 公证，不会弹「无法验证开发者」。</div></div>
+          <div class="qa__a"><div>下载 <code>.dmg</code> 拖进「应用程序」，或者 <code>brew tap gentpan/tap</code>、<code>brew trust gentpan/tap</code>，然后 <code>brew install --cask quotabar</code>。已用 Developer ID 签名并通过 Apple 公证，不会弹「无法验证开发者」。</div></div>
         </details>
         <details class="qa">
           <summary class="qa__q">服务商改了接口怎么办？</summary>
@@ -369,21 +393,22 @@
 
 <footer class="footer">
   <div class="shell">
-    <img class="footer__icon" src="assets/icon.png?v=4dab940b" alt="">
+    <img class="footer__icon" src="assets/icon.png?v=9af75c8c" alt="" loading="lazy" decoding="async">
     <div class="footer__links">
       <a href="https://github.com/gentpan/quotabar/releases/latest">下载</a>
       <a href="https://github.com/gentpan/quotabar">源码</a>
       <a href="https://github.com/gentpan/quotabar/issues">反馈</a>
     </div>
     <p class="footer__fine">
-      © 2026 QuotaBar · 开源软件<br>
-      QuotaBar 是独立的第三方应用，与 OpenAI、Anthropic、Cursor、Google、xAI 及其他任何被展示的服务商<br>
-      均无从属、认可或赞助关系。商标归各自所有者。
+      © 2026 QuotaBar · <a href="https://github.com/gentpan/quotabar/blob/main/LICENSE">MIT 许可证</a><br>
+      QuotaBar 是独立的第三方应用，与 OpenAI、Anthropic、Cursor、Google、xAI、Moonshot、智谱、<br>
+      MiniMax、Manus、DeepSeek、SST 及其他任何被展示的服务商均无从属、认可或赞助关系。<br>
+      商标归各自所有者。标题字体 <a href="assets/fonts/OFL.txt">Sora</a> 依 SIL OFL 1.1 授权。
     </p>
   </div>
 </footer>
 
-<script src="app.js?v=4dab940b"></script>
-<script src="replica.js?v=4dab940b"></script>
+<script src="app.js?v=9af75c8c"></script>
+<script src="replica.js?v=9af75c8c"></script>
 </body>
 </html>
