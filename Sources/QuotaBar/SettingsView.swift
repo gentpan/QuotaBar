@@ -761,6 +761,13 @@ struct PresentationPane: View {
                         onSelect: { store.setDockEdge($0) })
                     .frame(maxWidth: 200)
                 }
+                SettingRow(L10n.t("Corners", "边角")) {
+                    GlassSegmented(
+                        options: DockCorners.allCases.map { (value: $0, label: $0.displayName) },
+                        selection: store.dockCorners,
+                        onSelect: { store.setDockCorners($0) })
+                    .frame(maxWidth: 200)
+                }
                 SettingToggle(
                     L10n.t("Keep the dock visible", "常驻显示（不自动隐藏）"),
                     isOn: Binding(

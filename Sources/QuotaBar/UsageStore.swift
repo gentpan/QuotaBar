@@ -375,6 +375,13 @@ final class UsageStore: ObservableObject {
         dockRevision &+= 1
     }
 
+    var dockCorners: DockCorners { config.dockCorners }
+
+    func setDockCorners(_ corners: DockCorners) {
+        config.dockCorners = corners
+        objectWillChange.send()
+    }
+
     func setDockAlwaysVisible(_ on: Bool) {
         config.dockAlwaysVisible = on
         objectWillChange.send()

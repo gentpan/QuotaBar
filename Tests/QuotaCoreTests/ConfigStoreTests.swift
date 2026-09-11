@@ -435,6 +435,7 @@ final class DockSettingsTests: XCTestCase {
     func testDefaults() {
         let store = ConfigStore(fileURL: fileURL, credentials: MemoryCredentialStorage())
         XCTAssertEqual(store.dockEdge, .right)
+        XCTAssertEqual(store.dockCorners, .rounded)
         XCTAssertEqual(store.dockPosition, 0.5, accuracy: 0.001)
         XCTAssertFalse(store.dockAlwaysVisible)
     }
@@ -443,11 +444,13 @@ final class DockSettingsTests: XCTestCase {
         let keychain = MemoryCredentialStorage()
         let first = ConfigStore(fileURL: fileURL, credentials: keychain)
         first.dockEdge = .left
+        first.dockCorners = .square
         first.dockPosition = 0.2
         first.dockAlwaysVisible = true
 
         let second = ConfigStore(fileURL: fileURL, credentials: keychain)
         XCTAssertEqual(second.dockEdge, .left)
+        XCTAssertEqual(second.dockCorners, .square)
         XCTAssertEqual(second.dockPosition, 0.2, accuracy: 0.001)
         XCTAssertTrue(second.dockAlwaysVisible)
     }

@@ -105,8 +105,12 @@ final class EdgeDockCoordinator {
         let size = NSHostingView(rootView: root).fittingSize
 
         // Line the bubble up with the ring it belongs to. The strip lays its
-        // rings out from the top, and AppKit measures from the bottom.
-        let stripFrame = strip.frame
+        // rings out from the top, and AppKit measures from the bottom. Against
+        // where the strip is *going*, not where it is: the first hover lands
+        // on the handle, the strip is still sliding open when the ring reports
+        // it, and a card placed against the in-between frame sat well below
+        // the ring's centre.
+        let stripFrame = targetFrame ?? strip.frame
         let insetTop = Design.space4
         let centreFromTop = insetTop + CGFloat(index) * Self.cellHeight + Self.cellHeight / 2
         let centreY = stripFrame.maxY - centreFromTop
@@ -398,7 +402,12 @@ struct EdgeDockView: View {
     var body: some View {
         Group {
             if showsStrip {
-                strip.transition(.opacity)
+                // Slides in from the docked edge as the window grows, so the
+                // rings come out of the screen's side. A plain fade put them
+                // at their final position at 0% opacity and brightened them
+                // there, which read as the strip materialising next to the
+                // edge rather than emerging from it.
+                strip.transition(.move(edge: onLeft ? .leading : .trailing).combined(with: .opacity))
             } else {
                 handle.transition(.opacity)
             }
@@ -423,7 +432,8 @@ struct EdgeDockView: View {
         // 74pt wide and as the handle's pill edge at 18. Flat black: glass
         // was tried here and read as grey over light windows (GlassStyle.swift
         // has the numbers); black is what the owner wants.
-        .background(Self.dockShape(onLeft: onLeft).fill(Color.black))
+        .background(
+            Self.dockShape(onLeft: onLeft, square: store.dockCorners == .square).fill(Color.black))
         // Always dark, like the panel, the island and the widget.
         .environment(\.colorScheme, .dark)
         .onHover { inside in
@@ -438,12 +448,15 @@ struct EdgeDockView: View {
         }
     }
 
-    static func dockShape(onLeft: Bool) -> UnevenRoundedRectangle {
-        UnevenRoundedRectangle(
-            topLeadingRadius: onLeft ? 0 : Design.radiusPanel + 6,
-            bottomLeadingRadius: onLeft ? 0 : Design.radiusPanel + 6,
-            bottomTrailingRadius: onLeft ? Design.radiusPanel + 6 : 0,
-            topTrailingRadius: onLeft ? Design.radiusPanel + 6 : 0,
+    /// The edge against the screen is always square; the outboard corners
+    /// are rounded or square per the setting.
+    static func dockShape(onLeft: Bool, square: Bool = false) -> UnevenRoundedRectangle {
+        let radius: CGFloat = square ? 0 : Design.radiusPanel + 6
+        return UnevenRoundedRectangle(
+            topLeadingRadius: onLeft ? 0 : radius,
+            bottomLeadingRadius: onLeft ? 0 : radius,
+            bottomTrailingRadius: onLeft ? radius : 0,
+            topTrailingRadius: onLeft ? radius : 0,
             style: .continuous)
     }
 
