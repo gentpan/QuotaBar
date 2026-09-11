@@ -58,6 +58,13 @@ login keychain**, never to a file. Preferences live in `~/.config/quotabar/confi
 (mode `0600`) and contain no secrets. There is no analytics, no telemetry and no server
 of ours anywhere in the path.
 
+**One dialog, once.** Claude is the only provider whose session lives in *another app's*
+keychain item, so macOS asks before QuotaBar may read it. The app never raises that
+dialog from a background refresh — only from the **Allow keychain access** button in the
+panel or in Settings. Choose **Always Allow** and it stays quiet. (Unsigned development
+builds are asked again after every rebuild: macOS remembers them by code hash, not by
+identity. The notarized release is remembered by identity.)
+
 ## What it does
 
 **In the menu bar**

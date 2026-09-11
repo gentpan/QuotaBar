@@ -5,27 +5,26 @@ import Security
 public enum LocalCredentials {
     private static let home = FileManager.default.homeDirectoryForCurrentUser
 
-    /// `SecItemCopyMatching` blocks while macOS asks the user to authorize
-    /// keychain access, so the Claude lookup is memoized briefly. Short enough
-    /// that a re-login is picked up promptly, long enough that a refresh cycle
-    /// and a settings render do not each trigger their own prompt.
+    /// The Claude lookup is memoized briefly: a refresh cycle and a settings
+    /// render should share one keychain round trip, and a re-login should
+    /// still be picked up within the minute.
     private static let keychainTTL: TimeInterval = 60
     private static let memo = TokenMemo()
 
     final class TokenMemo: @unchecked Sendable {
         private let lock = NSLock()
-        private var value: String??
+        private var value: ClaudeLookup?
         private var storedAt: Date = .distantPast
 
-        func cached(ttl: TimeInterval) -> String?? {
+        func cached(ttl: TimeInterval) -> ClaudeLookup? {
             lock.lock(); defer { lock.unlock() }
             guard Date().timeIntervalSince(storedAt) < ttl else { return nil }
             return value
         }
 
-        func store(_ token: String?) {
+        func store(_ lookup: ClaudeLookup) {
             lock.lock()
-            value = token
+            value = lookup
             storedAt = Date()
             lock.unlock()
         }
@@ -61,14 +60,74 @@ public enum LocalCredentials {
 
     // MARK: Claude (Keychain item written by Claude Code)
 
-    public static func claudeOAuthToken() -> String? {
-        if let cached = memo.cached(ttl: keychainTTL) { return cached }
-        let token = readClaudeOAuthToken()
-        memo.store(token)
-        return token
+    /// What a lookup of Claude Code's keychain item found.
+    public enum ClaudeCredentialState: Sendable, Equatable {
+        /// A token was read.
+        case available
+        /// The item is there, but macOS would put up its keychain dialog
+        /// before handing it over, and no user action has asked for that yet.
+        case needsAuthorization
+        /// No item, or an item without a usable token: Claude Code has not
+        /// signed in on this Mac.
+        case missing
     }
 
-    private static func readClaudeOAuthToken() -> String? {
+    struct ClaudeLookup: Sendable, Equatable {
+        let state: ClaudeCredentialState
+        let token: String?
+    }
+
+    /// Shown wherever the app is waiting on the user's say-so.
+    public static var claudeAuthorizationHint: String {
+        L10n.t(
+            "Claude Code keeps its session in the keychain, and macOS asks before another app may read it. Press “Allow keychain access” and choose Always Allow in the dialog.",
+            "Claude Code 的会话存在钥匙串里，macOS 会在其他应用读取前询问一次。点「授权钥匙串访问」，在弹窗里选「始终允许」。")
+    }
+
+    /// Never prompts. Background refreshes call this every cycle, and a
+    /// keychain dialog that pops up on a timer — every minute, for as long as
+    /// the user keeps declining it — is exactly what this guards against.
+    /// When macOS would have asked, the answer is `nil` and
+    /// `claudeCredentialState()` reports `.needsAuthorization`; the dialog is
+    /// only ever raised by `authorizeClaudeAccess()`, from a button.
+    public static func claudeOAuthToken() -> String? {
+        probeClaude().token
+    }
+
+    public static func claudeCredentialState() -> ClaudeCredentialState {
+        probeClaude().state
+    }
+
+    /// The one place the keychain dialog is allowed. Call it from a user
+    /// action; it blocks the calling thread for as long as the dialog is up.
+    /// A decline is remembered like any other answer, so the next refresh
+    /// stays quiet and the button simply remains available.
+    @discardableResult
+    public static func authorizeClaudeAccess() -> Bool {
+        let lookup = readClaudeOAuthToken(interactive: true)
+        memo.store(lookup)
+        return lookup.state == .available
+    }
+
+    /// `authorizeClaudeAccess()` off the cooperative pool: the dialog can sit
+    /// there for minutes, and a pinned executor thread would be a poor trade
+    /// for one keychain read.
+    public static func authorizeClaudeAccessAsync() async -> Bool {
+        await withCheckedContinuation { continuation in
+            DispatchQueue.global(qos: .userInitiated).async {
+                continuation.resume(returning: authorizeClaudeAccess())
+            }
+        }
+    }
+
+    private static func probeClaude() -> ClaudeLookup {
+        if let cached = memo.cached(ttl: keychainTTL) { return cached }
+        let lookup = readClaudeOAuthToken(interactive: false)
+        memo.store(lookup)
+        return lookup
+    }
+
+    private static func readClaudeOAuthToken(interactive: Bool) -> ClaudeLookup {
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: "Claude Code-credentials",
@@ -76,16 +135,83 @@ public enum LocalCredentials {
             kSecMatchLimit as String: kSecMatchLimitOne,
         ]
         var result: AnyObject?
-        guard SecItemCopyMatching(query as CFDictionary, &result) == errSecSuccess,
-              let data = result as? Data,
-              let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+        let status: OSStatus = interactive
+            ? SecItemCopyMatching(query as CFDictionary, &result)
+            : KeychainUI.withoutPrompts { SecItemCopyMatching(query as CFDictionary, &result) }
+        return classify(status: status, data: result as? Data)
+    }
+
+    /// Pure, so the status mapping is pinned by tests without a keychain.
+    static func classify(status: OSStatus, data: Data?) -> ClaudeLookup {
+        switch status {
+        case errSecSuccess:
+            let token = data.flatMap(extractClaudeToken)
+            return ClaudeLookup(state: token == nil ? .missing : .available, token: token)
+        case errSecInteractionNotAllowed, errSecAuthFailed, errSecUserCanceled:
+            // -25308 is what the documentation promises for a suppressed
+            // dialog; -25293 is what macOS 27 actually returns (measured on
+            // an item this process is not trusted for). -128 is the user
+            // pressing Deny on the interactive path.
+            return ClaudeLookup(state: .needsAuthorization, token: nil)
+        default:
+            return ClaudeLookup(state: .missing, token: nil)
+        }
+    }
+
+    static func extractClaudeToken(_ data: Data) -> String? {
+        guard let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
         else { return nil }
         if let oauth = root["claudeAiOauth"] as? [String: Any],
            let token = oauth["accessToken"] as? String, !token.isEmpty
         {
             return token
         }
-        return root["accessToken"] as? String
+        if let token = root["accessToken"] as? String, !token.isEmpty { return token }
+        return nil
+    }
+
+    /// Legacy login-keychain items have no per-query "no UI" switch — the
+    /// `kSecUseAuthenticationUI` keys only govern data-protection items. The
+    /// process-wide `SecKeychainSetUserInteractionAllowed` is what works:
+    /// measured on macOS 27, a read that would have prompted returns in 9 ms
+    /// with `errSecAuthFailed` and no dialog. It has carried a deprecation
+    /// since 10.10 ("SecKeychain is deprecated") with nothing offered in its
+    /// place, so it is bound through `dlsym` rather than the declared symbol:
+    /// the warning would otherwise sit in every build. The C signature is
+    /// stable — `(Boolean) -> OSStatus`.
+    enum KeychainUI {
+        private typealias SetInteraction = @convention(c) (UInt8) -> OSStatus
+        private typealias GetInteraction = @convention(c) (UnsafeMutablePointer<UInt8>) -> OSStatus
+
+        // RTLD_DEFAULT; the macro does not import.
+        private static let handle = UnsafeMutableRawPointer(bitPattern: -2)
+        private static let set: SetInteraction? = dlsym(handle, "SecKeychainSetUserInteractionAllowed")
+            .map { unsafeBitCast($0, to: SetInteraction.self) }
+        private static let get: GetInteraction? = dlsym(handle, "SecKeychainGetUserInteractionAllowed")
+            .map { unsafeBitCast($0, to: GetInteraction.self) }
+        // The switch is process-global, so two callers must not interleave
+        // their save/restore.
+        private static let lock = NSLock()
+
+        static var isInteractionAllowed: Bool {
+            guard let get else { return true }
+            var value: UInt8 = 1
+            _ = get(&value)
+            return value != 0
+        }
+
+        /// Runs `body` with the keychain dialog suppressed, then puts the
+        /// switch back the way it was. Without the symbols (never, on macOS)
+        /// it runs `body` as-is — the old behaviour, which may prompt.
+        static func withoutPrompts<T>(_ body: () -> T) -> T {
+            lock.lock(); defer { lock.unlock() }
+            guard let set, let get else { return body() }
+            var previous: UInt8 = 1
+            _ = get(&previous)
+            _ = set(0)
+            defer { _ = set(previous) }
+            return body()
+        }
     }
 
     // MARK: Gemini (~/.gemini/oauth_creds.json written by Gemini CLI)

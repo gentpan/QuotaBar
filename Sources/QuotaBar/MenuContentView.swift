@@ -808,6 +808,11 @@ struct FailureView: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
             HStack(spacing: Design.space2) {
+                if id == .claude, store.claudeNeedsAuthorization {
+                    // The one button that may raise the keychain dialog.
+                    Button(L10n.t("Allow keychain access", "授权钥匙串访问")) { store.authorizeClaude() }
+                        .controlSize(.small)
+                }
                 Button(L10n.t("Retry", "重试")) { store.refresh(id) }
                     .controlSize(.small)
                 Button(L10n.t("Settings", "设置")) {

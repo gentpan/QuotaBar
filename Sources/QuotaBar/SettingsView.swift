@@ -522,11 +522,16 @@ private struct CredentialEditor: View {
             }
 
             SettingRow(L10n.t("How to sign in", "如何登录")) {
-                Text(id.credentialHint ?? id.setupHint)
-                    .font(.system(size: 11))
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .padding(.top, 5)
+                VStack(alignment: .leading, spacing: Design.space2) {
+                    Text(id.credentialHint ?? id.setupHint)
+                    if id == .claude, store.claudeNeedsAuthorization {
+                        Text(LocalCredentials.claudeAuthorizationHint)
+                    }
+                }
+                .font(.system(size: 11))
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.top, 5)
             }
 
             actions
@@ -553,6 +558,12 @@ private struct CredentialEditor: View {
                         .glassAction()
                         .controlSize(.small)
                 }
+            }
+
+            if id == .claude, store.claudeNeedsAuthorization {
+                Button(L10n.t("Allow keychain access", "授权钥匙串访问")) { store.authorizeClaude() }
+                    .glassAction(prominent: true)
+                    .controlSize(.small)
             }
 
             Button(action: test) {
@@ -634,6 +645,9 @@ private struct CredentialEditor: View {
         LocalCredentials.invalidateClaudeToken()
         Task {
             do {
+                // "Test" is a click, so for Claude it may raise the keychain
+                // dialog; a refresh never does.
+                if id == .claude { _ = await LocalCredentials.authorizeClaudeAccessAsync() }
                 let snapshot = try await provider.fetch(config: ConfigStore.shared)
                 let connected = L10n.t("Connected", "连接成功")
                 if let percent = snapshot.headlinePercent {

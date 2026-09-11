@@ -561,6 +561,46 @@ There is no OAuth-in-app path: of the eleven providers only Google (Gemini)
 permits third-party client registration, and it is already covered by the CLI
 login file. Do not embed another CLI's `client_id`, and never a `client_secret`.
 
+### The keychain dialog
+
+Reading Claude Code's item (`Claude Code-credentials`) is the one keychain
+access that can put up macOS's "wants to access your keychain" dialog, and the
+rule is: **never from a timer, only from a button.** `LocalCredentials` probes
+the item with user interaction switched off and reports `.needsAuthorization`
+instead of prompting; `authorizeClaudeAccess()` — wired to "Allow keychain
+access" in the panel and the settings row, and to "Test connection" — is the
+only interactive read. Before this, the 60-second refresh re-raised the dialog
+every minute for as long as the user kept declining.
+
+What was learned getting there, all measured on macOS 27:
+
+- The item's ACL is a list of trusted applications. "Always Allow" records
+  the requesting app by its *designated requirement* when it is signed with a
+  stable identity, and by **cdhash** when it is ad-hoc signed — and every
+  rebuild is a new cdhash. The owner's item had accumulated 27 entries, 21 of
+  them dead cdhashes for dev builds, one designated-requirement entry for the
+  Developer ID build. Dev builds will always be re-asked; the release will not.
+- The partition list (`teamid:…`) matters too and is set by the same dialog.
+  Inspect both with `security dump-keychain -a ~/Library/Keychains/login.keychain-db`
+  (attributes and ACL only; `-d` would dump secrets — never that).
+- `kSecUseAuthenticationUI` does nothing for legacy login-keychain items; the
+  switch that works is the process-wide `SecKeychainSetUserInteractionAllowed`.
+  A read that would have prompted then returns in 9 ms with `errSecAuthFailed`
+  (-25293), not the documented `errSecInteractionNotAllowed` (-25308); the
+  mapping accepts both, plus `errSecUserCanceled` from a declined dialog.
+- That function is deprecated since 10.10 with no replacement for this use,
+  so it is bound through `dlsym` to keep the build at zero warnings. The
+  switch is process-global; `KeychainUI.withoutPrompts` serialises callers
+  and restores the previous value, which a test pins.
+
+### Universal binary
+
+`swift build` alone produces the host architecture. 0.3.2 shipped arm64-only
+while the README promised Intel; `package_app.sh` now passes
+`--arch arm64 --arch x86_64` (`UNIVERSAL=0` to skip). The macOS 27 toolchain
+prints a deprecation notice for the x86_64 slice — informational, the slice
+still builds and links.
+
 ## Adding a provider
 
 1. Implement `QuotaProvider` in `QuotaCore/Providers/`, with a pure `parse`.

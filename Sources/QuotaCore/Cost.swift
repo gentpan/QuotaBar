@@ -623,7 +623,9 @@ public enum CostEstimator {
     /// to materialise a slice per line first, and at hundreds of millions of
     /// lines that allocation dominated the scan.
     private static func contains(_ haystack: UnsafeRawBufferPointer, _ needle: [UInt8]) -> Bool {
-        guard let base = haystack.baseAddress, haystack.count >= needle.count else { return false }
+        // An empty needle has no base address to hand to memmem.
+        guard !needle.isEmpty, let base = haystack.baseAddress, haystack.count >= needle.count
+        else { return false }
         return needle.withUnsafeBytes { pattern in
             memmem(base, haystack.count, pattern.baseAddress!, needle.count) != nil
         }

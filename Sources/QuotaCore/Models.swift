@@ -613,6 +613,9 @@ public struct UsageSnapshot: Sendable {
 
 public enum ProviderError: LocalizedError, Sendable {
     case notConfigured(hint: String)
+    /// The credential exists but macOS wants the user's permission before
+    /// this app may read it (Claude Code's keychain item).
+    case needsAuthorization(hint: String)
     case unauthorized
     case rateLimited
     case http(Int)
@@ -623,6 +626,8 @@ public enum ProviderError: LocalizedError, Sendable {
         switch self {
         case let .notConfigured(hint):
             return L10n.t("Not configured. \(hint)", "尚未配置。\(hint)")
+        case let .needsAuthorization(hint):
+            return L10n.t("Needs your permission. \(hint)", "需要授权。\(hint)")
         case .unauthorized:
             return L10n.t(
                 "Session expired — sign in again with the provider CLI or update the credential in Settings.",

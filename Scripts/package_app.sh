@@ -26,8 +26,17 @@ if [[ "$(xcode-select -p)" == *CommandLineTools* ]]; then
 fi
 
 CONFIG=${CONFIG:-release}
-swift build -c "$CONFIG" --product QuotaBar
-BIN="$(swift build -c "$CONFIG" --show-bin-path)/QuotaBar"
+# Universal by default. A plain `swift build` only produces the host
+# architecture, and 0.3.2 shipped arm64-only against a README that promises
+# Intel. UNIVERSAL=0 skips the second slice for a quick local build.
+ARCHS=()
+if [ "${UNIVERSAL:-1}" = "1" ]; then
+  ARCHS=(--arch arm64 --arch x86_64)
+fi
+# ${ARCHS[@]+...}: bash 3.2 treats an empty array as unbound under set -u.
+swift build -c "$CONFIG" ${ARCHS[@]+"${ARCHS[@]}"} --product QuotaBar
+BIN="$(swift build -c "$CONFIG" ${ARCHS[@]+"${ARCHS[@]}"} --show-bin-path)/QuotaBar"
+echo "Architectures: $(lipo -archs "$BIN")"
 
 APP=QuotaBar.app
 rm -rf "$APP"

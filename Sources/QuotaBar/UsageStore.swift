@@ -32,6 +32,10 @@ enum ProviderPhase: Sendable {
 final class UsageStore: ObservableObject {
     @Published var enabled: [ProviderID]
     @Published var states: [ProviderID: ProviderPhase] = [:]
+    /// Claude Code's session lives in another app's keychain item, and macOS
+    /// wants the user's say-so before this app may read it. True while that
+    /// is outstanding; the panel and the settings row show the button then.
+    @Published private(set) var claudeNeedsAuthorization = false
     /// Persisted, because it decides what the menu-bar glyph reports — a
     /// choice that silently reverted on every launch would make the icon
     /// change meaning without the user doing anything.
@@ -257,15 +261,31 @@ final class UsageStore: ObservableObject {
     /// Re-evaluates which providers have usable credentials.
     func refreshConfigured() {
         Task { [config] in
-            let ready = await Task.detached(priority: .utility) {
-                Set(ProviderID.allCases.filter { ProviderRegistry.make($0).isConfigured(config: config) })
+            let (ready, claudeWaiting) = await Task.detached(priority: .utility) {
+                let ready = Set(ProviderID.allCases.filter {
+                    ProviderRegistry.make($0).isConfigured(config: config)
+                })
+                // Non-interactive, like every keychain read off a timer.
+                let waiting = LocalCredentials.claudeCredentialState() == .needsAuthorization
+                return (ready, waiting)
             }.value
             self.configured = ready
+            self.claudeNeedsAuthorization = claudeWaiting
         }
     }
 
     func isConfigured(_ id: ProviderID) -> Bool {
         configured.contains(id)
+    }
+
+    /// Raises the keychain dialog for Claude Code's item — the only place the
+    /// app ever does — then reads again. Wire it to a button, nothing else.
+    func authorizeClaude() {
+        Task {
+            _ = await LocalCredentials.authorizeClaudeAccessAsync()
+            refresh(.claude)
+            refreshConfigured()
+        }
     }
 
     /// Only meaningful for a packaged build: the dev binary has no version.

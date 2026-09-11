@@ -196,6 +196,11 @@ public struct ClaudeProvider: QuotaProvider {
 
     public func fetch(config: ConfigStore) async throws -> UsageSnapshot {
         guard let token = LocalCredentials.claudeOAuthToken() else {
+            // Two different situations behind one nil: no session at all, or
+            // a session macOS will not hand over until the user says so.
+            if LocalCredentials.claudeCredentialState() == .needsAuthorization {
+                throw ProviderError.needsAuthorization(hint: LocalCredentials.claudeAuthorizationHint)
+            }
             throw ProviderError.notConfigured(hint: ProviderID.claude.setupHint)
         }
         let url = URL(string: "https://api.anthropic.com/api/oauth/usage")!
