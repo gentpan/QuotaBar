@@ -363,16 +363,22 @@ final class UsageStore: ObservableObject {
     }
     var dockAlwaysVisible: Bool { config.dockAlwaysVisible }
 
+    /// Bumped when a setting moves the dock, so the coordinator re-places
+    /// the window. Re-assigning `presentation` to itself did nothing: SwiftUI's
+    /// `onChange` compares values, and an unchanged value is not a change —
+    /// the strip mirrored its corners for the new edge and stayed put.
+    @Published var dockRevision = 0
+
     func setDockEdge(_ edge: DockEdge) {
         config.dockEdge = edge
         objectWillChange.send()
-        presentation = presentation  // nudge the coordinator to re-lay out
+        dockRevision &+= 1
     }
 
     func setDockAlwaysVisible(_ on: Bool) {
         config.dockAlwaysVisible = on
         objectWillChange.send()
-        presentation = presentation
+        dockRevision &+= 1
     }
     var updateFeedValue: String { config.updateFeed.configValue }
 

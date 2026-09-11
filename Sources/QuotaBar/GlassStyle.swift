@@ -12,14 +12,15 @@ import QuotaCore
 /// specular hairline, which is a different look but the same visual weight —
 /// the layout does not shift between the two.
 ///
-/// Scope is deliberate. The menu panel, the notch island and the desktop
-/// widget stay on the flat `Design` surfaces: they sit over arbitrary
-/// wallpaper and have to carry their own contrast, and clear glass there would
-/// put the user's wallpaper behind the numbers the app exists to show. A
-/// settings window is always over the desktop *and* always in front, so it
-/// can afford it. The edge dock and its callout are the middle case — glass,
-/// but through `DarkGlassBacking`, whose tint is heavy enough that the
-/// numbers keep their contrast (below).
+/// Scope is deliberate. The menu panel, the edge dock and its callout, the
+/// notch island and the desktop widget stay on the flat `Design` surfaces:
+/// they sit over arbitrary wallpaper and have to carry their own contrast,
+/// and glass there puts the user's wallpaper behind the numbers the app
+/// exists to show. Glass on the dock was tried and rejected — a black tint
+/// only colours the glass (74% white over a white window), an ink overlay
+/// on top of it still read as grey, and the owner wanted black. A settings
+/// window is always over the desktop *and* always in front, so it can afford
+/// glass.
 @available(macOS 26.0, *)
 private struct LiquidGlassSurface: ViewModifier {
     let radius: CGFloat
@@ -54,26 +55,6 @@ private struct FrostedSurface: ViewModifier {
                 .fill(.regularMaterial)
                 .overlay { shape.fill(tint?.opacity(0.16) ?? .clear) }
                 .overlay { shape.strokeBorder(Design.glassEdge, lineWidth: 1) }
-        }
-    }
-}
-
-/// Dark glass for the floating always-dark surfaces: the edge dock and its
-/// hover callout. Both windows are transparent, so the glass samples whatever
-/// the dock is docked over. The black tint is heavy on purpose —
-/// `Design.darkGlassTint`, 70% — so white text stays above 6:1 even over a
-/// white window; over the desktop it reads as smoked glass. Below macOS 26,
-/// and in the off-screen snapshot renderer, it is the flat black these
-/// surfaces have always been.
-struct DarkGlassBacking<S: Shape>: View {
-    @Environment(\.glassDisabled) private var disabled
-    let shape: S
-
-    var body: some View {
-        if !disabled, #available(macOS 26.0, *) {
-            Color.clear.glassEffect(.regular.tint(Design.darkGlassTint), in: shape)
-        } else {
-            shape.fill(Color.black)
         }
     }
 }

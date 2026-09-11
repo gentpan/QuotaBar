@@ -478,6 +478,24 @@ against black without adding a twelfth hue that competes with the provider
 brand colours. The settings window keeps its adaptive tokens; nothing there
 changed.
 
+### The dock stays black
+
+Glass on the edge dock and its callout was tried during 0.4 and taken out
+the same day. Measured over a white window, `.regular` glass with a 70%
+black tint rendered at 74% white (RGB 189) — `tint` colours the glass, it
+does not cover it; a 62% ink fill laid over the glass got the strip down to
+RGB ~53 but it still read as translucent grey, and the owner's call was
+"不要透明的，需要黑色的". The dock and the callout are flat `Color.black`,
+and the strip forces `.environment(\.colorScheme, .dark)` so nothing inside
+it resolves against the system appearance.
+
+Two dock fixes from the same session: `setDockEdge` / `setDockAlwaysVisible`
+used to "nudge" the coordinator by re-assigning `presentation` to itself,
+which `onChange` ignores — the strip mirrored its corners for the new edge
+and the window stayed on the old one. `dockRevision` is the real signal, and
+`EdgeDockCoordinator.relayout()` snaps the window (and re-sides the callout)
+when it changes.
+
 ### The settings window
 
 It is the one surface that opts into Liquid Glass, and the only place the

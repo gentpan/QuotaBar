@@ -111,12 +111,18 @@ final class EdgeDockCoordinator {
         let centreFromTop = insetTop + CGFloat(index) * Self.cellHeight + Self.cellHeight / 2
         let centreY = stripFrame.maxY - centreFromTop
         let height = max(size.height, 40)
-        let x = stripFrame.minX - Self.calloutWidth - Design.space2
+        // On the inboard side of the strip, whichever edge it is docked to.
+        let onLeft = ConfigStore.shared.dockEdge == .left
+        let x = onLeft
+            ? stripFrame.maxX + Design.space2
+            : stripFrame.minX - Self.calloutWidth - Design.space2
         let frame = NSRect(x: x, y: centreY - height / 2, width: Self.calloutWidth, height: height)
 
         if appearing {
             panel.alphaValue = 0
-            panel.setFrame(frame.offsetBy(dx: Design.space2, dy: 0), display: false)
+            // Starts a step closer to the strip and settles outward.
+            let towardStrip: CGFloat = onLeft ? -Design.space2 : Design.space2
+            panel.setFrame(frame.offsetBy(dx: towardStrip, dy: 0), display: false)
             panel.orderFrontRegardless()
             NSAnimationContext.runAnimationGroup { context in
                 context.duration = 0.18
@@ -205,6 +211,18 @@ final class EdgeDockCoordinator {
 
     /// Whether the strip should sit fully on screen regardless of the pointer.
     var alwaysVisible: Bool { ConfigStore.shared.dockAlwaysVisible }
+
+    /// Re-places the panel after a setting that moves it — the edge, the
+    /// position, always-visible. Snapped, not slid: the change came from a
+    /// control the user just operated, and the SwiftUI content had already
+    /// mirrored itself for the new edge while the window sat where it was,
+    /// which read as the setting having done half its job.
+    func relayout() {
+        guard panel != nil else { return }
+        targetFrame = nil
+        hideCallout()
+        layout(expanded: expanded)
+    }
 
     /// Collapsing is delayed so a pointer crossing the strip on its way
     /// somewhere else does not make it flap open and shut.
@@ -402,9 +420,12 @@ struct EdgeDockView: View {
         // cross-fading through each other — which looked like the handle and
         // the strip arguing over the same corner. The radius is clamped to the
         // shape it is drawn in, so the same 20pt reads as the panel's corner at
-        // 74pt wide and as the handle's pill edge at 18. Dark glass on macOS
-        // 26, the flat black it always was below.
-        .background(DarkGlassBacking(shape: Self.dockShape(onLeft: onLeft)))
+        // 74pt wide and as the handle's pill edge at 18. Flat black: glass
+        // was tried here and read as grey over light windows (GlassStyle.swift
+        // has the numbers); black is what the owner wants.
+        .background(Self.dockShape(onLeft: onLeft).fill(Color.black))
+        // Always dark, like the panel, the island and the widget.
+        .environment(\.colorScheme, .dark)
         .onHover { inside in
             coordinator.setExpanded(inside) { expanded = $0 }
             if !inside { hovered = nil }

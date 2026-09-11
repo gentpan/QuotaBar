@@ -108,8 +108,9 @@ struct ProviderCallout: View {
         }
         .padding(Design.space3)
         .frame(width: 260, alignment: .leading)
-        .background(DarkGlassBacking(
-            shape: RoundedRectangle(cornerRadius: Design.radiusCard + 2, style: .continuous)))
+        .background(
+            RoundedRectangle(cornerRadius: Design.radiusCard + 2, style: .continuous)
+                .fill(Color.black))
         .environment(\.colorScheme, .dark)
     }
 

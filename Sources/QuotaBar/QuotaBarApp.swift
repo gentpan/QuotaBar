@@ -22,6 +22,7 @@ struct QuotaBarApp: App {
                 .onAppear { syncPresentation() }
                 .onChange(of: store.presentation) { _, _ in syncPresentation() }
                 .onChange(of: store.widgetRevision) { _, _ in widget.sync(store: store) }
+                .onChange(of: store.dockRevision) { _, _ in dock.relayout() }
         }
         .menuBarExtraStyle(.window)
 
