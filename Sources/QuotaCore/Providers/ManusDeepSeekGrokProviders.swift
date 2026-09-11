@@ -117,33 +117,66 @@ public struct GrokProvider: QuotaProvider {
             "Accept": "application/json",
             "User-Agent": "QuotaBar",
         ]).requireOK()
+        return try Self.parse(response.data)
+    }
 
-        struct Amount: Decodable { let val: Double? }
-        struct Period: Decodable { let end: String? }
-        struct Config: Decodable {
-            let creditUsagePercent: Double?
-            let currentPeriod: Period?
-            let billingPeriodEnd: String?
-            let onDemandCap: Amount?
-            let onDemandUsed: Amount?
-            let subscriptionTier: String?
-        }
-        struct Body: Decodable {
-            let config: Config?
-            let subscriptionTier: String?
-        }
+    // MARK: Response shape
 
-        let body = try response.json(Body.self)
+    struct Amount: Decodable { let val: Double? }
+    struct Period: Decodable {
+        let type: String?
+        let end: String?
+    }
+    struct Product: Decodable {
+        let product: String?
+        let usagePercent: Double?
+    }
+    struct Config: Decodable {
+        let creditUsagePercent: Double?
+        let currentPeriod: Period?
+        let billingPeriodEnd: String?
+        let onDemandCap: Amount?
+        let onDemandUsed: Amount?
+        let productUsage: [Product]?
+        let subscriptionTier: String?
+    }
+    struct Body: Decodable {
+        let config: Config?
+        let subscriptionTier: String?
+    }
+
+    /// The period is whatever the account is on. Live accounts report
+    /// `USAGE_PERIOD_TYPE_WEEKLY`; before the type was read the window was
+    /// labelled "monthly" regardless, which was simply wrong on those. Each
+    /// `productUsage` entry (Grok Imagine, Grok Build, …) becomes a scoped
+    /// window under the same period, the way Claude's per-model windows do.
+    static func parse(_ data: Data) throws -> UsageSnapshot {
+        let body: Body
+        do { body = try JSONDecoder().decode(Body.self, from: data) } catch { throw ProviderError.badResponse }
         guard let configBody = body.config else { throw ProviderError.badResponse }
 
-        var windows: [UsageWindow] = []
         let periodEnd = Dates.parseISO(configBody.currentPeriod?.end)
             ?? Dates.parseISO(configBody.billingPeriodEnd)
+        let (title, seconds) = periodLabel(configBody.currentPeriod?.type)
+
+        var windows: [UsageWindow] = []
         if let percent = configBody.creditUsagePercent {
             windows.append(UsageWindow(
-                title: L10n.t("Monthly credits", "月度额度"),
+                title: title,
                 usedPercent: percent,
-                resetsAt: periodEnd))
+                resetsAt: periodEnd,
+                windowSeconds: seconds))
+        }
+        for product in configBody.productUsage ?? [] {
+            guard let raw = product.product, let percent = product.usagePercent else { continue }
+            let name = productName(raw)
+            // `UsageWindow.id` is the title, so a scoped window needs its own.
+            windows.append(UsageWindow(
+                title: "\(title) · \(name)",
+                usedPercent: percent,
+                resetsAt: periodEnd,
+                windowSeconds: seconds,
+                scope: name))
         }
         if let cap = configBody.onDemandCap?.val, cap > 0, let used = configBody.onDemandUsed?.val {
             windows.append(UsageWindow(
@@ -156,6 +189,30 @@ public struct GrokProvider: QuotaProvider {
         return UsageSnapshot(
             planName: configBody.subscriptionTier ?? body.subscriptionTier,
             windows: windows)
+    }
+
+    /// `USAGE_PERIOD_TYPE_WEEKLY` and friends → a title and the window length
+    /// the menu-bar glyph keys its short label off.
+    static func periodLabel(_ type: String?) -> (title: String, seconds: Int?) {
+        let value = type?.uppercased() ?? ""
+        if value.contains("WEEK") { return (L10n.t("Weekly credits", "每周额度"), 7 * 86_400) }
+        // "DAILY" does not contain "DAY".
+        if value.contains("DAI") || value.contains("DAY") { return (L10n.t("Daily credits", "每日额度"), 86_400) }
+        if value.contains("MONTH") { return (L10n.t("Monthly credits", "月度额度"), 30 * 86_400) }
+        return (L10n.t("Credits", "额度"), nil)
+    }
+
+    /// `GrokImagine` → `Grok Imagine`. The API's product ids are camel-cased
+    /// brand names; the space is what the product is actually called.
+    static func productName(_ raw: String) -> String {
+        var out = ""
+        var previous: Character?
+        for ch in raw {
+            if ch.isUppercase, let previous, previous.isLowercase || previous.isNumber { out.append(" ") }
+            out.append(ch)
+            previous = ch
+        }
+        return out
     }
 }
 

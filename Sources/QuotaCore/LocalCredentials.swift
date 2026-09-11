@@ -319,12 +319,36 @@ public enum LocalCredentials {
             guard let data = try? Data(contentsOf: url),
                   let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
             else { continue }
-            for key in ["access_token", "accessToken", "token", "api_key"] {
-                if let token = root[key] as? String, !token.isEmpty {
-                    return token
-                }
-            }
+            if let token = grokToken(in: root) { return token }
         }
         return nil
+    }
+
+    /// Two shapes. Early grok CLIs wrote a flat file with the token at the
+    /// top level. 1.0.x keys the file by issuer —
+    /// `"https://auth.x.ai::<client-id>": { "key": …, "expires_at": …, … }`
+    /// — and the bearer the billing endpoint wants is `key` (verified against
+    /// `cli-chat-proxy.grok.com/v1/billing`: 200 with it). Entries whose
+    /// `expires_at` has passed are ranked last rather than dropped: an expired
+    /// token gets a 401 and the "sign in again" message, which is the truth,
+    /// where "not configured" would send the user hunting for a file that is
+    /// right there. The CLI refreshes the entry on its next run; the app does
+    /// not touch `refresh_token` — that is the CLI's session to rotate.
+    static func grokToken(in root: [String: Any], now: Date = Date()) -> String? {
+        for key in ["access_token", "accessToken", "token", "api_key"] {
+            if let token = root[key] as? String, !token.isEmpty { return token }
+        }
+        var live: [(expires: Date, token: String)] = []
+        var expired: [(expires: Date, token: String)] = []
+        for value in root.values {
+            guard let entry = value as? [String: Any],
+                  let token = entry["key"] as? String, !token.isEmpty
+            else { continue }
+            let expires = Dates.parseISO(entry["expires_at"] as? String) ?? .distantFuture
+            if expires > now { live.append((expires, token)) } else { expired.append((expires, token)) }
+        }
+        // The one that lives longest, then the one that expired most recently.
+        return live.max(by: { $0.expires < $1.expires })?.token
+            ?? expired.max(by: { $0.expires < $1.expires })?.token
     }
 }
