@@ -449,7 +449,34 @@ the one `ProviderGlyph`'s `tint` solves.)
 Snapshots render light **and** dark (`-dark` suffix). Dark mode needs
 `NSAppearance.performAsCurrentDrawingAppearance` — adaptive colours resolve
 against the drawing appearance, which `ImageRenderer` does not inherit from the
-SwiftUI environment.
+SwiftUI environment. The menu panel's two variants now come out identical,
+because the panel is dark in both (below). On macOS 27, `ImageRenderer` draws
+AppKit-backed controls — `Toggle`, `TextField`, `ProgressView`, a disabled
+`Button` — as a yellow "prohibited" placeholder rather than skipping them as
+it did on 26; the layout is still readable, but the settings screenshot on
+the site has to come from a real window now.
+
+### The menu panel is always dark
+
+Since 0.3.3 the popover no longer follows the system appearance: it is the
+fourth always-dark surface after the dock, the island and the widget, and the
+last one that was still adaptive. The mechanism is the pair the widget and the
+island already use — `.environment(\.colorScheme, .dark)` on the root, so
+everything SwiftUI draws (`Color.primary` fills, the adaptive accent, the
+material) resolves dark — plus `PanelAppearance`, which pins the *window's*
+`NSAppearance` to `darkAqua` from `viewDidMoveToWindow`. The second half
+matters: the popover's rounded corners and the vibrancy under the content are
+AppKit's, drawn in the window's own appearance, and black content in a light
+window leaves a light hairline round the corners.
+
+The palette is the app's own dark family — `Design.panelSurface` is black,
+like the sidebar and the dock, so the surfaces read as one — with one value
+borrowed from CodexIsland (MIT): its alert amber `#F5A524` as
+`Design.panelWarning`, replacing system orange for the warning dot, the
+failure rows and the footer's "failed to update" line. It reads as amber
+against black without adding a twelfth hue that competes with the provider
+brand colours. The settings window keeps its adaptive tokens; nothing there
+changed.
 
 ### The settings window
 

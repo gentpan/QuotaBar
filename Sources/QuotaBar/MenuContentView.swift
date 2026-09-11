@@ -21,12 +21,17 @@ struct MenuContentView: View {
             // content reports the constrained size, and the resize is a no-op.
             .fixedSize(horizontal: false, vertical: true)
             .tint(Design.accent)
+            // Always dark, like the dock, the island and the widget. The
+            // environment covers what SwiftUI draws; `PanelAppearance` covers
+            // the window AppKit draws around it.
+            .environment(\.colorScheme, .dark)
             // An opaque backing, resolved in the same appearance as the text
             // on top of it. Without one the panel sits directly on the menu
             // bar window's vibrancy material, whose appearance does not always
             // match the one the content resolves in — light material under
             // dark-mode content renders the whole panel washed-out grey.
-            .background(Design.panelBackground)
+            .background(Design.panelSurface)
+            .background(PanelAppearance())
             .background(
                 GeometryReader { proxy in
                     Color.clear.onChange(of: proxy.size.height, initial: true) { _, height in
@@ -158,7 +163,7 @@ struct MenuContentBody: View {
                     .frame(height: 18)
                     if warn {
                         Circle()
-                            .fill(Color.orange)
+                            .fill(Design.panelWarning)
                             .frame(width: 5, height: 5)
                             .offset(x: 5, y: -2)
                     }
@@ -284,12 +289,12 @@ struct MenuContentBody: View {
                     .fixedSize(horizontal: false, vertical: true)
                 Spacer()
             }
-            .foregroundStyle(.orange)
+            .foregroundStyle(Design.panelWarning)
             .padding(.horizontal, Design.space2 + 2)
             .padding(.vertical, Design.space2)
             .background(
                 RoundedRectangle(cornerRadius: Design.radiusTile, style: .continuous)
-                    .fill(Color.orange.opacity(0.12)))
+                    .fill(Design.panelWarning.opacity(0.12)))
         }
     }
 
@@ -335,7 +340,7 @@ struct MenuContentBody: View {
                         L10n.t("\(names) not updating", "\(names) 未能更新"),
                         systemImage: "exclamationmark.triangle.fill")
                         .font(.caption2)
-                        .foregroundStyle(.orange)
+                        .foregroundStyle(Design.panelWarning)
                         .lineLimit(1)
                 }
             }
@@ -383,7 +388,7 @@ struct OverviewRow: View {
                     if store.states[id]?.errorMessage != nil {
                         Image(systemName: "exclamationmark.triangle.fill")
                             .font(.caption2)
-                            .foregroundStyle(.orange)
+                            .foregroundStyle(Design.panelWarning)
                             .help(store.states[id]?.errorMessage ?? "")
                     }
                     Spacer()
@@ -420,7 +425,7 @@ struct OverviewRow: View {
         case let .failed(message):
             Text(message)
                 .font(.caption)
-                .foregroundStyle(.orange)
+                .foregroundStyle(Design.panelWarning)
                 .lineLimit(1)
                 .help(message)
         }
@@ -763,7 +768,7 @@ struct StaleBanner: View {
     var body: some View {
         HStack(alignment: .top, spacing: Design.space2) {
             Image(systemName: "exclamationmark.triangle.fill")
-                .foregroundStyle(.orange)
+                .foregroundStyle(Design.panelWarning)
             VStack(alignment: .leading, spacing: 2) {
                 // No space before 的: the Chinese age string already ends in 前.
                 Text(L10n.t(
@@ -783,7 +788,7 @@ struct StaleBanner: View {
         .padding(Design.space2 + 2)
         .background(
             RoundedRectangle(cornerRadius: Design.radiusTile, style: .continuous)
-                .fill(Color.orange.opacity(0.12)))
+                .fill(Design.panelWarning.opacity(0.12)))
     }
 }
 
@@ -797,7 +802,7 @@ struct FailureView: View {
         VStack(alignment: .leading, spacing: Design.space2 + 2) {
             Label(message, systemImage: "exclamationmark.triangle")
                 .font(.callout)
-                .foregroundStyle(.orange)
+                .foregroundStyle(Design.panelWarning)
                 .fixedSize(horizontal: false, vertical: true)
             // `notConfigured` already quotes the setup hint; repeating it here
             // printed the same sentence twice.
@@ -1041,7 +1046,7 @@ struct WindowRow: View {
                 Text(label)
             }
             .font(.caption2)
-            .foregroundStyle(pace.willExhaustBeforeReset ? Color.orange : .secondary)
+            .foregroundStyle(pace.willExhaustBeforeReset ? Design.panelWarning : .secondary)
         }
     }
 }

@@ -28,11 +28,19 @@ enum Design {
     /// Clears the traffic lights once the titlebar is transparent.
     static let titlebarInset: CGFloat = 30
 
-    /// Opaque panel backing. Explicit rather than a material: the panel must
-    /// carry its own contrast, since it cannot rely on what sits behind it.
-    static var panelBackground: Color {
-        adaptive(light: "F2F2F2", dark: "1E1E1E")
-    }
+    /// The menu panel is the fourth always-dark surface, after the dock, the
+    /// island and the widget — black and pinned, not adaptive, for the same
+    /// reason the sidebar is: the app's own surfaces should read as one
+    /// family whatever the system appearance. Opaque rather than a material
+    /// because the panel must carry its own contrast; it cannot rely on what
+    /// sits behind it. Its cards keep their `Color.primary` fills, which
+    /// resolve white once `MenuContentView` forces its colour scheme.
+    static let panelSurface = Color.black
+
+    /// Warning tint on the panel: CodexIsland's alert amber (#F5A524). It
+    /// reads as amber against black without competing with the eleven brand
+    /// colours the way system orange does.
+    static let panelWarning = Color(hex: "F5A524")
 
     /// Low-contrast fill used for cards and tiles.
     static let surface = Color.primary.opacity(0.05)
