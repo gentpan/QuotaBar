@@ -404,9 +404,7 @@ struct EdgeDockView: View {
 
     private var onLeft: Bool { store.dockEdge == .left }
 
-    /// The selection bar: 3pt wide, 18pt tall, 4pt in from the strip's edge.
-    static let markWidth: CGFloat = 3
-    static let markHeight: CGFloat = 18
+    /// The selection dot's distance from the strip's inboard edge.
     static let markInset: CGFloat = 4
 
     private var showsStrip: Bool { expanded || coordinator.alwaysVisible }
@@ -516,26 +514,15 @@ struct EdgeDockView: View {
                     percent: store.states[id]?.snapshot?.headlinePercent,
                     alerts: store.alertSettings,
                     selected: store.selected == id,
-                    hovered: hovered == id)
-                    // The selection mark: a short bar on the strip's inboard
-                    // side — between the ring and where the callout appears,
-                    // away from the screen edge — the way the Dock marks a
-                    // running app. Not a halo on the ring, which read as
-                    // decoration, and not against the screen edge, where the
-                    // owner found it hard to read as belonging to the ring.
-                    .overlay(alignment: onLeft ? .trailing : .leading) {
-                        if store.selected == id {
-                            Capsule()
-                                .fill(Color.white.opacity(0.9))
-                                .frame(width: Self.markWidth, height: Self.markHeight)
-                                // From the ring's inboard edge out to `markInset`
-                                // in from the strip's inboard edge.
-                                .offset(x: (onLeft ? 1 : -1)
-                                    * ((EdgeDockCoordinator.width - ProviderRing.defaultDiameter) / 2
-                                        - Self.markInset - Self.markWidth))
-                                .transition(.opacity)
-                        }
-                    }
+                    hovered: hovered == id,
+                    // The selection dot sits on the strip's inboard side —
+                    // between the ring and where the callout appears, away
+                    // from the screen edge — `markInset` in from the strip's
+                    // edge. Not a halo on the ring, which read as decoration,
+                    // and not a bar, which the owner found heavy.
+                    mark: store.selected == id ? (onLeft ? .trailing : .leading) : nil,
+                    markDistance: (EdgeDockCoordinator.width - ProviderRing.defaultDiameter) / 2
+                        - Self.markInset)
                     .onHover { inside in
                         hovered = inside ? id : (hovered == id ? nil : hovered)
                     }
