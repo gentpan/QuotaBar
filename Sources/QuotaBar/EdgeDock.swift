@@ -347,13 +347,14 @@ struct EdgeDockView: View {
             maxWidth: .infinity,
             maxHeight: .infinity,
             alignment: onLeft ? .leading : .trailing)
-        // One black shape for both states, sized to the panel, so the reveal is
-        // a single shape growing rather than two shapes of different sizes
+        // One shape for both states, sized to the panel, so the reveal is a
+        // single shape growing rather than two shapes of different sizes
         // cross-fading through each other — which looked like the handle and
         // the strip arguing over the same corner. The radius is clamped to the
         // shape it is drawn in, so the same 20pt reads as the panel's corner at
-        // 74pt wide and as the handle's pill edge at 18.
-        .background(Self.dockShape(onLeft: onLeft).fill(Color.black))
+        // 74pt wide and as the handle's pill edge at 18. Dark glass on macOS
+        // 26, the flat black it always was below.
+        .background(DarkGlassBacking(shape: Self.dockShape(onLeft: onLeft)))
         .onHover { inside in
             coordinator.setExpanded(inside) { expanded = $0 }
             if !inside { hovered = nil }
@@ -409,7 +410,8 @@ struct EdgeDockView: View {
                     id: id,
                     percent: store.states[id]?.snapshot?.headlinePercent,
                     alerts: store.alertSettings,
-                    selected: store.selected == id)
+                    selected: store.selected == id,
+                    hovered: hovered == id)
                     .onHover { inside in
                         hovered = inside ? id : (hovered == id ? nil : hovered)
                     }

@@ -37,6 +37,11 @@ enum Design {
     /// resolve white once `MenuContentView` forces its colour scheme.
     static let panelSurface = Color.black
 
+    /// The dock's and callout's glass tint. 70% black is the floor at which
+    /// white text still clears 6:1 over a white window behind the glass;
+    /// lighter and the numbers start to depend on the wallpaper.
+    static let darkGlassTint = Color.black.opacity(0.7)
+
     /// Warning tint on the panel: CodexIsland's alert amber (#F5A524). It
     /// reads as amber against black without competing with the eleven brand
     /// colours the way system orange does.

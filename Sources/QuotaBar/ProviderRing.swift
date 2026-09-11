@@ -16,10 +16,25 @@ struct ProviderRing: View {
     /// single click in the dock; opening the panel is a double click, so
     /// choosing what the icon means does not also throw a window at you.
     var selected: Bool = false
+    /// The pointer is over this ring. Only the disc reacts, and only by
+    /// scaling, so the strip's height — which the dock derives from
+    /// `cellHeight` — is untouched.
+    var hovered: Bool = false
 
     private var level: AlertLevel {
         alerts.level(for: percent ?? 0)
     }
+
+    /// Hover lifts the disc the most; selection keeps it a little proud of
+    /// the row so the chosen provider still stands out once the pointer has
+    /// gone.
+    private var discScale: CGFloat {
+        if hovered { return 1.14 }
+        if selected { return 1.06 }
+        return 1
+    }
+
+    private static let lift = Animation.spring(response: 0.26, dampingFraction: 0.72)
 
     /// Green until the warning band, then the alert colour. A provider with no
     /// reading yet gets the neutral track only.
@@ -33,7 +48,7 @@ struct ProviderRing: View {
         VStack(spacing: 5) {
             ZStack {
                 Circle()
-                    .fill(Color.white.opacity(0.08))
+                    .fill(Color.white.opacity(selected ? 0.14 : 0.08))
                 Circle()
                     .stroke(Color.white.opacity(0.14), lineWidth: 3)
                 if let percent {
@@ -47,23 +62,25 @@ struct ProviderRing: View {
                 ProviderGlyph(id: id, size: diameter * 0.42, tint: .white)
             }
             .frame(width: diameter, height: diameter)
+            // Selection marks the disc alone — a halo just outside the arc —
+            // not a block behind disc and figure together, which read as a
+            // second, larger cell with the number trapped inside it.
+            .overlay {
+                if selected {
+                    Circle()
+                        .stroke(Color.white.opacity(0.45), lineWidth: 1.5)
+                        .padding(-4)
+                }
+            }
+            .scaleEffect(discScale)
+            .animation(Self.lift, value: hovered)
+            .animation(Self.lift, value: selected)
 
             if showsLabel {
                 Text(percent.map { "\(Int($0.rounded()))%" } ?? "—")
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(.system(size: 12, weight: selected ? .bold : .semibold))
                     .monospacedDigit()
-                    .foregroundStyle(.white)
-            }
-        }
-        .background {
-            if selected {
-                // Negative padding so the marker is larger than the cell
-                // without changing its size — the dock computes its own height
-                // from `cellHeight` and a taller cell would desync the panel.
-                RoundedRectangle(cornerRadius: Design.radiusCard, style: .continuous)
-                    .fill(Color.white.opacity(0.13))
-                    .padding(.horizontal, -7)
-                    .padding(.vertical, -5)
+                    .foregroundStyle(.white.opacity(selected ? 1 : 0.78))
             }
         }
         .accessibilityLabel(percent.map {
@@ -91,9 +108,8 @@ struct ProviderCallout: View {
         }
         .padding(Design.space3)
         .frame(width: 260, alignment: .leading)
-        .background(
-            RoundedRectangle(cornerRadius: Design.radiusCard + 2, style: .continuous)
-                .fill(Color.black))
+        .background(DarkGlassBacking(
+            shape: RoundedRectangle(cornerRadius: Design.radiusCard + 2, style: .continuous)))
         .environment(\.colorScheme, .dark)
     }
 
