@@ -87,10 +87,20 @@ struct MenuContentBody: View {
     var scrollable: Bool = false
     @Environment(\.openSettings) private var openSettings
 
-    private let columns = Array(repeating: GridItem(.flexible(), spacing: Design.space2), count: 4)
+    /// As many columns as keeps the rows even: the overview plus four
+    /// providers is one row of five; six tiles are 3 + 3; all eleven are
+    /// 4 + 4 + 4. A fixed four columns left one tile alone on a second row
+    /// as soon as a fourth provider was enabled.
+    private var columns: [GridItem] {
+        let count = GridLayout.balancedColumns(count: store.enabled.count + 1)
+        return Array(repeating: GridItem(.flexible(), spacing: Design.space2), count: count)
+    }
 
     var body: some View {
-        VStack(spacing: Design.space3) {
+        // space4 between sections: the panel sizes itself to its content, so
+        // room here costs nothing but height, and the tighter setting read as
+        // cramped.
+        VStack(spacing: Design.space4) {
             providerGrid
             Divider()
             if scrollable {
@@ -114,7 +124,7 @@ struct MenuContentBody: View {
     // MARK: Grid switcher
 
     private var providerGrid: some View {
-        LazyVGrid(columns: columns, spacing: Design.space2 + 2) {
+        LazyVGrid(columns: columns, spacing: Design.space3) {
             gridCell(
                 title: L10n.t("Overview", "总览"),
                 logoID: nil,
@@ -174,7 +184,7 @@ struct MenuContentBody: View {
                     .minimumScaleFactor(0.7)
                 MiniMeter(percent: percent, accent: isSelected ? Design.ink : accent)
             }
-            .padding(.vertical, Design.space1 + 2)
+            .padding(.vertical, Design.space2)
             .padding(.horizontal, Design.space1)
             .frame(maxWidth: .infinity)
             .background(
@@ -198,7 +208,7 @@ struct MenuContentBody: View {
     }
 
     private var overviewRows: some View {
-        VStack(spacing: Design.space2 + 2) {
+        VStack(spacing: Design.space3) {
             if store.cost.hasData {
                 CostCard(cost: store.cost)
             } else if store.isComputingCost {
