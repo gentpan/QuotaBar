@@ -22,6 +22,16 @@ final class EdgeDockCoordinator {
     static let calloutWidth: CGFloat = 260
     /// One ring plus its label plus the stack spacing.
     static let cellHeight: CGFloat = 78
+    /// The strip's vertical insets, corrected for what the eye sees rather
+    /// than what the frames say. A ring's 3pt arc is stroked centred on the
+    /// disc's edge, so its ink reaches 1.5pt above the top cell; the label's
+    /// digits sit on a baseline about 3pt above the bottom cell's edge. With
+    /// equal insets the strip read as 14.5pt of black above and 19pt below —
+    /// which the owner saw as the content sitting high. Two points moved from
+    /// the bottom to the top makes the visible margins 16.5 and 17; the sum
+    /// is unchanged, so `computedStripHeight` is too.
+    static let stripInsetTop: CGFloat = Design.space4 + 2
+    static let stripInsetBottom: CGFloat = Design.space4 - 2
 
     /// Collapsed, the dock is a handle rather than a sliver of the strip.
     /// Five points of an off-screen panel is neither visible nor clickable —
@@ -111,8 +121,7 @@ final class EdgeDockCoordinator {
         // it, and a card placed against the in-between frame sat well below
         // the ring's centre.
         let stripFrame = targetFrame ?? strip.frame
-        let insetTop = Design.space4
-        let centreFromTop = insetTop + CGFloat(index) * Self.cellHeight + Self.cellHeight / 2
+        let centreFromTop = Self.stripInsetTop + CGFloat(index) * Self.cellHeight + Self.cellHeight / 2
         let centreY = stripFrame.maxY - centreFromTop
         let height = max(size.height, 40)
         // On the inboard side of the strip, whichever edge it is docked to.
@@ -282,7 +291,7 @@ final class EdgeDockCoordinator {
     static func computedStripHeight(providers count: Int) -> CGFloat {
         guard count > 0 else { return handleHeight }
         // cellHeight is one ring plus one gap; the last ring has no gap after it.
-        return Design.space4 * 2 + CGFloat(count) * cellHeight - Design.space3
+        return stripInsetTop + stripInsetBottom + CGFloat(count) * cellHeight - Design.space3
     }
 
     /// Keyed by provider count, so enabling one invalidates the old figure
@@ -393,9 +402,12 @@ struct EdgeDockView: View {
     @State private var expanded = false
     @State private var hovered: ProviderID?
 
-    @Environment(\.openSettings) private var openSettings
-
     private var onLeft: Bool { store.dockEdge == .left }
+
+    /// The selection bar: 3pt wide, 18pt tall, 4pt in from the strip's edge.
+    static let markWidth: CGFloat = 3
+    static let markHeight: CGFloat = 18
+    static let markInset: CGFloat = 4
 
     private var showsStrip: Bool { expanded || coordinator.alwaysVisible }
 
@@ -420,6 +432,15 @@ struct EdgeDockView: View {
         // Vertically centred because the panel grows symmetrically about its
         // own centre: 18x92 and 74x332 share a midpoint.
         .fixedSize()
+        // The same three actions the menu-bar item offers on its secondary
+        // click, so the dock is complete on its own when the menu-bar item
+        // is hidden behind the notch.
+        .contextMenu {
+            Button(L10n.t("Refresh now", "立即刷新")) { store.refreshAll() }
+            Button(L10n.t("Settings…", "设置…")) { SettingsWindow.open() }
+            Divider()
+            Button(L10n.t("Quit QuotaBar", "退出 QuotaBar")) { NSApp.terminate(nil) }
+        }
         .frame(
             maxWidth: .infinity,
             maxHeight: .infinity,
@@ -496,6 +517,25 @@ struct EdgeDockView: View {
                     alerts: store.alertSettings,
                     selected: store.selected == id,
                     hovered: hovered == id)
+                    // The selection mark: a short bar on the strip's inboard
+                    // side — between the ring and where the callout appears,
+                    // away from the screen edge — the way the Dock marks a
+                    // running app. Not a halo on the ring, which read as
+                    // decoration, and not against the screen edge, where the
+                    // owner found it hard to read as belonging to the ring.
+                    .overlay(alignment: onLeft ? .trailing : .leading) {
+                        if store.selected == id {
+                            Capsule()
+                                .fill(Color.white.opacity(0.9))
+                                .frame(width: Self.markWidth, height: Self.markHeight)
+                                // From the ring's inboard edge out to `markInset`
+                                // in from the strip's inboard edge.
+                                .offset(x: (onLeft ? 1 : -1)
+                                    * ((EdgeDockCoordinator.width - ProviderRing.defaultDiameter) / 2
+                                        - Self.markInset - Self.markWidth))
+                                .transition(.opacity)
+                        }
+                    }
                     .onHover { inside in
                         hovered = inside ? id : (hovered == id ? nil : hovered)
                     }
@@ -503,8 +543,7 @@ struct EdgeDockView: View {
                     // higher count first only if it is attached first.
                     .onTapGesture(count: 2) {
                         store.selected = id
-                        openSettings()
-                        SettingsWindow.focus()
+                        SettingsWindow.open()
                     }
                     .onTapGesture {
                         // A single click only points the menu-bar glyph at this
@@ -514,7 +553,8 @@ struct EdgeDockView: View {
                     }
             }
         }
-        .padding(.vertical, Design.space4)
+        .padding(.top, EdgeDockCoordinator.stripInsetTop)
+        .padding(.bottom, EdgeDockCoordinator.stripInsetBottom)
         .frame(width: EdgeDockCoordinator.width)
         // No background of its own: the container owns the one black shape
         // both states share.

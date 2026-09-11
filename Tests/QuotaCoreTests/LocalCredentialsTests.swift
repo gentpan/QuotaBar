@@ -56,6 +56,27 @@ final class LocalCredentialsClaudeTests: XCTestCase {
         XCTAssertNil(LocalCredentials.extractClaudeToken(json("not json")))
     }
 
+    // MARK: Plan
+
+    func testThePlanComesFromTheRateLimitTierFirst() {
+        let root: [String: Any] = ["claudeAiOauth": [
+            "accessToken": "t", "subscriptionType": "max", "rateLimitTier": "default_claude_max_20x"]]
+        XCTAssertEqual(LocalCredentials.claudePlan(root), "Max 20x")
+        XCTAssertEqual(LocalCredentials.claudePlan(["claudeAiOauth": ["rateLimitTier": "default_claude_pro"]]), "Pro")
+    }
+
+    func testThePlanFallsBackToTheSubscriptionType() {
+        XCTAssertEqual(LocalCredentials.claudePlan(["claudeAiOauth": ["subscriptionType": "max"]]), "Max")
+        XCTAssertNil(LocalCredentials.claudePlan(["claudeAiOauth": ["accessToken": "t"]]))
+    }
+
+    func testASuccessfulReadCarriesThePlan() {
+        let lookup = LocalCredentials.classify(
+            status: errSecSuccess,
+            data: json(#"{"claudeAiOauth":{"accessToken":"t","rateLimitTier":"default_claude_max_5x"}}"#))
+        XCTAssertEqual(lookup.plan, "Max 5x")
+    }
+
     // MARK: The process-wide switch
 
     /// The switch is global to the process, so leaving it off would silence

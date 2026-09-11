@@ -210,7 +210,10 @@ public struct ClaudeProvider: QuotaProvider {
             "anthropic-beta": "oauth-2025-04-20",
             "User-Agent": "claude-code/2.1.0",
         ]).requireOK()
-        return try Self.parse(response.data)
+        var snapshot = try Self.parse(response.data)
+        // The usage endpoint does not name the plan; Claude Code's item does.
+        if snapshot.planName == nil { snapshot.planName = LocalCredentials.claudePlanName() }
+        return snapshot
     }
 
     // MARK: Response shape

@@ -32,50 +32,6 @@ struct MenuContentView: View {
             // dark-mode content renders the whole panel washed-out grey.
             .background(Design.panelSurface)
             .background(PanelAppearance())
-            .background(
-                GeometryReader { proxy in
-                    Color.clear.onChange(of: proxy.size.height, initial: true) { _, height in
-                        MenuPanel.fit(contentHeight: height)
-                    }
-                })
-    }
-}
-
-/// Resizes the `MenuBarExtra` popover to the height its content actually needs.
-///
-/// SwiftUI measures that popover **once**, on the first render — which happens
-/// before any provider has answered, when the detail section is sitting on its
-/// 210pt floor. The window is 418pt from then on, for every provider, forever:
-/// reopening it does not re-measure. Real content is 429pt (a failed provider)
-/// to 624pt (the overview), so the VStack was always over-committed and the
-/// footer was drawn on top of the last quota row.
-///
-/// The panel is identified by its level. `.popUpMenu` is the popover's own
-/// level and nothing else the app creates uses it — the dock, island and widget
-/// are all `.statusBar`, and Settings is `.normal`.
-@MainActor
-enum MenuPanel {
-    static func fit(contentHeight: CGFloat) {
-        guard contentHeight > 1 else { return }
-        DispatchQueue.main.async {
-            guard let panel = NSApp.windows.first(where: { $0.level == .popUpMenu })
-            else { return }
-            // A panel taller than the screen is worse than a short one, so the
-            // request is clamped to what is actually below the menu bar. On any
-            // display this app is usable on, the content fits well inside that.
-            let available = (panel.screen ?? NSScreen.main)?.visibleFrame.height
-                ?? contentHeight
-            let target = min(contentHeight, available)
-            var frame = panel.frame
-            guard abs(frame.height - target) > 0.5 else { return }
-            // Popovers hang from the menu bar, so the top edge is the anchor —
-            // growing from the bottom-left origin AppKit uses would push the
-            // panel up under the menu bar.
-            let top = frame.maxY
-            frame.size.height = target
-            frame.origin.y = top - target
-            panel.setFrame(frame, display: true)
-        }
     }
 }
 
@@ -85,7 +41,6 @@ struct MenuContentBody: View {
     /// The menu-bar panel sizes itself to its content. Only the notch island,
     /// which lives in a fixed-size floating panel, scrolls.
     var scrollable: Bool = false
-    @Environment(\.openSettings) private var openSettings
 
     /// As many columns as keeps the rows even: the overview plus four
     /// providers is one row of five; six tiles are 3 + 3; all eleven are
@@ -229,8 +184,7 @@ struct MenuContentBody: View {
                         .font(.callout)
                         .foregroundStyle(.secondary)
                     Button(L10n.t("Open Settings", "打开设置")) {
-                        openSettings()
-                        SettingsWindow.focus()
+                        SettingsWindow.open()
                     }
                         .controlSize(.small)
                 }
@@ -363,8 +317,7 @@ struct MenuContentBody: View {
             .buttonStyle(.borderless)
             .help(L10n.t("Refresh now", "立即刷新"))
             Button {
-                openSettings()
-                SettingsWindow.focus()
+                SettingsWindow.open()
             } label: {
                 Image(systemName: "gearshape")
             }
@@ -806,7 +759,6 @@ struct FailureView: View {
     @ObservedObject var store: UsageStore
     let id: ProviderID
     let message: String
-    @Environment(\.openSettings) private var openSettings
 
     var body: some View {
         VStack(alignment: .leading, spacing: Design.space2 + 2) {
@@ -831,8 +783,7 @@ struct FailureView: View {
                 Button(L10n.t("Retry", "重试")) { store.refresh(id) }
                     .controlSize(.small)
                 Button(L10n.t("Settings", "设置")) {
-                    openSettings()
-                    SettingsWindow.focus()
+                    SettingsWindow.open()
                 }
                     .controlSize(.small)
                 if let url = id.dashboardURL {

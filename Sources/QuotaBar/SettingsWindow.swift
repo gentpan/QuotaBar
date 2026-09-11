@@ -1,24 +1,69 @@
 import AppKit
+import SwiftUI
+import QuotaCore
 
-/// Brings the Settings window to the front after SwiftUI has created it.
+/// The settings window, owned here rather than by a SwiftUI `Settings` scene.
 ///
-/// `openSettings()` does create the window, but an accessory app (`LSUIElement`)
-/// is never activated as a side effect, so the window is ordered in behind
-/// whatever the user was already looking at. From their side the menu simply
-/// closes and nothing happens.
-///
-/// Order matters: activating *before* the window exists does nothing, because
-/// there is no window to bring forward. Hence the hop to the next runloop turn.
+/// The menu-bar item opens it on a plain click, and AppKit has no supported
+/// way to ask a `Settings` scene to open — the `showSettingsWindow:` selector
+/// is private and has changed name before. One window for the app's
+/// lifetime: closing hides it, so it comes back at the size and place it was
+/// left. `WindowChrome`, applied inside `SettingsView`, dresses whichever
+/// window hosts it, so the look is the same as under the scene.
+@MainActor
 enum SettingsWindow {
+    private static var window: NSWindow?
+    private static weak var store: UsageStore?
+    private static let autosaveName = "QuotaBar.Settings"
+
+    static func configure(store: UsageStore) {
+        self.store = store
+    }
+
+    static func open() {
+        guard let store else { return }
+        let window = self.window ?? make(store: store)
+        self.window = window
+        window.makeKeyAndOrderFront(nil)
+        // An accessory app is never activated as a side effect, so without
+        // this the window orders in behind whatever the user was looking at:
+        // from their side the click did nothing.
+        NSApp.activate(ignoringOtherApps: true)
+    }
+
+    /// Older call sites asked for the front settings window to be brought
+    /// forward after SwiftUI created it. Same thing, now.
     static func focus() {
-        DispatchQueue.main.async {
-            NSApp.activate(ignoringOtherApps: true)
-            // The status item and the notch island are ours too, but neither
-            // can become main — so this picks out the real settings window
-            // without matching on a private class name or a localized title.
-            NSApp.windows
-                .first { $0.canBecomeMain && $0.isVisible }?
-                .makeKeyAndOrderFront(nil)
+        open()
+    }
+
+    private static func make(store: UsageStore) -> NSWindow {
+        let window = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 840, height: 700),
+            styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
+            backing: .buffered,
+            defer: false)
+        // Title before content: `WindowChrome`, applied inside SettingsView,
+        // blanks the title the moment the hosting view lands in the window —
+        // the sidebar wordmark is the title — and set afterwards it would
+        // come back and sit above the pane.
+        window.title = L10n.t("QuotaBar Settings", "QuotaBar 设置")
+        window.contentView = NSHostingView(rootView: SettingsView(store: store))
+        window.isReleasedWhenClosed = false
+        window.contentMinSize = NSSize(width: 840, height: 700)
+        if !window.setFrameUsingName(autosaveName) {
+            // First open: centred on the screen with the pointer. `center()`
+            // picks the main screen, which on a multi-display Mac is
+            // routinely the other one.
+            let screen = NSScreen.screens.first { $0.frame.contains(NSEvent.mouseLocation) }
+                ?? NSScreen.main
+            if let visible = screen?.visibleFrame {
+                window.setFrameOrigin(NSPoint(
+                    x: visible.midX - window.frame.width / 2,
+                    y: visible.midY - window.frame.height / 2))
+            }
         }
+        window.setFrameAutosaveName(autosaveName)
+        return window
     }
 }

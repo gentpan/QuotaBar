@@ -1,46 +1,36 @@
-import SwiftUI
 import AppKit
+import SwiftUI
 import QuotaCore
 
+/// AppKit lifecycle, not a SwiftUI `App`.
+///
+/// There is no SwiftUI scene left to show: the menu-bar item is a status item
+/// (`StatusItemCoordinator`), the settings window is ours (`SettingsWindow`),
+/// and every other surface is an `NSPanel` hosting a SwiftUI view. The
+/// intermediate step — a SwiftUI `App` whose only scene was
+/// `Settings { EmptyView() }` — put that scene's window on screen at launch,
+/// an empty 45×233pt window titled "QuotaBar Settings", because SwiftUI shows
+/// the settings scene when it is the only one. Hence the plain delegate.
 @main
-struct QuotaBarApp: App {
-    @NSApplicationDelegateAdaptor(AppDelegate.self) private var delegate
-    @StateObject private var store = UsageStore()
-    private let island = IslandCoordinator()
-    private let dock = EdgeDockCoordinator()
-    private let widget = DesktopWidgetCoordinator()
-
-    var body: some Scene {
-        MenuBarExtra {
-            MenuContentView(store: store)
-        } label: {
-            Image(nsImage: MenuBarIcon.render(
-                reading: store.meterReading,
-                style: store.menuBarStyle,
-                level: store.alertLevel,
-                mode: store.meterMode))
-                .onAppear { syncPresentation() }
-                .onChange(of: store.presentation) { _, _ in syncPresentation() }
-                .onChange(of: store.widgetRevision) { _, _ in widget.sync(store: store) }
-                .onChange(of: store.dockRevision) { _, _ in dock.relayout() }
-        }
-        .menuBarExtraStyle(.window)
-
-        Settings {
-            SettingsView(store: store)
-        }
-    }
-
-    /// Only one alternate presentation is live at a time; the menu-bar item
-    /// stays regardless, as the settings entry point.
-    private func syncPresentation() {
-        island.sync(store: store)
-        dock.sync(store: store)
-        widget.sync(store: store)
-    }
-}
-
+@MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
+    /// `NSApplication.delegate` is weak; something has to own the delegate.
+    private static var shared: AppDelegate?
+
+    private var store: UsageStore?
+    private let coordinators = Coordinators()
+
+    static func main() {
+        let app = NSApplication.shared
+        let delegate = AppDelegate()
+        shared = delegate
+        app.delegate = delegate
+        // `NSApplicationMain`, not `app.run()`: with a bare `run()` the status
+        // item's window was created but never placed — it sat at (0, 0, 38, 0)
+        // and the accessibility tree showed no status menu bar at all.
+        _ = NSApplicationMain(CommandLine.argc, CommandLine.unsafeArgv)
+    }
+
     func applicationDidFinishLaunching(_ notification: Notification) {
         // Info.plist carries LSUIElement for the packaged app; setting it here
         // too keeps the dev loop (bare binary, no bundle) out of the Dock.
@@ -78,6 +68,55 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if arguments.contains("--cost") {
             Diagnostics.printCost()
             NSApp.terminate(nil)
+        }
+
+        let store = UsageStore()
+        self.store = store
+        SettingsWindow.configure(store: store)
+        coordinators.start(store: store)
+    }
+}
+
+/// The surfaces that hang off the store, and the one place that decides
+/// which of them to poke when it changes. The status item's store
+/// subscription drives it; the revisions are compared here so that a tick
+/// does not re-place the dock or re-sync the widget.
+@MainActor
+final class Coordinators {
+    private let status = StatusItemCoordinator()
+    private let island = IslandCoordinator()
+    private let dock = EdgeDockCoordinator()
+    private let widget = DesktopWidgetCoordinator()
+
+    private var presentation: Presentation?
+    private var widgetRevision = -1
+    private var dockRevision = -1
+
+    func start(store: UsageStore) {
+        status.onStoreChange = { [weak self, weak store] in
+            guard let self, let store else { return }
+            self.sync(store: store)
+        }
+        status.start(store: store)
+        sync(store: store)
+    }
+
+    /// Only one alternate presentation is live at a time; the menu-bar item
+    /// stays regardless, as the settings entry point.
+    private func sync(store: UsageStore) {
+        if store.presentation != presentation {
+            presentation = store.presentation
+            island.sync(store: store)
+            dock.sync(store: store)
+            widget.sync(store: store)
+        }
+        if store.widgetRevision != widgetRevision {
+            widgetRevision = store.widgetRevision
+            widget.sync(store: store)
+        }
+        if store.dockRevision != dockRevision {
+            dockRevision = store.dockRevision
+            dock.relayout()
         }
     }
 }

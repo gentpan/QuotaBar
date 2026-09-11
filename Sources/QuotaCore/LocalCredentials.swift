@@ -75,6 +75,8 @@ public enum LocalCredentials {
     struct ClaudeLookup: Sendable, Equatable {
         let state: ClaudeCredentialState
         let token: String?
+        /// "Max 20x", "Pro" — from the same item, so no extra keychain read.
+        var plan: String? = nil
     }
 
     /// Shown wherever the app is waiting on the user's say-so.
@@ -96,6 +98,12 @@ public enum LocalCredentials {
 
     public static func claudeCredentialState() -> ClaudeCredentialState {
         probeClaude().state
+    }
+
+    /// The subscription Claude Code's item records, for the plan chip. The
+    /// usage endpoint itself does not say.
+    public static func claudePlanName() -> String? {
+        probeClaude().plan
     }
 
     /// The one place the keychain dialog is allowed. Call it from a user
@@ -145,8 +153,12 @@ public enum LocalCredentials {
     static func classify(status: OSStatus, data: Data?) -> ClaudeLookup {
         switch status {
         case errSecSuccess:
-            let token = data.flatMap(extractClaudeToken)
-            return ClaudeLookup(state: token == nil ? .missing : .available, token: token)
+            let root = data.flatMap { try? JSONSerialization.jsonObject(with: $0) as? [String: Any] }
+            let token = root.flatMap(claudeToken)
+            return ClaudeLookup(
+                state: token == nil ? .missing : .available,
+                token: token,
+                plan: root.flatMap(claudePlan))
         case errSecInteractionNotAllowed, errSecAuthFailed, errSecUserCanceled:
             // -25308 is what the documentation promises for a suppressed
             // dialog; -25293 is what macOS 27 actually returns (measured on
@@ -161,12 +173,35 @@ public enum LocalCredentials {
     static func extractClaudeToken(_ data: Data) -> String? {
         guard let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
         else { return nil }
+        return claudeToken(root)
+    }
+
+    static func claudeToken(_ root: [String: Any]) -> String? {
         if let oauth = root["claudeAiOauth"] as? [String: Any],
            let token = oauth["accessToken"] as? String, !token.isEmpty
         {
             return token
         }
         if let token = root["accessToken"] as? String, !token.isEmpty { return token }
+        return nil
+    }
+
+    /// `rateLimitTier` is the precise one — "default_claude_max_20x" carries
+    /// the multiplier — with `subscriptionType` ("max", "pro") as the
+    /// fallback. Neither is documented; both are what the item holds today.
+    static func claudePlan(_ root: [String: Any]) -> String? {
+        let oauth = root["claudeAiOauth"] as? [String: Any] ?? root
+        if let tier = oauth["rateLimitTier"] as? String, !tier.isEmpty {
+            var words = tier.split(separator: "_").map(String.init)
+            if words.first == "default" { words.removeFirst() }
+            if words.first?.lowercased() == "claude" { words.removeFirst() }
+            if !words.isEmpty {
+                return words.map { $0.prefix(1).uppercased() + $0.dropFirst() }.joined(separator: " ")
+            }
+        }
+        if let type = oauth["subscriptionType"] as? String, !type.isEmpty {
+            return type.prefix(1).uppercased() + type.dropFirst()
+        }
         return nil
     }
 

@@ -496,6 +496,41 @@ and the window stayed on the old one. `dockRevision` is the real signal, and
 `EdgeDockCoordinator.relayout()` snaps the window (and re-sides the callout)
 when it changes.
 
+### 0.4: the menu-bar item is a status item, and there is no dropdown
+
+The popover is gone. A click on the menu-bar item opens the settings window;
+a secondary click (right or control) shows 刷新 / 设置… / 退出. The item is an
+AppKit `NSStatusItem` (`StatusItemCoordinator`) because SwiftUI's
+`MenuBarExtra` can only hang a menu or a popover off its primary click.
+
+That took the app off the SwiftUI `App` lifecycle altogether. The half-way
+house — an `App` whose only scene was `Settings { EmptyView() }` — showed
+that scene's window at launch: a 45×233pt empty window titled "QuotaBar
+Settings", because SwiftUI presents the settings scene when it is the only
+one. `QuotaBarApp.swift` is now a plain `@main` `NSApplicationDelegate`
+that owns the `UsageStore` and the coordinators; the settings window is
+`SettingsWindow` (one `NSWindow` for the app's lifetime, `WindowChrome` still
+dresses it), and the `openSettings` environment action is gone from every
+call site.
+
+The status item has one measured quirk. Created synchronously inside
+`applicationDidFinishLaunching`, its window existed but was never placed —
+frame (0, 0, 38, 0), nothing drawn, no status menu bar in the accessibility
+tree — while a 30-line AppKit app doing the same thing was placed at once.
+Creating it one turn later works, and `install(store:attempt:)` re-checks
+after 1.5s and rebuilds the item once if the window is still zero-height.
+The cause was not run down; the self-check is the guarantee. (Accessibility
+reports "1 menu bar" for this process even when the item is on screen, so
+`count of menu bars` is not a usable check — the button's window frame is.)
+
+Also in this pass: the dock has the same three-item context menu, the
+selected ring is marked by a short white bar on the strip's inboard side
+(the halo round the ring and the block behind ring-plus-figure both read
+as decoration), the strip's vertical insets are 18/14 to make the visible
+margins even, and the callout heads with the provider name, a plan chip
+("PRO", "MAX 20X" — Claude's tier comes from `rateLimitTier` in Claude
+Code's own keychain item) and the account when the provider reports one.
+
 ### The settings window
 
 It is the one surface that opts into Liquid Glass, and the only place the

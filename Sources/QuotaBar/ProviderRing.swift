@@ -10,7 +10,8 @@ struct ProviderRing: View {
     let id: ProviderID
     let percent: Double?
     let alerts: AlertSettings
-    var diameter: CGFloat = 46
+    static let defaultDiameter: CGFloat = 46
+    var diameter: CGFloat = Self.defaultDiameter
     var showsLabel: Bool = true
     /// Marks the provider the menu-bar glyph is reporting. Picking one is a
     /// single click in the dock; opening the panel is a double click, so
@@ -25,13 +26,11 @@ struct ProviderRing: View {
         alerts.level(for: percent ?? 0)
     }
 
-    /// Hover lifts the disc the most; selection keeps it a little proud of
-    /// the row so the chosen provider still stands out once the pointer has
-    /// gone.
+    /// Only hover lifts the disc. Selection is marked by the strip — a short
+    /// bar against the docked edge — not by the ring itself; a halo round the
+    /// disc was tried and read as a second, decorative ring.
     private var discScale: CGFloat {
-        if hovered { return 1.14 }
-        if selected { return 1.06 }
-        return 1
+        hovered ? 1.14 : 1
     }
 
     private static let lift = Animation.spring(response: 0.26, dampingFraction: 0.72)
@@ -62,19 +61,8 @@ struct ProviderRing: View {
                 ProviderGlyph(id: id, size: diameter * 0.42, tint: .white)
             }
             .frame(width: diameter, height: diameter)
-            // Selection marks the disc alone — a halo just outside the arc —
-            // not a block behind disc and figure together, which read as a
-            // second, larger cell with the number trapped inside it.
-            .overlay {
-                if selected {
-                    Circle()
-                        .stroke(Color.white.opacity(0.45), lineWidth: 1.5)
-                        .padding(-4)
-                }
-            }
             .scaleEffect(discScale)
             .animation(Self.lift, value: hovered)
-            .animation(Self.lift, value: selected)
 
             if showsLabel {
                 Text(percent.map { "\(Int($0.rounded()))%" } ?? "—")
@@ -98,11 +86,32 @@ struct ProviderCallout: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: Design.space3) {
-            HStack(spacing: Design.space2) {
-                ProviderGlyph(id: id, size: 15, tint: .white)
-                Text(L10n.t("\(id.displayName) usage", "\(id.displayName) 用量"))
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(.white)
+            // Name and plan, the way CodexIsland heads its panel — "Codex PRO"
+            // — with the account under it when the provider reports one. The
+            // word "usage" said nothing the meters below do not.
+            VStack(alignment: .leading, spacing: 3) {
+                HStack(spacing: Design.space2) {
+                    ProviderGlyph(id: id, size: 15, tint: .white)
+                    Text(id.displayName)
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(.white)
+                    if let plan = planChip {
+                        Text(plan)
+                            .font(.system(size: 9, weight: .bold, design: .monospaced))
+                            .tracking(0.6)
+                            .foregroundStyle(.white.opacity(0.78))
+                            .padding(.horizontal, 5)
+                            .padding(.vertical, 2)
+                            .background(Color.white.opacity(0.10), in: RoundedRectangle(cornerRadius: 4, style: .continuous))
+                    }
+                }
+                if let account = phase?.snapshot?.account, !account.isEmpty {
+                    Text(account)
+                        .font(.system(size: 10, design: .monospaced))
+                        .foregroundStyle(.white.opacity(0.40))
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                }
             }
             content
         }
@@ -179,5 +188,14 @@ struct ProviderCallout: View {
 
     private func meterTint(_ percent: Double) -> Color {
         return Color(hex: UsageRamp.hex(used: percent))
+    }
+
+    /// "Pro_plus" → "PRO PLUS", "pro" → "PRO". Providers spell their tiers
+    /// every way; the chip spells them one way.
+    private var planChip: String? {
+        guard let raw = phase?.snapshot?.planName?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !raw.isEmpty
+        else { return nil }
+        return raw.replacingOccurrences(of: "_", with: " ").uppercased()
     }
 }
