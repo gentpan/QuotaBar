@@ -20,18 +20,16 @@ final class EdgeDockCoordinator {
     private var expanded = false
 
     static let calloutWidth: CGFloat = 260
-    /// One ring plus its label plus the stack spacing.
-    static let cellHeight: CGFloat = 78
-    /// The strip's vertical insets, corrected for what the eye sees rather
-    /// than what the frames say. A ring's 3pt arc is stroked centred on the
-    /// disc's edge, so its ink reaches 1.5pt above the top cell; the label's
-    /// digits sit on a baseline about 3pt above the bottom cell's edge. With
-    /// equal insets the strip read as 14.5pt of black above and 19pt below —
-    /// which the owner saw as the content sitting high. Two points moved from
-    /// the bottom to the top makes the visible margins 16.5 and 17; the sum
-    /// is unchanged, so `computedStripHeight` is too.
-    static let stripInsetTop: CGFloat = Design.space4 + 2
-    static let stripInsetBottom: CGFloat = Design.space4 - 2
+    /// One ring, the dot row under it, and the stack spacing. No figure: the
+    /// owner had the percentages removed — the callout carries them.
+    static let cellHeight: CGFloat = ProviderRing.cellHeight(selectionDot: true) + Design.space3
+    /// The strip's vertical insets. A ring's 3pt arc is stroked centred on
+    /// the disc's edge, so its ink reaches 1.5pt above the top cell; the last
+    /// cell ends with the 10pt dot row, which is empty unless that provider is
+    /// the selected one. Top 16 and bottom 8 put about 15pt of black above the
+    /// first arc and 17 below the last, and keep the dot 8pt off the edge.
+    static let stripInsetTop: CGFloat = Design.space4
+    static let stripInsetBottom: CGFloat = Design.space2
 
     /// Collapsed, the dock is a handle rather than a sliver of the strip.
     /// Five points of an off-screen panel is neither visible nor clickable —
@@ -121,7 +119,9 @@ final class EdgeDockCoordinator {
         // it, and a card placed against the in-between frame sat well below
         // the ring's centre.
         let stripFrame = targetFrame ?? strip.frame
-        let centreFromTop = Self.stripInsetTop + CGFloat(index) * Self.cellHeight + Self.cellHeight / 2
+        // The disc's centre, not the cell's: the cell has the dot row under
+        // the disc, so its middle sits 5pt low.
+        let centreFromTop = Self.stripInsetTop + CGFloat(index) * Self.cellHeight + ProviderRing.defaultDiameter / 2
         let centreY = stripFrame.maxY - centreFromTop
         let height = max(size.height, 40)
         // On the inboard side of the strip, whichever edge it is docked to.
@@ -404,9 +404,6 @@ struct EdgeDockView: View {
 
     private var onLeft: Bool { store.dockEdge == .left }
 
-    /// The selection dot's distance from the strip's inboard edge.
-    static let markInset: CGFloat = 4
-
     private var showsStrip: Bool { expanded || coordinator.alwaysVisible }
 
     var body: some View {
@@ -517,16 +514,10 @@ struct EdgeDockView: View {
                     id: id,
                     percent: store.states[id]?.snapshot?.headlinePercent,
                     alerts: store.alertSettings,
+                    showsLabel: false,
                     selected: store.selected == id,
                     hovered: hovered == id,
-                    // The selection dot sits on the strip's inboard side —
-                    // between the ring and where the callout appears, away
-                    // from the screen edge — `markInset` in from the strip's
-                    // edge. Not a halo on the ring, which read as decoration,
-                    // and not a bar, which the owner found heavy.
-                    mark: store.selected == id ? (onLeft ? .trailing : .leading) : nil,
-                    markDistance: (EdgeDockCoordinator.width - ProviderRing.defaultDiameter) / 2
-                        - Self.markInset)
+                    selectionDot: true)
                     .onHover { inside in
                         hovered = inside ? id : (hovered == id ? nil : hovered)
                     }

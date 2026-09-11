@@ -1,7 +1,8 @@
 import SwiftUI
 import QuotaCore
 
-/// One provider as a ring with its mark in the middle and the figure below.
+/// One provider as a ring with its mark in the middle and, where the surface
+/// asks for it, the figure below or a selection dot.
 ///
 /// The ring carries the reading and the alert colour at once; the logo says
 /// which provider without a label, which is what makes a narrow vertical strip
@@ -21,14 +22,23 @@ struct ProviderRing: View {
     /// scaling, so the strip's height — which the dock derives from
     /// `cellHeight` — is untouched.
     var hovered: Bool = false
-    /// Which side of the disc carries the selection dot, if any. Set by the
-    /// strip, which knows its docked edge; the dot sits `markDistance` out
-    /// from the disc's edge on that side, level with the disc's centre.
-    var mark: HorizontalEdge? = nil
-    var markDistance: CGFloat = 10
+    /// Reserve a row under the disc for the selection dot. The row is always
+    /// there, so picking a provider never shifts its neighbours; only the
+    /// selected ring's dot is drawn.
+    var selectionDot: Bool = false
 
-    /// The dot: 5pt, like the Dock's running-app mark, at 92% white.
+    /// The dot: 5pt, like the Dock's running-app mark, in the live green —
+    /// under the ring rather than beside it, the owner's call once the
+    /// figures went: the callout has the numbers, the strip needs only the
+    /// pick.
     static let markSize: CGFloat = 5
+    static let markSpacing: CGFloat = 5
+    static let markColor = Color(hex: "3DD68C")
+
+    /// Disc plus the dot row, when reserved.
+    static func cellHeight(diameter: CGFloat = defaultDiameter, selectionDot: Bool) -> CGFloat {
+        selectionDot ? diameter + markSpacing + markSize : diameter
+    }
 
     private var level: AlertLevel {
         alerts.level(for: percent ?? 0)
@@ -52,7 +62,7 @@ struct ProviderRing: View {
     }
 
     var body: some View {
-        VStack(spacing: 5) {
+        VStack(spacing: Self.markSpacing) {
             ZStack {
                 Circle()
                     .fill(Color.white.opacity(selected ? 0.14 : 0.08))
@@ -73,25 +83,22 @@ struct ProviderRing: View {
             .frame(width: diameter, height: diameter)
             .scaleEffect(discScale)
             .animation(Self.lift, value: hovered)
-            // After the scale, so the dot keeps its place while the disc
-            // lifts under the pointer; aligned to the disc, so it is level
-            // with the disc's centre rather than the cell's (the cell has
-            // the figure under the disc, and a mark centred on it sat low).
-            .overlay(alignment: mark == .leading ? .leading : .trailing) {
-                if let mark {
-                    Circle()
-                        .fill(Color.white.opacity(0.92))
-                        .frame(width: Self.markSize, height: Self.markSize)
-                        .offset(x: (mark == .leading ? -1 : 1) * markDistance)
-                        .transition(.opacity)
-                }
+
+            if selectionDot {
+                Circle()
+                    .fill(selected ? Self.markColor : Color.clear)
+                    .frame(width: Self.markSize, height: Self.markSize)
+                    .animation(.easeOut(duration: 0.18), value: selected)
             }
 
             if showsLabel {
+                // Small and grey: the figure is a caption to the ring, not
+                // a second reading of it. At 12pt bold white it competed
+                // with the marks; selection lifts it a step, not to white.
                 Text(percent.map { "\(Int($0.rounded()))%" } ?? "—")
-                    .font(.system(size: 12, weight: selected ? .bold : .semibold))
+                    .font(.system(size: 10, weight: selected ? .semibold : .medium))
                     .monospacedDigit()
-                    .foregroundStyle(.white.opacity(selected ? 1 : 0.78))
+                    .foregroundStyle(.white.opacity(selected ? 0.85 : 0.55))
             }
         }
         .accessibilityLabel(percent.map {

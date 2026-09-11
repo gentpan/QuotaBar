@@ -538,6 +538,28 @@ private struct CredentialEditor: View {
                 .padding(.top, 5)
             }
 
+            // The page's reading, in full, here rather than behind a link:
+            // the owner wants to see it, not be sent to it.
+            if let status = store.serviceStatus[id] {
+                SettingRow(L10n.t("Service status", "服务状态")) {
+                    HStack(spacing: Design.space2) {
+                        ServiceStatusBadge(status: status, size: 12, ink: .primary)
+                        Text(status.description)
+                            .font(.system(size: 11))
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                            .truncationMode(.tail)
+                        Text(L10n.t(
+                            "· checked \(QuotaFormat.age(of: status.checkedAt))",
+                            "· \(QuotaFormat.age(of: status.checkedAt))检查"))
+                            .font(.system(size: 11))
+                            .foregroundStyle(.tertiary)
+                            .lineLimit(1)
+                        Spacer(minLength: 0)
+                    }
+                }
+            }
+
             actions
 
             testResult
@@ -578,18 +600,6 @@ private struct CredentialEditor: View {
             .disabled({ if case .running = testPhase { return true }; return false }())
 
             Spacer(minLength: 0)
-
-            if let url = StatusPages.page(for: id) {
-                Button {
-                    NSWorkspace.shared.open(url)
-                } label: {
-                    Label(L10n.t("Status page", "状态页"), systemImage: "waveform.path.ecg")
-                        .font(.system(size: 11))
-                }
-                .buttonStyle(.plain)
-                .foregroundStyle(.secondary)
-                .help(url.absoluteString)
-            }
 
             if let url = id.dashboardURL {
                 Button {
