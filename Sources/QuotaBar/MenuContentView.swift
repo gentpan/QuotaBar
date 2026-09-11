@@ -708,6 +708,9 @@ struct ProviderDetailView: View {
                     .background(Capsule().fill(Color(hex: id.accentHex).opacity(0.18)))
                     .foregroundStyle(Color(hex: id.accentHex))
             }
+            if let status = store.serviceStatus[id] {
+                ServiceStatusBadge(status: status)
+            }
             Spacer()
             if let account = snapshot.account {
                 Text(account)
@@ -746,7 +749,7 @@ struct StaleBanner: View {
             }
             Spacer()
             Button(L10n.t("Retry", "重试"), action: retry)
-                .controlSize(.small)
+                .glassAction(compact: true)
         }
         .padding(Design.space2 + 2)
         .background(
@@ -778,17 +781,17 @@ struct FailureView: View {
                 if id == .claude, store.claudeNeedsAuthorization {
                     // The one button that may raise the keychain dialog.
                     Button(L10n.t("Allow keychain access", "授权钥匙串访问")) { store.authorizeClaude() }
-                        .controlSize(.small)
+                        .glassAction(prominent: true, compact: true)
                 }
                 Button(L10n.t("Retry", "重试")) { store.refresh(id) }
-                    .controlSize(.small)
+                    .glassAction(compact: true)
                 Button(L10n.t("Settings", "设置")) {
                     SettingsWindow.open()
                 }
-                    .controlSize(.small)
+                    .glassAction(compact: true)
                 if let url = id.dashboardURL {
                     Button(L10n.t("Console", "控制台")) { NSWorkspace.shared.open(url) }
-                        .controlSize(.small)
+                        .glassAction(compact: true)
                 }
             }
         }

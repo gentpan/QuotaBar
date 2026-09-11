@@ -452,7 +452,7 @@ struct EdgeDockView: View {
         // was tried here and read as grey over light windows (GlassStyle.swift
         // has the numbers); black is what the owner wants.
         .background(
-            Self.dockShape(onLeft: onLeft, square: store.dockCorners == .square).fill(Color.black))
+            Self.dockShape(onLeft: onLeft).fill(Color.black))
         // Always dark, like the panel, the island and the widget.
         .environment(\.colorScheme, .dark)
         .onHover { inside in
@@ -467,10 +467,13 @@ struct EdgeDockView: View {
         }
     }
 
-    /// The edge against the screen is always square; the outboard corners
-    /// are rounded or square per the setting.
-    static func dockShape(onLeft: Bool, square: Bool = false) -> UnevenRoundedRectangle {
-        let radius: CGFloat = square ? 0 : Design.radiusPanel + 6
+    /// The edge against the screen is square; the outboard corners take the
+    /// island's 14pt, the radius codex-island cuts its notch with. The 20pt
+    /// before it read as nearly a semicircle on a strip this narrow, and a
+    /// square option was dropped along with it: the owner wanted one shape,
+    /// closer to square than that, not a choice.
+    static func dockShape(onLeft: Bool) -> UnevenRoundedRectangle {
+        let radius: CGFloat = Design.radiusPanel
         return UnevenRoundedRectangle(
             topLeadingRadius: onLeft ? 0 : radius,
             bottomLeadingRadius: onLeft ? 0 : radius,
@@ -501,7 +504,8 @@ struct EdgeDockView: View {
                 ProviderCallout(
                     id: id,
                     phase: store.states[id],
-                    alerts: store.alertSettings)
+                    alerts: store.alertSettings,
+                    status: store.serviceStatus[id])
             }
         }
     }

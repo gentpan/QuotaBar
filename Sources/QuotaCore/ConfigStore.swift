@@ -16,7 +16,6 @@ public struct QuotaConfig: Codable, Sendable, Equatable {
     public var updateFeed: String
     public var checksForUpdates: Bool
     public var dockEdge: DockEdge
-    public var dockCorners: DockCorners
     /// Vertical placement of the dock as a fraction of the screen, 0 at the
     /// top. Remembered so the strip stays out of whatever the user keeps at
     /// the middle of that edge.
@@ -56,7 +55,6 @@ public struct QuotaConfig: Codable, Sendable, Equatable {
         updateFeed: String = UpdateFeed.default.configValue,
         checksForUpdates: Bool = true,
         dockEdge: DockEdge = .right,
-        dockCorners: DockCorners = .rounded,
         dockPosition: Double = 0.5,
         dockAlwaysVisible: Bool = false,
         widgetEnabled: Bool = false,
@@ -77,7 +75,6 @@ public struct QuotaConfig: Codable, Sendable, Equatable {
         self.updateFeed = updateFeed
         self.checksForUpdates = checksForUpdates
         self.dockEdge = dockEdge
-        self.dockCorners = dockCorners
         self.dockPosition = dockPosition
         self.dockAlwaysVisible = dockAlwaysVisible
         self.widgetEnabled = widgetEnabled
@@ -91,7 +88,7 @@ public struct QuotaConfig: Codable, Sendable, Equatable {
     private enum CodingKeys: String, CodingKey {
         case enabled, refreshMinutes, menuBarStyle, meterMode, presentation, alerts, language
         case selected, updateFeed, checksForUpdates
-        case dockEdge, dockCorners, dockPosition, dockAlwaysVisible
+        case dockEdge, dockPosition, dockAlwaysVisible
         case widgetEnabled, widgetDensity, widgetX, widgetY, widgetAlwaysOnTop
         case legacyCredentials = "credentials"
     }
@@ -123,7 +120,6 @@ public struct QuotaConfig: Codable, Sendable, Equatable {
         checksForUpdates = (try? container.decodeIfPresent(Bool.self, forKey: .checksForUpdates))
             ?? defaults.checksForUpdates
         dockEdge = QuotaConfig.decodeEnum(from: container, forKey: .dockEdge) ?? defaults.dockEdge
-        dockCorners = QuotaConfig.decodeEnum(from: container, forKey: .dockCorners) ?? defaults.dockCorners
         // Clamped: a stored value outside 0...1 would park the strip off-screen.
         dockPosition = min(max(
             (try? container.decodeIfPresent(Double.self, forKey: .dockPosition))
@@ -203,7 +199,6 @@ public struct QuotaConfig: Codable, Sendable, Equatable {
         try container.encode(updateFeed, forKey: .updateFeed)
         try container.encode(checksForUpdates, forKey: .checksForUpdates)
         try container.encode(dockEdge, forKey: .dockEdge)
-        try container.encode(dockCorners, forKey: .dockCorners)
         try container.encode(dockPosition, forKey: .dockPosition)
         try container.encode(dockAlwaysVisible, forKey: .dockAlwaysVisible)
         try container.encode(widgetEnabled, forKey: .widgetEnabled)
@@ -419,14 +414,6 @@ public final class ConfigStore: @unchecked Sendable {
             return config.dockEdge
         }
         set { mutate { $0.dockEdge = newValue } }
-    }
-
-    public var dockCorners: DockCorners {
-        get {
-            lock.lock(); defer { lock.unlock() }
-            return config.dockCorners
-        }
-        set { mutate { $0.dockCorners = newValue } }
     }
 
     public var dockPosition: Double {

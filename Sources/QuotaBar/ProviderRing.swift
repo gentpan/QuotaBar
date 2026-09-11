@@ -66,7 +66,9 @@ struct ProviderRing: View {
                 }
                 // Always-dark surface: force the mark light rather than
                 // leaving it to resolve against the system appearance.
-                ProviderGlyph(id: id, size: diameter * 0.42, tint: .white)
+                // Half the disc: at 0.42 the owner found the marks small, and Kimi's,
+                // on its own black tile, smaller still.
+                ProviderGlyph(id: id, size: diameter * 0.5, tint: .white)
             }
             .frame(width: diameter, height: diameter)
             .scaleEffect(discScale)
@@ -104,6 +106,8 @@ struct ProviderCallout: View {
     let id: ProviderID
     let phase: ProviderPhase?
     let alerts: AlertSettings
+    /// The provider's public status page, when it has one and it answered.
+    var status: ServiceStatus? = nil
 
     var body: some View {
         VStack(alignment: .leading, spacing: Design.space3) {
@@ -126,12 +130,21 @@ struct ProviderCallout: View {
                             .background(Color.white.opacity(0.10), in: RoundedRectangle(cornerRadius: 4, style: .continuous))
                     }
                 }
-                if let account = phase?.snapshot?.account, !account.isEmpty {
-                    Text(account)
-                        .font(.system(size: 10, design: .monospaced))
-                        .foregroundStyle(.white.opacity(0.40))
-                        .lineLimit(1)
-                        .truncationMode(.middle)
+                let account = phase?.snapshot?.account.flatMap { $0.isEmpty ? nil : $0 }
+                if account != nil || status != nil {
+                    HStack(spacing: Design.space2) {
+                        if let account {
+                            Text(account)
+                                .font(.system(size: 10, design: .monospaced))
+                                .foregroundStyle(.white.opacity(0.40))
+                                .lineLimit(1)
+                                .truncationMode(.middle)
+                        }
+                        Spacer(minLength: 0)
+                        if let status {
+                            ServiceStatusBadge(status: status, size: 10, ink: .white.opacity(0.55))
+                        }
+                    }
                 }
             }
             content

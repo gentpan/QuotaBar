@@ -175,21 +175,6 @@ public enum WidgetDensity: String, Codable, CaseIterable, Identifiable, Sendable
 }
 
 /// Which screen edge the dock attaches to.
-/// How the edge dock's outboard corners are cut.
-public enum DockCorners: String, Codable, CaseIterable, Identifiable, Sendable {
-    case rounded
-    case square
-
-    public var id: String { rawValue }
-
-    public var displayName: String {
-        switch self {
-        case .rounded: L10n.t("Rounded", "圆角")
-        case .square: L10n.t("Square", "直角")
-        }
-    }
-}
-
 public enum DockEdge: String, Codable, CaseIterable, Identifiable, Sendable {
     case right
     case left

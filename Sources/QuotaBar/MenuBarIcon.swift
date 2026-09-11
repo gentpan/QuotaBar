@@ -519,7 +519,16 @@ struct ProviderGlyph: View {
     }
 
     var body: some View {
-        if let logo = Self.logo(for: id) {
+        if tint != nil, let mark = Self.logo(for: id, dark: true) {
+            // A mark cut for black surfaces — Kimi's white K without the
+            // black tile it ships on, which on a black strip left a mark half
+            // the size of its neighbours'. Drawn as-is: it already carries the
+            // colours it needs against black.
+            Image(nsImage: mark.image)
+                .resizable()
+                .scaledToFit()
+                .frame(width: size, height: size)
+        } else if let logo = Self.logo(for: id) {
             if logo.isMonochrome {
                 Image(nsImage: logo.image)
                     .resizable()
@@ -547,13 +556,16 @@ struct ProviderGlyph: View {
         let isMonochrome: Bool
     }
 
-    static func logo(for id: ProviderID) -> Logo? {
-        if let cached = Self.cache[id] { return cached }
-        guard let url = Self.logoURL(for: id), let image = NSImage(contentsOf: url) else {
+    /// `dark`: the `<id>-dark.png` variant, present only for marks whose
+    /// shipping form does not survive a black background; nil otherwise.
+    static func logo(for id: ProviderID, dark: Bool = false) -> Logo? {
+        let key = "\(id.rawValue)\(dark ? "-dark" : "")"
+        if let cached = Self.cache[key] { return cached }
+        guard let url = Self.logoURL(for: id, dark: dark), let image = NSImage(contentsOf: url) else {
             return nil
         }
         let logo = Logo(image: image, isMonochrome: Self.isMonochrome(image))
-        Self.cache[id] = logo
+        Self.cache[key] = logo
         return logo
     }
 
@@ -580,12 +592,12 @@ struct ProviderGlyph: View {
         return sampled > 0
     }
 
-    private static var cache: [ProviderID: Logo] = [:]
+    private static var cache: [String: Logo] = [:]
 
     /// Looks in the packaged app bundle first, then the SwiftPM resource bundle (dev runs).
     /// Never touches `Bundle.module`, whose generated accessor traps when the bundle is absent.
-    static func logoURL(for id: ProviderID) -> URL? {
-        let fileName = "\(id.rawValue).png"
+    static func logoURL(for id: ProviderID, dark: Bool = false) -> URL? {
+        let fileName = "\(id.rawValue)\(dark ? "-dark" : "").png"
         let fm = FileManager.default
         var candidates: [URL] = []
         if let resources = Bundle.main.resourceURL {

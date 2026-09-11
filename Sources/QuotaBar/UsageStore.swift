@@ -73,6 +73,12 @@ final class UsageStore: ObservableObject {
     /// SwiftUI `body`.
     @Published var configured: Set<ProviderID> = []
 
+    /// Latest reading of each provider's public status page, for the ones
+    /// that have one. Absent until the page has answered once; a failed poll
+    /// keeps the previous reading rather than blanking the chip.
+    @Published var serviceStatus: [ProviderID: ServiceStatus] = [:]
+    private var statusTask: Task<Void, Never>?
+
     private var lastAlertLevel: AlertLevel = .none
     private var notificationsReady = false
 
@@ -133,12 +139,14 @@ final class UsageStore: ObservableObject {
         startAutoRefresh()
         startClock()
         startSystemObservers()
+        startStatusPolling()
         refreshAll()
     }
 
     deinit {
         autoRefreshTask?.cancel()
         clockTask?.cancel()
+        statusTask?.cancel()
         netMonitor?.cancel()
     }
 
@@ -225,6 +233,36 @@ final class UsageStore: ObservableObject {
             self.finishRefresh()
             self.refreshConfigured()
         }
+    }
+
+    // MARK: Status pages
+
+    /// Every five minutes, independent of the quota cadence: an incident
+    /// lasts hours, and the pages rate-limit by IP.
+    private func startStatusPolling() {
+        statusTask?.cancel()
+        statusTask = Task { [weak self] in
+            while !Task.isCancelled {
+                await self?.refreshServiceStatus()
+                try? await Task.sleep(for: .seconds(300))
+            }
+        }
+    }
+
+    func refreshServiceStatus(_ only: [ProviderID]? = nil) async {
+        let ids = (only ?? enabled).filter { StatusPages.page(for: $0) != nil }
+        guard !ids.isEmpty else { return }
+        let fresh = await withTaskGroup(of: (ProviderID, ServiceStatus?).self) { group in
+            for id in ids {
+                group.addTask { (id, await StatusPages.fetch(id)) }
+            }
+            var out: [ProviderID: ServiceStatus] = [:]
+            for await (id, status) in group {
+                if let status { out[id] = status }
+            }
+            return out
+        }
+        for (id, status) in fresh { serviceStatus[id] = status }
     }
 
     private func markLoading(_ id: ProviderID) {
@@ -375,13 +413,6 @@ final class UsageStore: ObservableObject {
         dockRevision &+= 1
     }
 
-    var dockCorners: DockCorners { config.dockCorners }
-
-    func setDockCorners(_ corners: DockCorners) {
-        config.dockCorners = corners
-        objectWillChange.send()
-    }
-
     func setDockAlwaysVisible(_ on: Bool) {
         config.dockAlwaysVisible = on
         objectWillChange.send()
@@ -473,6 +504,7 @@ final class UsageStore: ObservableObject {
             history[id] = UsageHistoryStore.shared.readings(for: id).map(\.percent)
             if selected == nil && enabled.count == 1 { selected = id }
             refresh(id)
+            Task { await refreshServiceStatus([id]) }
         } else {
             enabled.removeAll { $0 == id }
             states[id] = nil

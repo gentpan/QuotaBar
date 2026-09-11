@@ -131,21 +131,40 @@ extension View {
     }
 
     /// Button chrome to match the surfaces.
-    @ViewBuilder
-    func glassAction(prominent: Bool = false) -> some View {
-        if #available(macOS 26.0, *) {
-            if prominent {
-                buttonStyle(.glassProminent)
-            } else {
-                buttonStyle(.glass)
-            }
-        } else {
-            if prominent {
-                buttonStyle(.borderedProminent)
-            } else {
-                buttonStyle(.bordered)
-            }
-        }
+    ///
+    /// Drawn here rather than borrowed from `.glass` / `.bordered`: those size
+    /// themselves by `controlSize`, and at `.small` a button sat 20pt tall
+    /// beside a 30pt segmented control, and "重置" was a stamp. Every action
+    /// button is now field height, with the same corner and edge as the
+    /// fields, and wide enough that a two-character label is still a button.
+    /// `compact` drops the minimum width for the panel, where four buttons
+    /// share 350pt.
+    func glassAction(prominent: Bool = false, compact: Bool = false) -> some View {
+        buttonStyle(GlassActionStyle(prominent: prominent, compact: compact))
+    }
+}
+
+struct GlassActionStyle: ButtonStyle {
+    var prominent = false
+    var compact = false
+
+    @Environment(\.isEnabled) private var isEnabled
+    @Environment(\.glassDisabled) private var glassDisabled
+
+    func makeBody(configuration: Configuration) -> some View {
+        let shape = RoundedRectangle(cornerRadius: Design.radiusField, style: .continuous)
+        let destructive = configuration.role == .destructive
+        return configuration.label
+            .font(.system(size: 12, weight: prominent ? .semibold : .medium))
+            .lineLimit(1)
+            .padding(.horizontal, compact ? Design.space3 : Design.space3 + Design.space1)
+            .frame(minWidth: compact ? 0 : 76, minHeight: Design.fieldHeight)
+            .foregroundStyle(prominent ? Design.ink : (destructive ? Color(hex: "E5484D") : Color.primary))
+            .background(shape.fill(prominent ? Design.accent : Design.fieldFill))
+            .overlay(shape.strokeBorder(prominent ? Color.clear : Design.glassEdge, lineWidth: 1))
+            .opacity(isEnabled ? (configuration.isPressed ? 0.7 : 1) : 0.45)
+            .contentShape(shape)
+            .animation(.easeOut(duration: 0.12), value: configuration.isPressed)
     }
 }
 

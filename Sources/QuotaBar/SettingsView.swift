@@ -441,6 +441,10 @@ struct ProviderSettingsRow: View {
 
             Spacer(minLength: Design.space2)
 
+            if let status = store.serviceStatus[id] {
+                ServiceStatusBadge(status: status)
+            }
+
             statusPill
 
             Toggle("", isOn: Binding(
@@ -551,19 +555,16 @@ private struct CredentialEditor: View {
             if isManual {
                 Button(L10n.t("Save", "保存"), action: save)
                     .glassAction(prominent: true)
-                    .controlSize(.small)
                     .disabled(credential == saved)
                 if !saved.isEmpty {
                     Button(L10n.t("Clear", "清除"), role: .destructive, action: clear)
                         .glassAction()
-                        .controlSize(.small)
                 }
             }
 
             if id == .claude, store.claudeNeedsAuthorization {
                 Button(L10n.t("Allow keychain access", "授权钥匙串访问")) { store.authorizeClaude() }
                     .glassAction(prominent: true)
-                    .controlSize(.small)
             }
 
             Button(action: test) {
@@ -574,10 +575,21 @@ private struct CredentialEditor: View {
                 }
             }
             .glassAction()
-            .controlSize(.small)
             .disabled({ if case .running = testPhase { return true }; return false }())
 
             Spacer(minLength: 0)
+
+            if let url = StatusPages.page(for: id) {
+                Button {
+                    NSWorkspace.shared.open(url)
+                } label: {
+                    Label(L10n.t("Status page", "状态页"), systemImage: "waveform.path.ecg")
+                        .font(.system(size: 11))
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(.secondary)
+                .help(url.absoluteString)
+            }
 
             if let url = id.dashboardURL {
                 Button {
@@ -761,13 +773,6 @@ struct PresentationPane: View {
                         onSelect: { store.setDockEdge($0) })
                     .frame(maxWidth: 200)
                 }
-                SettingRow(L10n.t("Corners", "边角")) {
-                    GlassSegmented(
-                        options: DockCorners.allCases.map { (value: $0, label: $0.displayName) },
-                        selection: store.dockCorners,
-                        onSelect: { store.setDockCorners($0) })
-                    .frame(maxWidth: 200)
-                }
                 SettingToggle(
                     L10n.t("Keep the dock visible", "常驻显示（不自动隐藏）"),
                     isOn: Binding(
@@ -895,7 +900,6 @@ struct GeneralPane: View {
                     .frame(width: 320)
                     Button(L10n.t("Refresh now", "立即刷新")) { store.refreshAll() }
                         .glassAction()
-                        .controlSize(.small)
                     Spacer(minLength: 0)
                 }
             }
@@ -909,7 +913,6 @@ struct GeneralPane: View {
             {
                 Button(L10n.t("Reset", "重置"), role: .destructive) { store.resetHistory() }
                     .glassAction()
-                    .controlSize(.small)
             }
         }
     }
@@ -987,7 +990,6 @@ struct UpdatesPane: View {
                     HStack(spacing: Design.space2) {
                         Button(L10n.t("Check now", "立即检查")) { store.checkForUpdate() }
                             .glassAction(prominent: true)
-                            .controlSize(.small)
                             .disabled(!store.checksForUpdates)
                         if store.updateIsManagedByHomebrew {
                             Text(L10n.t("Installed via Homebrew", "通过 Homebrew 安装"))
