@@ -107,7 +107,8 @@ public struct GrokProvider: QuotaProvider {
     }
 
     public func fetch(config: ConfigStore) async throws -> UsageSnapshot {
-        guard let token = config.credential(for: .grok) ?? LocalCredentials.grokAccessToken() else {
+        let local = LocalCredentials.grokAuth()
+        guard let token = config.credential(for: .grok) ?? local?.accessToken else {
             throw ProviderError.notConfigured(hint: ProviderID.grok.setupHint)
         }
         let url = URL(string: "https://cli-chat-proxy.grok.com/v1/billing?format=credits")!
@@ -117,7 +118,10 @@ public struct GrokProvider: QuotaProvider {
             "Accept": "application/json",
             "User-Agent": "QuotaBar",
         ]).requireOK()
-        return try Self.parse(response.data)
+        var snapshot = try Self.parse(response.data)
+        // The billing response carries no identity; the CLI's auth entry does.
+        if snapshot.account == nil { snapshot.account = local?.email }
+        return snapshot
     }
 
     // MARK: Response shape

@@ -345,7 +345,17 @@ public enum LocalCredentials {
 
     // MARK: Grok (~/.grok/auth.json written by the grok CLI)
 
+    public struct GrokAuth: Sendable {
+        public let accessToken: String
+        /// The signed-in account, from the same entry as the token.
+        public let email: String?
+    }
+
     public static func grokAccessToken() -> String? {
+        grokAuth()?.accessToken
+    }
+
+    public static func grokAuth() -> GrokAuth? {
         let candidates = [
             home.appendingPathComponent(".grok/auth.json"),
             home.appendingPathComponent(".config/grok/auth.json"),
@@ -354,7 +364,7 @@ public enum LocalCredentials {
             guard let data = try? Data(contentsOf: url),
                   let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
             else { continue }
-            if let token = grokToken(in: root) { return token }
+            if let auth = grokAuth(in: root) { return auth }
         }
         return nil
     }
@@ -370,20 +380,27 @@ public enum LocalCredentials {
     /// right there. The CLI refreshes the entry on its next run; the app does
     /// not touch `refresh_token` — that is the CLI's session to rotate.
     static func grokToken(in root: [String: Any], now: Date = Date()) -> String? {
+        grokAuth(in: root, now: now)?.accessToken
+    }
+
+    static func grokAuth(in root: [String: Any], now: Date = Date()) -> GrokAuth? {
         for key in ["access_token", "accessToken", "token", "api_key"] {
-            if let token = root[key] as? String, !token.isEmpty { return token }
+            if let token = root[key] as? String, !token.isEmpty {
+                return GrokAuth(accessToken: token, email: root["email"] as? String)
+            }
         }
-        var live: [(expires: Date, token: String)] = []
-        var expired: [(expires: Date, token: String)] = []
+        var live: [(expires: Date, auth: GrokAuth)] = []
+        var expired: [(expires: Date, auth: GrokAuth)] = []
         for value in root.values {
             guard let entry = value as? [String: Any],
                   let token = entry["key"] as? String, !token.isEmpty
             else { continue }
+            let auth = GrokAuth(accessToken: token, email: entry["email"] as? String)
             let expires = Dates.parseISO(entry["expires_at"] as? String) ?? .distantFuture
-            if expires > now { live.append((expires, token)) } else { expired.append((expires, token)) }
+            if expires > now { live.append((expires, auth)) } else { expired.append((expires, auth)) }
         }
         // The one that lives longest, then the one that expired most recently.
-        return live.max(by: { $0.expires < $1.expires })?.token
-            ?? expired.max(by: { $0.expires < $1.expires })?.token
+        return live.max(by: { $0.expires < $1.expires })?.auth
+            ?? expired.max(by: { $0.expires < $1.expires })?.auth
     }
 }

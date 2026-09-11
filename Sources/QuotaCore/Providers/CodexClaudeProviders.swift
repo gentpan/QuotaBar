@@ -203,17 +203,62 @@ public struct ClaudeProvider: QuotaProvider {
             }
             throw ProviderError.notConfigured(hint: ProviderID.claude.setupHint)
         }
-        let url = URL(string: "https://api.anthropic.com/api/oauth/usage")!
-        let response = try await HTTP.get(url, headers: [
+        let headers = [
             "Authorization": "Bearer \(token)",
             "Accept": "application/json",
             "anthropic-beta": "oauth-2025-04-20",
             "User-Agent": "claude-code/2.1.0",
-        ]).requireOK()
+        ]
+        let url = URL(string: "https://api.anthropic.com/api/oauth/usage")!
+        let response = try await HTTP.get(url, headers: headers).requireOK()
         var snapshot = try Self.parse(response.data)
         // The usage endpoint does not name the plan; Claude Code's item does.
         if snapshot.planName == nil { snapshot.planName = LocalCredentials.claudePlanName() }
+        // Nor the account; /api/oauth/profile does. Memoized per token, so
+        // the extra request happens once per sign-in, not once per minute.
+        snapshot.account = await Self.profileEmail(headers: headers, token: token)
         return snapshot
+    }
+
+    // MARK: Profile
+
+    private static let profileMemo = ProfileMemo()
+
+    final class ProfileMemo: @unchecked Sendable {
+        private let lock = NSLock()
+        private var token: String?
+        private var email: String?
+
+        func email(for token: String) -> String? {
+            lock.lock(); defer { lock.unlock() }
+            return self.token == token ? email : nil
+        }
+
+        func store(_ email: String, for token: String) {
+            lock.lock(); defer { lock.unlock() }
+            self.token = token
+            self.email = email
+        }
+    }
+
+    struct Profile: Decodable {
+        struct Account: Decodable { let email: String? }
+        let account: Account?
+    }
+
+    /// Best effort: a failure here leaves the card without an account line,
+    /// never without its numbers. Only a hit is cached, so a transient
+    /// failure is retried on the next refresh.
+    static func profileEmail(headers: [String: String], token: String) async -> String? {
+        if let cached = profileMemo.email(for: token) { return cached }
+        let url = URL(string: "https://api.anthropic.com/api/oauth/profile")!
+        guard let response = try? await HTTP.get(url, headers: headers),
+              response.status == 200,
+              let email = (try? response.json(Profile.self))?.account?.email,
+              !email.isEmpty
+        else { return nil }
+        profileMemo.store(email, for: token)
+        return email
     }
 
     // MARK: Response shape
