@@ -73,6 +73,14 @@ final class EdgeDockCoordinator {
     // MARK: Callout
 
     /// Shows the bubble beside ring `index`, or hides it when nil.
+    ///
+    /// Moving between rings *travels*: the window's frame animates on a curve
+    /// with a little overshoot — the same hand as the settings rail's light —
+    /// and the content crossfades, so the card is one thing following the
+    /// pointer rather than a new card appearing at each ring. First
+    /// appearance fades in from the ring's side. `animator()`, never
+    /// `setFrame(animate:)`: the latter blocks the main thread for the whole
+    /// animation (measured 341ms on the strip).
     func showCallout<Content: View>(
         at index: Int?,
         total: Int,
@@ -82,10 +90,19 @@ final class EdgeDockCoordinator {
             hideCallout()
             return
         }
-        let host = NSHostingView(rootView: content())
-        let size = host.fittingSize
+        let root = CalloutRoot(key: index, content: AnyView(content()))
+        let appearing = calloutPanel == nil
         let panel = calloutPanel ?? makeCalloutPanel()
-        panel.contentView = host
+        if let host = panel.contentView as? NSHostingView<CalloutRoot> {
+            withAnimation(Self.calloutFade) { host.rootView = root }
+        } else {
+            let host = NSHostingView(rootView: root)
+            // The frame is ours to animate; the host must not fight it.
+            host.sizingOptions = []
+            panel.contentView = host
+        }
+        // Measure the incoming content, not the host mid-crossfade.
+        let size = NSHostingView(rootView: root).fittingSize
 
         // Line the bubble up with the ring it belongs to. The strip lays its
         // rings out from the top, and AppKit measures from the bottom.
@@ -95,11 +112,44 @@ final class EdgeDockCoordinator {
         let centreY = stripFrame.maxY - centreFromTop
         let height = max(size.height, 40)
         let x = stripFrame.minX - Self.calloutWidth - Design.space2
-        panel.setFrame(
-            NSRect(x: x, y: centreY - height / 2, width: Self.calloutWidth, height: height),
-            display: true)
-        panel.orderFrontRegardless()
+        let frame = NSRect(x: x, y: centreY - height / 2, width: Self.calloutWidth, height: height)
+
+        if appearing {
+            panel.alphaValue = 0
+            panel.setFrame(frame.offsetBy(dx: Design.space2, dy: 0), display: false)
+            panel.orderFrontRegardless()
+            NSAnimationContext.runAnimationGroup { context in
+                context.duration = 0.18
+                context.timingFunction = CAMediaTimingFunction(name: .easeOut)
+                panel.animator().setFrame(frame, display: true)
+                panel.animator().alphaValue = 1
+            }
+        } else {
+            NSAnimationContext.runAnimationGroup { context in
+                context.duration = 0.3
+                // Mild overshoot. The rail's 1.95 would be too much here: the
+                // frame's height animates on the same curve, and a card
+                // that visibly over-grows reads as a glitch.
+                context.timingFunction = CAMediaTimingFunction(controlPoints: 0.2, 0.9, 0.3, 1.08)
+                panel.animator().setFrame(frame, display: true)
+            }
+        }
         calloutPanel = panel
+    }
+
+    private static let calloutFade = Animation.easeOut(duration: 0.16)
+
+    /// One host for the callout's lifetime; the key changes the identity so
+    /// the content crossfades instead of being rebuilt in place.
+    struct CalloutRoot: View {
+        let key: Int
+        let content: AnyView
+
+        var body: some View {
+            content
+                .id(key)
+                .transition(.opacity)
+        }
     }
 
     func hideCallout() {
