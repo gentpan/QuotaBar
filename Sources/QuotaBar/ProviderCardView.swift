@@ -58,7 +58,7 @@ struct ProviderCardView: View {
                         Circle()
                             .fill(Color(hex: status.level.colorHex))
                             .frame(width: 6, height: 6)
-                            .help(status.description)
+                            .help(status.sourceNote)
                     } else {
                         ServiceStatusBadge(status: status, size: 10, ink: .white.opacity(0.65))
                     }

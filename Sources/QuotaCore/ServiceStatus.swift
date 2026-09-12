@@ -12,10 +12,10 @@ public enum ServiceStatusLevel: String, Sendable, Codable, Equatable {
     case critical
     case maintenance
 
-    /// Short, so it fits beside a name: "运行正常", not the page's sentence.
+    /// Short, so it fits beside a name: "服务正常", not the page's sentence.
     public var displayName: String {
         switch self {
-        case .operational: L10n.t("Operational", "运行正常")
+        case .operational: L10n.t("Service OK", "服务正常")
         case .minor: L10n.t("Minor outage", "轻微故障")
         case .major: L10n.t("Partial outage", "部分故障")
         case .critical: L10n.t("Major outage", "重大故障")
@@ -385,7 +385,7 @@ public enum StatusPages {
         if let first = touching.first {
             description = first
         } else if level.isHealthy {
-            description = L10n.t("\(label): operational", "\(label) 运行正常")
+            description = L10n.t("\(label): service OK", "\(label) 服务正常")
         } else {
             description = L10n.t("\(label): \(level.displayName)", "\(label)：\(level.displayName)")
         }

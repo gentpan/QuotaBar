@@ -197,14 +197,14 @@ struct QuotaRowView: View {
             }
         case .close:
             if let pace {
-                Text(L10n.t("~\(Int(max(1, 100 - pace.projectedPercent).rounded()))% spare", "约 \(Int(max(1, 100 - pace.projectedPercent).rounded()))% 余量"))
+                Text(L10n.t("~\(Int(max(1, 100 - pace.projectedPercent).rounded()))% left at reset", "预计重置时剩 \(Int(max(1, 100 - pace.projectedPercent).rounded()))%"))
                     .font(.system(size: 10, weight: .medium))
                     .foregroundStyle(Palette.amber)
                     .help(projectionHelp)
             }
         case .ahead:
             if experience.alwaysShowPace, let pace {
-                Text(L10n.t("~\(Int((100 - pace.projectedPercent).rounded()))% left at reset", "重置时约剩 \(Int((100 - pace.projectedPercent).rounded()))%"))
+                Text(L10n.t("~\(Int((100 - pace.projectedPercent).rounded()))% left at reset", "预计重置时剩 \(Int((100 - pace.projectedPercent).rounded()))%"))
                     .font(.system(size: 10))
                     .foregroundStyle(.white.opacity(0.4))
             }
@@ -319,19 +319,26 @@ struct QuotaRowView: View {
     }
 
     /// The one number the row does not already show: where the rate lands.
+    /// The working behind the note, with the numbers it used, so a
+    /// forecast can be checked rather than taken on trust.
     private var projectionHelp: String {
         guard let pace, let verdict else { return "" }
-        let projected = pace.projectedPercent
-        switch verdict {
-        case .spent: return L10n.t("Limit reached", "已到上限")
-        case .ahead: return L10n.t("~\(Int((100 - projected).rounded()))% left at reset", "按当前速度，重置时约剩 \(Int((100 - projected).rounded()))%")
-        case .close: return L10n.t("~\(Int(projected.rounded()))% used at reset", "按当前速度，重置时约用掉 \(Int(projected.rounded()))%")
-        case .over:
-            let over = Int((projected - 100).rounded())
-            return over > 0
-                ? L10n.t("~\(over)% over the limit at reset", "按当前速度，重置时约超出 \(over)%")
-                : L10n.t("~100% used at reset", "按当前速度，重置时正好用完")
+        if verdict == .spent { return L10n.t("Limit reached", "已到上限") }
+        let through = Int(pace.expectedPercent.rounded())
+        let used = Int(pace.actualPercent.rounded())
+        let projected = Int(pace.projectedPercent.rounded())
+        let basis = L10n.t(
+            "\(through)% of this window has passed and \(used)% is used. At that average rate, ",
+            "这个窗口已过 \(through)%，已用 \(used)%。按这段时间的平均速度，")
+        let outcome: String
+        if projected < 100 {
+            outcome = L10n.t("it reaches about \(projected)% by the reset — \(100 - projected)% left.", "到重置时约用到 \(projected)%，剩 \(100 - projected)%。")
+        } else if projected == 100 {
+            outcome = L10n.t("it runs out right at the reset.", "正好在重置时用完。")
+        } else {
+            outcome = L10n.t("it runs out before the reset.", "会在重置前用完。")
         }
+        return basis + outcome + L10n.t(" A forecast from the average so far, not a promise.", "这是按目前平均速度的估算。")
     }
 }
 

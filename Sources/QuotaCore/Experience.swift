@@ -359,11 +359,27 @@ extension WindowPace {
         return actualPercent / (expectedPercent / 100)
     }
 
+    /// How long the window has run, from how far through it is and how long
+    /// is left.
+    public var elapsedSeconds: Double {
+        let fraction = expectedPercent / 100
+        guard fraction < 1 else { return .infinity }
+        return secondsToReset * fraction / (1 - fraction)
+    }
+
+    /// Enough of the window has passed for its average rate to mean
+    /// something: at least 5% of it and at least a quarter of an hour. Three
+    /// minutes into a 5-hour window, 3% used projects to 300% — true of the
+    /// arithmetic, useless as a forecast.
+    public var isSettled: Bool {
+        expectedPercent >= 5 && elapsedSeconds >= 900
+    }
+
     /// The pace verdict. Nothing used yet has no rate to project, and a
-    /// window that young is left alone.
+    /// window too young to have a rate is left alone.
     public var verdict: PaceVerdict? {
         if actualPercent >= 99.5 { return .spent }
-        guard actualPercent > 0 else { return nil }
+        guard actualPercent > 0, isSettled else { return nil }
         let projected = projectedPercent
         if projected <= 90 { return .ahead }
         // "~0% spare" is not a cushion: a projection that lands on the limit
@@ -377,7 +393,7 @@ extension WindowPace {
 
     /// Seconds until the window runs out, only when that lands before reset.
     public var runOutSeconds: Double? {
-        guard let secondsToExhaustion, secondsToExhaustion < secondsToReset else { return nil }
+        guard isSettled, let secondsToExhaustion, secondsToExhaustion < secondsToReset else { return nil }
         return secondsToExhaustion
     }
 }

@@ -22,6 +22,23 @@ final class PaceVerdictTests: XCTestCase {
         XCTAssertNil(pace(used: 0, elapsedFraction: 0.5).verdict, "nothing used has no rate to project")
     }
 
+    /// Too early in a window to forecast: no verdict and no run-out time,
+    /// though a spent window is still spent.
+    func testYoungWindowIsNotForecast() {
+        let early = pace(used: 3, elapsedFraction: 0.01)  // 3 minutes into 5 hours
+        XCTAssertFalse(early.isSettled)
+        XCTAssertNil(early.verdict)
+        XCTAssertNil(early.runOutSeconds)
+        XCTAssertEqual(pace(used: 100, elapsedFraction: 0.01).verdict, .spent)
+        // 5% of a week is 8.4 hours: settled.
+        XCTAssertTrue(pace(used: 10, elapsedFraction: 0.05, window: 7 * 86_400).isSettled)
+        // The owner's Fable reading on 2026-09-13: 80% used, 87% through the week.
+        let fable = pace(used: 80, elapsedFraction: 0.8699, window: 7 * 86_400)
+        XCTAssertEqual(fable.projectedPercent, 91.96, accuracy: 0.01)
+        XCTAssertEqual(fable.verdict, .close)
+        XCTAssertEqual(fable.elapsedSeconds, 0.8699 * 7 * 86_400, accuracy: 1)
+    }
+
     func testProjectionTickAndRunOut() {
         let p = pace(used: 50, elapsedFraction: 0.25)
         XCTAssertEqual(p.projectedPercent, 200, accuracy: 0.001)

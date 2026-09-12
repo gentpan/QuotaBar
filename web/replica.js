@@ -88,12 +88,12 @@
       { title: "周窗口", used: 36, reset: "5 天 16 小时后重置" },
       { title: "GPT-5.3-Codex-Spark", used: 0, reset: "4 小时 59 分后重置" },
     ]},
-    claude: { name: "Claude", logo: "claude.png", colour: true, plan: "MAX 20X", acct: "you@example.com", status: "运行正常", rows: [
+    claude: { name: "Claude", logo: "claude.png", colour: true, plan: "MAX 20X", acct: "you@example.com", status: "服务正常", rows: [
       { title: "5 小时窗口", used: 18, reset: "2 小时 41 分后重置" },
       { title: "周窗口", used: 58, reset: "4 天 9 小时后重置" },
       { title: "Fable", used: 10, reset: "4 天 9 小时后重置" },
     ]},
-    cursor: { name: "Cursor", logo: "cursor.png", plan: "PRO PLUS", acct: "you@example.com", status: "运行正常", rows: [
+    cursor: { name: "Cursor", logo: "cursor.png", plan: "PRO PLUS", acct: "you@example.com", status: "服务正常", rows: [
       { title: "月度套餐", used: 86, reset: "9 天 2 小时后重置", detail: "$17.20 / $20.00" },
       { title: "Grok Bot", used: 2, reset: "6 天 21 小时后重置" },
     ]},

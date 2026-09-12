@@ -428,7 +428,7 @@ struct StatusPane: View {
 
             if isOpen, let status {
                 VStack(alignment: .leading, spacing: Design.space2 + 2) {
-                    // "Claude Code 运行正常" would only repeat the line under
+                    // "Claude Code 服务正常" would only repeat the line under
                     // it; the sentence is worth a line when something is wrong.
                     if status.focus.isEmpty || !status.level.isHealthy {
                         Text(status.description)
