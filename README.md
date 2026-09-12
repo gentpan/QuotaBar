@@ -50,10 +50,10 @@ English and Simplified Chinese and follows the system language unless you pick o
 <!-- changelog:start -->
 <!-- Generated from CHANGELOG.md by Scripts/sync_changelog.py. Do not edit by hand. -->
 
-Latest release **0.4.0** (2026-09-12) · **65** changes in development · [full changelog](CHANGELOG.md) (kept in Chinese)
+Latest release **0.4.0** (2026-09-12) · **66** changes in development · [full changelog](CHANGELOG.md) (kept in Chinese)
 
 <details open>
-<summary><b>2026-09-13</b> · Unreleased · 34 added · 10 style · 12 fixed</summary>
+<summary><b>2026-09-13</b> · Unreleased · 34 added · 10 style · 13 fixed</summary>
 
 **Added**
 
@@ -119,6 +119,7 @@ Latest release **0.4.0** (2026-09-12) · **65** changes in development · [full 
 - 中文界面的服务状态不再显示状态页的英文标题（如 All Systems Operational），改为中文状态级别；具体事件名称仍保留状态页原文。
 - 英文界面花费说明里的来源列表用了中文顿号，现在按语言使用逗号或顿号。
 - 桌面卡片在还没有读数时，仪表环、服务商网格和排行进度条会画成满格绿色，节奏格显示"够用"：现在画成空的，数字和节奏显示横线。
+- 关于页的联网说明漏写了一项：模型价目表也是从 GitHub 获取的（LiteLLM 价目表），现在已补上。
 
 </details>
 
@@ -308,7 +309,7 @@ QuotaBar connects only to:
 - the usage endpoints of the providers you turn on, with your own session or key;
 - their public status pages, such as `status.claude.com`;
 - `open.er-api.com`, once a day, for exchange rates;
-- GitHub, to check for and download updates;
+- GitHub, to check for and download updates and to fetch model prices (LiteLLM's catalog);
 - `quota.bar`, only when you send feedback.
 
 With a proxy set (HTTP, HTTPS or SOCKS5), all of it goes through the proxy. Your usage is

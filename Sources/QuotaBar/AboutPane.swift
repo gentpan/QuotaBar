@@ -136,8 +136,8 @@ struct AboutPane: View {
                    "各服务的公开状态页，例如 status.claude.com；"),
             L10n.t("open.er-api.com, once a day, for exchange rates;",
                    "open.er-api.com，每天一次，获取汇率；"),
-            L10n.t("GitHub, to check for and download updates;",
-                   "GitHub，检查和下载更新；"),
+            L10n.t("GitHub, to check for and download updates and to fetch model prices;",
+                   "GitHub，检查和下载更新，以及获取模型价目表；"),
             L10n.t("quota.bar, only when you send feedback.",
                    "quota.bar，仅在你提交反馈时。"),
         ]
