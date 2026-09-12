@@ -338,19 +338,22 @@ struct StatusPane: View {
     @State private var expanded: ProviderID?
 
     var body: some View {
+        // Only the providers with a page. A row saying "none" for the rest
+        // was five rows of nothing; the footnote names them once.
+        let listed = ProviderID.allCases.filter { StatusPages.page(for: $0) != nil }
         SettingsCard {
             VStack(alignment: .leading, spacing: 0) {
-                ForEach(ProviderID.allCases) { id in
+                ForEach(listed) { id in
                     row(id)
-                    if id != ProviderID.allCases.last {
+                    if id != listed.last {
                         Divider().opacity(0.3)
                     }
                 }
             }
         }
         SettingFootnote(L10n.t(
-            "Read from each provider's public status page every five minutes, without signing in. Click a row for the page's own account of what is going on. xAI's page refuses automated readers; Z.ai, OpenCode, Antigravity and Qwen Cloud publish none.",
-            "每五分钟读取各服务商的公开状态页，无需登录。点击一行可看状态页对当前情况的说明。xAI 的页面拒绝自动读取；Z.ai、OpenCode、Antigravity 与 Qwen Cloud 没有公开状态页。"))
+            "Read from each provider's public status page every five minutes, without signing in. Click a row for the page's own account of what is going on. Not listed: xAI's page refuses automated readers; Z.ai, OpenCode, Antigravity and Qwen Cloud publish none.",
+            "每五分钟读取各服务商的公开状态页，无需登录。点击一行可看状态页对当前情况的说明。未列出的：xAI 的页面拒绝自动读取；Z.ai、OpenCode、Antigravity 与 Qwen Cloud 没有公开状态页。"))
     }
 
     /// One line per provider — name, band, when it was asked — and the
@@ -383,9 +386,7 @@ struct StatusPane: View {
                         .foregroundStyle(.tertiary)
                         .lineLimit(1)
                 } else {
-                    Text(StatusPages.page(for: id) != nil
-                        ? L10n.t("Not read yet", "尚未读取")
-                        : L10n.t("No public status page", "没有公开状态页"))
+                    Text(L10n.t("Not read yet", "尚未读取"))
                         .font(.system(size: 12))
                         .foregroundStyle(.tertiary)
                     Spacer(minLength: Design.space2)
