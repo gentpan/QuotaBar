@@ -8,6 +8,36 @@
   var motion = window.matchMedia("(prefers-reduced-motion: reduce)");
   function reduced() { return motion.matches; }
 
+  /* ── 菜单栏时钟 ───────────────────────────────────────────────────
+   * 访客自己的本地时间，按其系统语言排版：zh-CN 得到「周六 05:48」，
+   * en-US 得到「Sat 05:48」——就是 macOS 菜单栏右上角那一行。每分钟对齐
+   * 一次，不用每秒重排。写死的时间和访客手表对不上，比没有更糟。
+   */
+  var clock = document.getElementById("menubarClock");
+  if (clock) {
+    var format;
+    try {
+      format = new Intl.DateTimeFormat(navigator.language || "zh-CN", {
+        weekday: "short", hour: "2-digit", minute: "2-digit", hour12: false,
+      });
+    } catch (e) {
+      format = null;
+    }
+    function tick() {
+      var now = new Date();
+      var text = format
+        ? format.format(now)
+        : now.toTimeString().slice(0, 5);
+      // 某些引擎会在 24 小时制里把 0 点写成 24:xx
+      text = text.replace(/24:(\d\d)/, "00:$1");
+      clock.textContent = text;
+      clock.setAttribute("datetime", now.toISOString());
+      // 下一次正好在整分钟
+      setTimeout(tick, 60000 - (now.getSeconds() * 1000 + now.getMilliseconds()) + 50);
+    }
+    tick();
+  }
+
   /* ── FAQ 手风琴 ───────────────────────────────────────────────────
    * <details> 自带开合但没有过渡。这里接管：把面板高度从 0 动到实测
    * 高度，收起时反过来，并把 open 属性的移除推迟到动画结束——否则
