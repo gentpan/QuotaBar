@@ -9,7 +9,9 @@ Rewrites, from CHANGELOG.md and `git log`:
   <!-- changelog:start --> and <!-- changelog:end -->;
 - the same block on the website's home page, web/index.html;
 - web/changelog.html, the whole log as a page;
-- Assets/readme/activity.svg and activity.zh.svg, 26 weeks of commits.
+- Assets/readme/activity.svg and activity.zh.svg, 26 weeks of commits;
+- the website's provider strip, provider count and download version, from
+  ProviderID in Sources/QuotaCore/Models.swift and the app's logos.
 
 Run it after every CHANGELOG edit; deploy_site.sh runs it before publishing.
 Standard library only, so it runs on a stock Mac and in CI.
@@ -20,7 +22,10 @@ import html
 import math
 import pathlib
 import re
+import shutil
+import struct
 import subprocess
+import zlib
 from collections import Counter
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
@@ -356,6 +361,127 @@ def activity_svg(per_day, today, en):
     return "\n".join(parts) + "\n"
 
 
+# ── Providers ─────────────────────────────────────────────────────────────
+
+def providers():
+    """(raw id, Chinese display name) in ProviderID's order."""
+    models = (ROOT / "Sources" / "QuotaCore" / "Models.swift").read_text(encoding="utf-8")
+    body = re.search(r"public enum ProviderID\b[^{]*\{(.*?)\n    public var ", models, re.S).group(1)
+    cases = []
+    for name, raw in re.findall(r"^\s*case (\w+)(?: = \"([^\"]+)\")?\s*$", body, re.M):
+        cases.append((name, raw or name))
+    names = {}
+    block = models[models.index("public enum ProviderID"):]
+    block = block[block.index("public var displayName"):]
+    block = block[:block.index("\n    }\n")]
+    for name, value in re.findall(r"case \.(\w+): (.+)", block):
+        pair = re.findall(r'"([^"]*)"', value)
+        names[name] = pair[-1] if pair else name
+    return [(raw, names.get(name, name)) for name, raw in cases]
+
+
+def png_tone(path):
+    """(monochrome, dark) for a logo. Monochrome marks carry no colour of their
+    own, so the site draws them white; dark coloured ones (Qoder's) would vanish
+    on the dark page and get a light backing. Reads 8-bit, non-interlaced
+    RGB/RGBA PNGs, which is what the app ships."""
+    data = path.read_bytes()
+    pos, idat, width, height, colour = 8, b"", 0, 0, 6
+    while pos < len(data):
+        length, kind = struct.unpack(">I4s", data[pos:pos + 8])
+        chunk = data[pos + 8:pos + 8 + length]
+        if kind == b"IHDR":
+            width, height, depth, colour, _, _, interlace = struct.unpack(">IIBBBBB", chunk)
+            if depth != 8 or interlace or colour not in (2, 6):
+                return False, False
+        elif kind == b"IDAT":
+            idat += chunk
+        pos += 12 + length
+    channels = 4 if colour == 6 else 3
+    raw = zlib.decompress(idat)
+    stride = width * channels
+    previous = bytearray(stride)
+    sampled = coloured = 0
+    brightness = 0
+    for y in range(height):
+        start = y * (stride + 1)
+        kind, row = raw[start], bytearray(raw[start + 1:start + 1 + stride])
+        for i in range(stride):
+            left = row[i - channels] if i >= channels else 0
+            up = previous[i]
+            corner = previous[i - channels] if i >= channels else 0
+            if kind == 1:
+                row[i] = (row[i] + left) & 255
+            elif kind == 2:
+                row[i] = (row[i] + up) & 255
+            elif kind == 3:
+                row[i] = (row[i] + (left + up) // 2) & 255
+            elif kind == 4:
+                p = left + up - corner
+                pa, pb, pc = abs(p - left), abs(p - up), abs(p - corner)
+                row[i] = (row[i] + (left if pa <= pb and pa <= pc else up if pb <= pc else corner)) & 255
+        previous = row
+        if y % 4:
+            continue
+        for x in range(0, width, 4):
+            px = row[x * channels:x * channels + channels]
+            if channels == 4 and px[3] < 128:
+                continue
+            sampled += 1
+            hi, lo = max(px[:3]), min(px[:3])
+            brightness += hi
+            if hi and (hi - lo) / hi > 0.18:
+                coloured += 1
+    if not sampled:
+        return False, False
+    mono = coloured / sampled <= 0.05
+    return mono, not mono and brightness / sampled < 64
+
+
+def site_providers(index_html):
+    """Copies the logos into web/assets/logos and renders the strip."""
+    token = re.search(r"styles\.css\?v=([A-Za-z0-9]+)", index_html)
+    v = f"?v={token.group(1)}" if token else ""
+    logos = ROOT / "Sources" / "QuotaBar" / "Resources" / "logos"
+    target = ROOT / "web" / "assets" / "logos"
+    target.mkdir(parents=True, exist_ok=True)
+    items = []
+    for raw, name in providers():
+        # A mark cut for dark surfaces wins where there is one (Kimi's).
+        source = logos / f"{raw}-dark.png"
+        if not source.exists():
+            source = logos / f"{raw}.png"
+        if not source.exists():
+            continue
+        copy = target / f"{raw}.png"
+        if not copy.exists() or copy.read_bytes() != source.read_bytes():
+            shutil.copyfile(source, copy)
+        mono, dark = png_tone(source)
+        tone = " is-mono" if mono else " is-dark" if dark else ""
+        items.append(f'<li class="prov"><img class="prov__logo{tone}" src="assets/logos/{raw}.png{v}" alt="" width="24" height="24" loading="lazy" decoding="async"><span>{html.escape(name)}</span></li>')
+    count = len(providers())
+    strip = "\n".join(f"          {item}" for item in items)
+    block = "\n".join([
+        "<!-- providers:start -->",
+        "  <!-- 由 Scripts/sync_changelog.py 从 ProviderID 与应用内的 logo 生成，请勿手改。 -->",
+        '  <section id="providers" class="providers" aria-label="支持的服务商">',
+        '    <p class="providers__head">支持 <b class="provider-count">' + str(count) + "</b> 个 AI 编码服务</p>",
+        '    <div class="providers__track">',
+        # The list twice, for a loop with no seam; the copy is hidden from
+        # assistive tech.
+        '      <ul class="providers__row">',
+        strip,
+        "      </ul>",
+        '      <ul class="providers__row" aria-hidden="true">',
+        strip,
+        "      </ul>",
+        "    </div>",
+        "  </section>",
+        "  <!-- providers:end -->",
+    ])
+    return block, count
+
+
 def write_if_changed(path, content):
     path.parent.mkdir(parents=True, exist_ok=True)
     if path.exists() and path.read_text(encoding="utf-8") == content:
@@ -377,7 +503,19 @@ def main():
     if replace_block(ROOT / "README.zh-CN.md", readme_block(releases, en=False)):
         changed.append("README.zh-CN.md")
     index = ROOT / "web" / "index.html"
-    if replace_block(index, site_block(releases)):
+    site_changed = replace_block(index, site_block(releases))
+    strip, count = site_providers(index.read_text(encoding="utf-8"))
+    site_changed |= replace_block(index, strip, "<!-- providers:start -->", "<!-- providers:end -->")
+    text = index.read_text(encoding="utf-8")
+    latest = latest_release(releases)
+    updated = re.sub(r'(<[a-z]+ class="provider-count">)\d+(</[a-z]+>)', lambda m: f"{m.group(1)}{count}{m.group(2)}", text)
+    updated = re.sub(r"等 \d+ 个 AI 编码服务", f"等 {count} 个 AI 编码服务", updated)
+    if latest:
+        updated = re.sub(r'(<span class="latest-version">)[\d.]+(</span>)', lambda m: f"{m.group(1)}{latest['version']}{m.group(2)}", updated)
+    if updated != text:
+        index.write_text(updated, encoding="utf-8")
+        site_changed = True
+    if site_changed:
         changed.append("web/index.html")
     if write_if_changed(ROOT / "web" / "changelog.html", site_page(intro, releases, index.read_text(encoding="utf-8"))):
         changed.append("web/changelog.html")

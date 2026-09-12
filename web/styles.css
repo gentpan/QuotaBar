@@ -163,28 +163,89 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
 }
 
 /* 菜单栏 —— 页面的顶栏 */
+/* 照 macOS 的菜单栏：32px 高（带刘海的机型），壁纸透过毛玻璃染色，
+   菜单标题 13px、App 名加粗；打开的菜单标题有一块圆角高亮，下拉菜单是
+   半透明的圆角面板，悬停项是系统强调蓝。 */
 .menubar {
   position: absolute;
   inset: 0 0 auto 0;
   z-index: 20;
-  height: 30px;
+  height: 32px;
   display: flex;
   align-items: center;
-  gap: 20px;
-  padding-inline: 18px;
-  background: rgba(0, 0, 0, 0.3);
-  backdrop-filter: blur(26px) saturate(180%);
-  -webkit-backdrop-filter: blur(26px) saturate(180%);
+  gap: 2px;
+  padding-inline: 12px;
+  background: rgba(22, 24, 28, 0.32);
+  backdrop-filter: blur(30px) saturate(190%);
+  -webkit-backdrop-filter: blur(30px) saturate(190%);
+  box-shadow: inset 0 -0.5px 0 rgba(255, 255, 255, 0.08);
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC", "Helvetica Neue", sans-serif;
   font-size: 13px;
-  color: rgba(255, 255, 255, 0.92);
+  color: rgba(255, 255, 255, 0.94);
+  text-shadow: 0 0.5px 1px rgba(0, 0, 0, 0.18);
+  user-select: none;
+  -webkit-user-select: none;
 }
-.menubar__apple { width: 13px; opacity: 0.95; flex: none; }
-.menubar__app { font-size: 14px; font-weight: 600; }
-.menubar__menu { color: rgba(255, 255, 255, 0.84); transition: color 140ms ease-out; }
-.menubar__menu:hover { color: #fff; }
-.menubar__right { margin-left: auto; display: flex; align-items: center; gap: 15px; }
-.menubar__right svg { opacity: 0.88; }
-.menubar__clock { font-size: 12.5px; opacity: 0.9; white-space: nowrap; }
+.menubar__apple { width: 14px; margin: 0 10px 0 8px; opacity: 0.96; flex: none; }
+.menubar__app { font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", sans-serif; font-weight: 700; letter-spacing: 0; }
+
+.mb-menu { position: relative; height: 100%; display: flex; align-items: center; }
+.mb-title {
+  display: flex;
+  align-items: center;
+  height: 24px;
+  padding-inline: 9px;
+  border-radius: 6px;
+  cursor: default;
+  white-space: nowrap;
+}
+.mb-menu.is-open .mb-title { background: rgba(255, 255, 255, 0.22); }
+.mb-title:focus-visible { outline: none; background: rgba(255, 255, 255, 0.22); }
+
+.mb-drop {
+  position: absolute;
+  top: calc(100% - 2px);
+  left: 0;
+  min-width: 212px;
+  padding: 5px;
+  border-radius: 11px;
+  background: rgba(40, 41, 46, 0.74);
+  backdrop-filter: blur(40px) saturate(180%);
+  -webkit-backdrop-filter: blur(40px) saturate(180%);
+  box-shadow: 0 0 0 0.5px rgba(0, 0, 0, 0.7), inset 0 0 0 0.5px rgba(255, 255, 255, 0.16),
+    0 14px 40px rgba(0, 0, 0, 0.45);
+  text-shadow: none;
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(-3px);
+  transition: opacity 90ms ease-out, transform 90ms ease-out, visibility 0s linear 90ms;
+}
+.mb-menu.is-open .mb-drop {
+  opacity: 1;
+  visibility: visible;
+  transform: none;
+  transition: opacity 90ms ease-out, transform 90ms ease-out;
+}
+.mb-drop a {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-6);
+  height: 24px;
+  padding-inline: 10px;
+  border-radius: 6px;
+  color: rgba(255, 255, 255, 0.92);
+  white-space: nowrap;
+  cursor: default;
+}
+.mb-drop a:hover, .mb-drop a:focus-visible { outline: none; background: #0a84ff; color: #fff; }
+.mb-drop__ext { font-size: 11px; color: rgba(255, 255, 255, 0.45); }
+.mb-drop a:hover .mb-drop__ext, .mb-drop a:focus-visible .mb-drop__ext { color: rgba(255, 255, 255, 0.8); }
+.mb-drop hr { height: 1px; margin: 5px 10px; border: 0; background: rgba(255, 255, 255, 0.12); }
+
+.menubar__right { margin-left: auto; display: flex; align-items: center; gap: 16px; padding-right: 6px; }
+.menubar__right svg { opacity: 0.92; flex: none; }
+.menubar__clock { font-size: 13px; white-space: nowrap; font-variant-numeric: tabular-nums; }
 
 /* 状态栏里的 QuotaBar 图标：高亮，因为面板正从它下面挂出来 */
 .menubar__quota {
@@ -507,6 +568,43 @@ section { position: relative; }
   color: var(--ink);
 }
 
+/* ── 服务商 logo 条 ───────────────────────────────────────────────────
+ * 列表由 Scripts/sync_changelog.py 从应用的 ProviderID 与 logo 生成。
+ * 同一份列表放两遍，整条向左平移一半宽度，首尾无缝循环；悬停暂停。
+ * 单色的 logo（is-mono）画成白色，彩色的保留原色。 */
+.providers { padding-block: var(--s-12) 0; }
+.providers__head { margin: 0 0 var(--s-6); text-align: center; font-size: 14px; color: var(--body); }
+.providers__head b { color: var(--ink); font-weight: 600; }
+.providers__track {
+  display: flex;
+  width: max-content;
+  animation: providers-scroll 60s linear infinite;
+}
+.providers:hover .providers__track { animation-play-state: paused; }
+.providers {
+  overflow: hidden;
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 10%, #000 90%, transparent);
+  mask-image: linear-gradient(90deg, transparent, #000 10%, #000 90%, transparent);
+}
+.providers__row { display: flex; gap: var(--s-3); margin: 0; padding: 0 var(--s-3) 0 0; list-style: none; }
+.prov {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 44px;
+  padding: 0 16px 0 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-full);
+  background: #0d0f10;
+  font-size: 14px;
+  color: var(--ink);
+  white-space: nowrap;
+}
+.prov__logo { width: 24px; height: 24px; object-fit: contain; }
+.prov__logo.is-mono { filter: brightness(0) invert(1); }
+.prov__logo.is-dark { padding: 2px; border-radius: 6px; background: #fff; }
+@keyframes providers-scroll { to { transform: translateX(-50%); } }
+
 /* ── 更新日志 ───────────────────────────────────────────────────────────
  * 首页的「最近三天」和 changelog.html 整页，内容都由
  * Scripts/sync_changelog.py 从 CHANGELOG.md 生成。 */
@@ -623,11 +721,12 @@ section { position: relative; }
   .desktop .desktop__panel { top: 34px; right: 8px; --panel-scale: .52; }
   .desktop .desktop__island { --panel-scale: .62; }
   .desktop__copy { justify-content: flex-end; padding: 30px 24px 120px; }
-  .menubar { gap: 13px; padding-inline: 11px; font-size: 12px; }
-  /* nth-of-type 数的是所有 <a> 兄弟，而第 1 个 <a> 是 wordmark「QuotaBar」。
-     写 n+3 会从第 2 个菜单项开始隐藏，窄屏顶栏只剩「功能」一项。 */
-  .menubar__menu:nth-of-type(n + 4) { display: none; }
-  .menubar__clock { display: none; }
+  .menubar { padding-inline: 6px; font-size: 12px; }
+  .menubar__apple { margin-inline: 6px 4px; }
+  /* 子元素依次是：苹果标志、QuotaBar、功能、展示方式、更新日志、帮助、右侧状态栏。
+     窄屏只留前两个菜单，从第 5 个子元素（更新日志）起收掉。 */
+  .mb-menu:nth-child(n + 5) { display: none; }
+  .menubar__extra, .menubar__clock { display: none; }
   .dock__tile { width: 40px; height: 40px; }
 }
 
@@ -659,5 +758,10 @@ section { position: relative; }
 
 @media (prefers-reduced-motion: reduce) {
   * { animation: none !important; transition: none !important; }
+  /* 不滚动时整条换行摊开，第二份列表收起 */
+  .providers { -webkit-mask-image: none; mask-image: none; }
+  .providers__track { width: auto; justify-content: center; }
+  .providers__row { flex-wrap: wrap; justify-content: center; padding: 0 var(--s-6); }
+  .providers__row[aria-hidden="true"] { display: none; }
   html { scroll-behavior: auto; }
 }

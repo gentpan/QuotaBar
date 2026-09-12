@@ -9,16 +9,17 @@
   function reduced() { return motion.matches; }
 
   /* ── 菜单栏时钟 ───────────────────────────────────────────────────
-   * 访客自己的本地时间，按其系统语言排版：zh-CN 得到「周六 05:48」，
-   * en-US 得到「Sat 05:48」——就是 macOS 菜单栏右上角那一行。每分钟对齐
-   * 一次，不用每秒重排。写死的时间和访客手表对不上，比没有更糟。
+   * 访客自己的本地时间，按其系统语言排版：zh-CN 得到「9月13日 周日 05:48」，
+   * en-US 得到「Sun Sep 13 05:48」——就是 macOS 菜单栏右上角那一行。每分钟
+   * 对齐一次，不用每秒重排。写死的时间和访客手表对不上，比没有更糟。
    */
   var clock = document.getElementById("menubarClock");
   if (clock) {
     var format;
     try {
       format = new Intl.DateTimeFormat(navigator.language || "zh-CN", {
-        weekday: "short", hour: "2-digit", minute: "2-digit", hour12: false,
+        month: /^zh|^ja|^ko/.test(navigator.language || "zh") ? "long" : "short",
+        day: "numeric", weekday: "short", hour: "2-digit", minute: "2-digit", hour12: false,
       });
     } catch (e) {
       format = null;
@@ -30,6 +31,8 @@
         : now.toTimeString().slice(0, 5);
       // 某些引擎会在 24 小时制里把 0 点写成 24:xx
       text = text.replace(/24:(\d\d)/, "00:$1");
+      // 菜单栏里各段之间只用空格：去掉英文的逗号，中文的「9月13日周日」拆开
+      text = text.replace(/,/g, "").replace(/日(周|星期)/, "日 $1");
       // 中文排版把星期和时间连着写（周六07:04）；菜单栏里两者之间有一个空格
       text = text.replace(/([^\s\d])(\d{1,2}:\d\d)/, "$1 $2");
       clock.textContent = text;
@@ -39,6 +42,69 @@
     }
     tick();
   }
+
+  /* ── 菜单栏的下拉菜单 ─────────────────────────────────────────────
+   * 照 macOS：点标题打开；已经有菜单开着时，鼠标滑到别的标题上直接切过去；
+   * 点菜单外、按 Esc 或选中一项就收起。标题本身是指向页内章节的链接，
+   * 脚本没跑到时照样能用。
+   */
+  var menus = Array.prototype.slice.call(document.querySelectorAll(".mb-menu"));
+  var openMenu = null;
+
+  function setOpen(menu) {
+    if (openMenu === menu) return;
+    if (openMenu) {
+      openMenu.classList.remove("is-open");
+      openMenu.querySelector(".mb-title").setAttribute("aria-expanded", "false");
+    }
+    openMenu = menu;
+    if (menu) {
+      menu.classList.add("is-open");
+      menu.querySelector(".mb-title").setAttribute("aria-expanded", "true");
+    }
+  }
+
+  menus.forEach(function (menu) {
+    var title = menu.querySelector(".mb-title");
+    title.addEventListener("click", function (event) {
+      event.preventDefault();
+      setOpen(openMenu === menu ? null : menu);
+    });
+    title.addEventListener("mouseenter", function () {
+      if (openMenu && openMenu !== menu) setOpen(menu);
+    });
+    title.addEventListener("keydown", function (event) {
+      if (event.key === "ArrowDown") {
+        event.preventDefault();
+        setOpen(menu);
+        var first = menu.querySelector(".mb-drop a");
+        if (first) first.focus();
+      }
+    });
+    menu.querySelector(".mb-drop").addEventListener("keydown", function (event) {
+      var items = Array.prototype.slice.call(menu.querySelectorAll(".mb-drop a"));
+      var index = items.indexOf(document.activeElement);
+      if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+        event.preventDefault();
+        var step = event.key === "ArrowDown" ? 1 : -1;
+        items[(index + step + items.length) % items.length].focus();
+      }
+    });
+    Array.prototype.forEach.call(menu.querySelectorAll(".mb-drop a"), function (item) {
+      item.addEventListener("click", function () { setOpen(null); });
+    });
+  });
+
+  document.addEventListener("click", function (event) {
+    if (openMenu && !openMenu.contains(event.target)) setOpen(null);
+  });
+  document.addEventListener("keydown", function (event) {
+    if (event.key === "Escape" && openMenu) {
+      var title = openMenu.querySelector(".mb-title");
+      setOpen(null);
+      title.focus();
+    }
+  });
 
   /* ── FAQ 手风琴 ───────────────────────────────────────────────────
    * <details> 自带开合但没有过渡。这里接管：把面板高度从 0 动到实测
