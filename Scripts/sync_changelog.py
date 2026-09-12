@@ -248,7 +248,7 @@ def site_page(intro, releases, index_html):
         '<meta name="theme-color" content="#101112">',
         '<link rel="canonical" href="https://quota.bar/changelog.html">',
         f'<link rel="icon" type="image/png" sizes="256x256" href="assets/icon.png{v}">',
-        '<link rel="icon" sizes="48x48" href="/favicon.ico">',
+        f'<link rel="icon" sizes="48x48" href="/favicon.ico{v}">',
         f'<link rel="apple-touch-icon" sizes="180x180" href="assets/apple-touch-icon.png{v}">',
         f'<link rel="stylesheet" href="styles.css{v}">',
     ]
