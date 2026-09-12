@@ -49,7 +49,7 @@
 
 @font-face {
   font-family: "Instrument Sans";
-  src: url("assets/fonts/InstrumentSans-Variable.ttf?v=b571609e") format("truetype-variations");
+  src: url("assets/fonts/InstrumentSans-Variable.ttf?v=0a6bd817") format("truetype-variations");
   font-weight: 400 700;
   font-stretch: 75% 100%;
   font-display: swap;
@@ -138,16 +138,16 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
 .desktop__wall {
   position: absolute;
   inset: 0;
-  background: #1b2438 url("assets/wallpaper-dark.webp?v=e92ca10a") center 62% / cover no-repeat;
+  background: #1b2438 url("assets/wallpaper-dark.webp?v=0a6bd817") center 62% / cover no-repeat;
 }
 @media (max-width: 900px) {
-  .desktop__wall { background-image: url("assets/wallpaper-dark-1280.webp?v=e92ca10a"); }
+  .desktop__wall { background-image: url("assets/wallpaper-dark-1280.webp?v=0a6bd817"); }
 }
 @media (prefers-color-scheme: light) {
-  .desktop__wall { background-color: #7aa3d6; background-image: url("assets/wallpaper-light.webp?v=e92ca10a"); }
+  .desktop__wall { background-color: #7aa3d6; background-image: url("assets/wallpaper-light.webp?v=0a6bd817"); }
 }
 @media (prefers-color-scheme: light) and (max-width: 900px) {
-  .desktop__wall { background-image: url("assets/wallpaper-light-1280.webp?v=e92ca10a"); }
+  .desktop__wall { background-image: url("assets/wallpaper-light-1280.webp?v=0a6bd817"); }
 }
 /* 底部压暗，让 Dock 立得住，也和下面的内容区接得上 */
 .desktop__wall::before {
