@@ -27,13 +27,37 @@ public struct HTTPResponse: Sendable {
 }
 
 public enum HTTP {
-    private static let session: URLSession = {
+    private static let sessionLock = NSLock()
+    nonisolated(unsafe) private static var currentSession = makeSession(proxy: nil)
+    nonisolated(unsafe) private static var currentProxy = ""
+
+    private static var session: URLSession {
+        sessionLock.withLock { currentSession }
+    }
+
+    private static func makeSession(proxy: ProxySpec?) -> URLSession {
         let config = URLSessionConfiguration.ephemeral
         config.timeoutIntervalForRequest = 20
         config.httpCookieStorage = nil
         config.urlCache = nil
+        if let proxy { config.connectionProxyDictionary = proxy.dictionary }
         return URLSession(configuration: config)
-    }()
+    }
+
+    /// Routes every provider request through a proxy, after openusage:
+    /// "http://host:port", "https://host:port" or "socks5://host:port".
+    /// Empty or unparseable means direct. Returns whether the value was used.
+    @discardableResult
+    public static func configureProxy(_ value: String) -> Bool {
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        let spec = ProxySpec(trimmed)
+        return sessionLock.withLock {
+            guard trimmed != currentProxy else { return spec != nil || trimmed.isEmpty }
+            currentProxy = trimmed
+            currentSession = makeSession(proxy: spec)
+            return spec != nil || trimmed.isEmpty
+        }
+    }
 
     public static func send(
         _ method: String,
@@ -102,5 +126,43 @@ public enum Dates {
         guard let string, !string.isEmpty else { return nil }
         if let iso = parseISO(string) { return iso }
         return parseEpoch(Double(string))
+    }
+}
+
+/// A parsed proxy address.
+public struct ProxySpec: Equatable, Sendable {
+    public enum Kind: String, Sendable { case http, https, socks5 }
+    public var kind: Kind
+    public var host: String
+    public var port: Int
+
+    public init?(_ value: String) {
+        guard let url = URL(string: value), let scheme = url.scheme?.lowercased(),
+              let kind = Kind(rawValue: scheme == "socks" ? "socks5" : scheme),
+              let host = url.host, !host.isEmpty
+        else { return nil }
+        self.kind = kind
+        self.host = host
+        self.port = url.port ?? (kind == .socks5 ? 1080 : 8080)
+    }
+
+    var dictionary: [AnyHashable: Any] {
+        switch kind {
+        case .socks5:
+            return [
+                kCFNetworkProxiesSOCKSEnable as String: 1,
+                kCFNetworkProxiesSOCKSProxy as String: host,
+                kCFNetworkProxiesSOCKSPort as String: port,
+            ]
+        case .http, .https:
+            return [
+                kCFNetworkProxiesHTTPEnable as String: 1,
+                kCFNetworkProxiesHTTPProxy as String: host,
+                kCFNetworkProxiesHTTPPort as String: port,
+                kCFNetworkProxiesHTTPSEnable as String: 1,
+                kCFNetworkProxiesHTTPSProxy as String: host,
+                kCFNetworkProxiesHTTPSPort as String: port,
+            ]
+        }
     }
 }

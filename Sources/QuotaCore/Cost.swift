@@ -47,13 +47,20 @@ public struct DailyCost: Sendable, Equatable, Identifiable {
     public var day: Date
     public var usd: Double
     public var tokens: Int
+    /// Fresh input plus output, without cache reads and writes.
+    public var billableTokens: Int
 
     public var id: TimeInterval { day.timeIntervalSince1970 }
 
-    public init(day: Date, usd: Double = 0, tokens: Int = 0) {
+    public init(day: Date, usd: Double = 0, tokens: Int = 0, billableTokens: Int = 0) {
         self.day = day
         self.usd = usd
         self.tokens = tokens
+        self.billableTokens = billableTokens
+    }
+
+    public func tokens(_ counting: TokenCounting) -> Int {
+        counting == .all ? tokens : billableTokens
     }
 }
 
@@ -62,6 +69,19 @@ public struct SpendBreakdown: Sendable, Equatable {
     public var usd: Double = 0
     public var tokens: Int = 0
     public var bySource: [CostSource: Double] = [:]
+    public var billableTokens: Int = 0
+    public var tokensBySource: [CostSource: Int] = [:]
+    public var billableBySource: [CostSource: Int] = [:]
+    /// Dollars and tokens per model id, for the hover breakdown.
+    public var byModel: [String: ModelSpend] = [:]
+
+    public func tokens(_ counting: TokenCounting) -> Int {
+        counting == .all ? tokens : billableTokens
+    }
+
+    public func tokens(from source: CostSource, _ counting: TokenCounting) -> Int {
+        (counting == .all ? tokensBySource : billableBySource)[source] ?? 0
+    }
 
     public init(usd: Double = 0, tokens: Int = 0, bySource: [CostSource: Double] = [:]) {
         self.usd = usd
@@ -86,10 +106,48 @@ public struct SpendBreakdown: Sendable, Equatable {
         contributions.contains { $0.source.isEstimated }
     }
 
-    mutating func add(_ usd: Double, tokens: Int, from source: CostSource) {
+    mutating func add(_ usd: Double, tokens: Int, billable: Int = 0, model: String? = nil, from source: CostSource) {
         self.usd += usd
         self.tokens += tokens
         bySource[source, default: 0] += usd
+        billableTokens += billable
+        tokensBySource[source, default: 0] += tokens
+        billableBySource[source, default: 0] += billable
+        if let model {
+            var entry = byModel[model] ?? ModelSpend(model: model, source: source)
+            entry.usd += usd
+            entry.tokens += tokens
+            entry.billableTokens += billable
+            byModel[model] = entry
+        }
+    }
+
+    /// Models by dollars, largest first.
+    public var models: [ModelSpend] {
+        byModel.values.filter { $0.usd > 0 || $0.tokens > 0 }.sorted { $0.usd == $1.usd ? $0.tokens > $1.tokens : $0.usd > $1.usd }
+    }
+}
+
+/// One model's share of a period.
+public struct ModelSpend: Sendable, Equatable, Identifiable {
+    public var model: String
+    public var source: CostSource
+    public var usd: Double = 0
+    public var tokens: Int = 0
+    public var billableTokens: Int = 0
+
+    public var id: String { model }
+
+    public init(model: String, source: CostSource, usd: Double = 0, tokens: Int = 0, billableTokens: Int = 0) {
+        self.model = model
+        self.source = source
+        self.usd = usd
+        self.tokens = tokens
+        self.billableTokens = billableTokens
+    }
+
+    public func tokens(_ counting: TokenCounting) -> Int {
+        counting == .all ? tokens : billableTokens
     }
 }
 
@@ -349,6 +407,7 @@ public enum CostEstimator {
             }
             let cost = cost(of: event)
             let count = tokens(of: event)
+            let billable = event.input + event.output
 
             guard event.timestamp >= windowStart else { continue }
             summary.windowUSD += cost
@@ -360,15 +419,16 @@ public enum CostEstimator {
             var bucket = perDay[day] ?? DailyCost(day: day)
             bucket.usd += cost
             bucket.tokens += count
+            bucket.billableTokens += billable
             perDay[day] = bucket
 
-            periods[.window]?.add(cost, tokens: count, from: event.source)
+            periods[.window]?.add(cost, tokens: count, billable: billable, model: event.model, from: event.source)
             if event.timestamp >= dayStart {
                 summary.todayUSD += cost
                 summary.todayTokens += count
-                periods[.today]?.add(cost, tokens: count, from: event.source)
+                periods[.today]?.add(cost, tokens: count, billable: billable, model: event.model, from: event.source)
             } else if event.timestamp >= yesterdayStart {
-                periods[.yesterday]?.add(cost, tokens: count, from: event.source)
+                periods[.yesterday]?.add(cost, tokens: count, billable: billable, model: event.model, from: event.source)
             }
         }
         summary.periods = periods
@@ -440,6 +500,33 @@ public enum CostEstimator {
             modelSources: modelSources,
             scannedAt: now,
             deduplicated: duplicates)
+    }
+
+    // MARK: Archive records
+
+    /// Every token event since `cutoff`, folded per local day, CLI and model,
+    /// for the archive. Shares the parsed-file memo with the other scans.
+    public static func archiveRecords(paths: CostPaths = .default, since cutoff: Date) -> ArchiveDays {
+        var events = scanClaude(root: paths.claudeProjects, cutoff: cutoff)
+        events.append(contentsOf: scanCodex(root: paths.codexSessions, cutoff: cutoff))
+        events.append(contentsOf: scanOpenCode(database: paths.openCodeDatabase, cutoff: cutoff))
+        var seen = Set<String>()
+        var out: ArchiveDays = [:]
+        for event in events {
+            if let key = event.dedupeKey {
+                guard seen.insert(key).inserted else { continue }
+            }
+            guard event.timestamp >= cutoff else { continue }
+            let day = UsageArchive.dayKey(event.timestamp)
+            var entry = out[day]?[event.source.rawValue]?[event.model] ?? ArchiveEntry()
+            entry.usd += cost(of: event)
+            entry.input += event.input
+            entry.output += event.output
+            entry.cacheRead += event.cacheRead
+            entry.cacheWrite += event.cacheWrite5m + event.cacheWrite1h
+            out[day, default: [:]][event.source.rawValue, default: [:]][event.model] = entry
+        }
+        return out
     }
 
     /// Drops the parsed-file memo; used by tests and after a manual rescan.

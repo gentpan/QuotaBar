@@ -50,6 +50,8 @@ public struct QuotaConfig: Codable, Sendable, Equatable {
     /// ring, the island, the widget, the menu-bar reading. Absent = the
     /// fullest window. Picked by clicking a row in the provider's card.
     public var headlineWindows: [ProviderID: String]
+    /// Everything added in 0.5 — pace, panel, glow, sharing, privacy.
+    public var experience: ExperiencePrefs
 
     /// Only ever populated by decoding a pre-Keychain config file. `ConfigStore`
     /// drains it into the keychain on load and rewrites the file without it;
@@ -90,6 +92,7 @@ public struct QuotaConfig: Codable, Sendable, Equatable {
         widgetPin: ProviderID? = nil,
         displayScreen: String? = nil,
         headlineWindows: [ProviderID: String] = [:],
+        experience: ExperiencePrefs = ExperiencePrefs(),
         legacyCredentials: [ProviderID: String] = [:])
     {
         self.enabled = enabled
@@ -120,6 +123,7 @@ public struct QuotaConfig: Codable, Sendable, Equatable {
         self.widgetPin = widgetPin
         self.displayScreen = displayScreen
         self.headlineWindows = headlineWindows
+        self.experience = experience
         self.legacyCredentials = legacyCredentials
     }
 
@@ -128,7 +132,7 @@ public struct QuotaConfig: Codable, Sendable, Equatable {
         case selected, updateFeed, checksForUpdates, updatePolicy
         case dockEdge, dockPosition, dockAlwaysVisible, islandSlots
         case widgetEnabled, widgetDensity, widgetX, widgetY, widgetAlwaysOnTop, widgetScope, islandPin, dockPin, widgetPin
-        case displayScreen, headlineWindows
+        case displayScreen, headlineWindows, experience
         case legacyCredentials = "credentials"
     }
 
@@ -141,8 +145,11 @@ public struct QuotaConfig: Codable, Sendable, Equatable {
         // happen from a hand-edited config, or from running an older build
         // after a newer one wrote a value it does not know.
         enabled = QuotaConfig.decodeProviders(from: container) ?? defaults.enabled
-        refreshMinutes = (try? container.decodeIfPresent(Int.self, forKey: .refreshMinutes))
-            ?? defaults.refreshMinutes
+        // Five minutes at least: codex-island found Anthropic's usage
+        // endpoint rate-limits anything tighter, and a 1-minute setting from
+        // an older build is lifted rather than kept.
+        refreshMinutes = QuotaConfig.clampRefresh(
+            (try? container.decodeIfPresent(Int.self, forKey: .refreshMinutes)) ?? defaults.refreshMinutes)
         menuBarStyle = QuotaConfig.decodeEnum(from: container, forKey: .menuBarStyle)
             ?? defaults.menuBarStyle
         menuBarIconMode = QuotaConfig.decodeEnum(from: container, forKey: .menuBarIconMode) ?? defaults.menuBarIconMode
@@ -187,8 +194,15 @@ public struct QuotaConfig: Codable, Sendable, Equatable {
         displayScreen = (try? container.decodeIfPresent(String.self, forKey: .displayScreen))
             .flatMap { $0.isEmpty ? nil : $0 }
         headlineWindows = QuotaConfig.decodeProviderStrings(from: container, forKey: .headlineWindows)
+        experience = (try? container.decodeIfPresent(ExperiencePrefs.self, forKey: .experience)) ?? ExperiencePrefs()
         legacyCredentials = QuotaConfig.decodeLegacyCredentials(from: container)
         hasLegacyCredentialKey = container.contains(.legacyCredentials)
+    }
+
+    public static let minimumRefreshMinutes = 5
+
+    public static func clampRefresh(_ minutes: Int) -> Int {
+        max(minimumRefreshMinutes, min(minutes, 24 * 60))
     }
 
     /// A per-provider string map, stored as an object keyed by provider id —
@@ -277,6 +291,7 @@ public struct QuotaConfig: Codable, Sendable, Equatable {
         try container.encodeIfPresent(dockPin, forKey: .dockPin)
         try container.encodeIfPresent(widgetPin, forKey: .widgetPin)
         try container.encodeIfPresent(displayScreen, forKey: .displayScreen)
+        try container.encode(experience, forKey: .experience)
         if !headlineWindows.isEmpty {
             try container.encode(
                 Dictionary(uniqueKeysWithValues: headlineWindows.map { ($0.key.rawValue, $0.value) }),
@@ -431,7 +446,7 @@ public final class ConfigStore: @unchecked Sendable {
             lock.lock(); defer { lock.unlock() }
             return config.refreshMinutes
         }
-        set { mutate { $0.refreshMinutes = max(1, newValue) } }
+        set { mutate { $0.refreshMinutes = QuotaConfig.clampRefresh(newValue) } }
     }
 
     public var presentation: Presentation {
@@ -594,6 +609,19 @@ public final class ConfigStore: @unchecked Sendable {
             return config.displayScreen
         }
         set { mutate { $0.displayScreen = newValue } }
+    }
+
+    public var experience: ExperiencePrefs {
+        get {
+            lock.lock(); defer { lock.unlock() }
+            return config.experience
+        }
+        set { mutate { $0.experience = newValue } }
+    }
+
+    /// Changes one or more 0.5 preferences in a single write.
+    public func updateExperience(_ body: (inout ExperiencePrefs) -> Void) {
+        mutate { body(&$0.experience) }
     }
 
     public func headlineWindow(for id: ProviderID) -> String? {

@@ -1286,12 +1286,14 @@ struct GeneralPane: View {
             SettingRow(L10n.t("Interval", "间隔")) {
                 HStack(spacing: Design.space3) {
                     GlassSegmented(
-                        options: [1, 2, 5, 15, 30].map {
+                        // Nothing under five minutes: Anthropic's usage
+                        // endpoint rate-limits tighter polling.
+                        options: [5, 15, 30].map {
                             (value: $0, label: L10n.t("\($0)m", "\($0) 分"))
                         },
                         selection: store.refreshMinutes,
                         onSelect: { store.setRefreshMinutes($0) })
-                    .frame(width: 320)
+                    .frame(width: 220)
                     Button(L10n.t("Refresh now", "立即刷新")) { store.refreshAll() }
                         .glassAction()
                     Spacer(minLength: 0)

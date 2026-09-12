@@ -726,8 +726,8 @@ final class UsageStore: ObservableObject {
     }
 
     func setRefreshMinutes(_ minutes: Int) {
-        refreshMinutes = minutes
-        config.refreshMinutes = minutes
+        refreshMinutes = QuotaConfig.clampRefresh(minutes)
+        config.refreshMinutes = refreshMinutes
         startAutoRefresh()
     }
 

@@ -187,10 +187,14 @@ final class ConfigStoreTests: XCTestCase {
         L10n.override = .system
     }
 
-    func testRefreshIntervalCannotBeZero() {
+    /// Five minutes at least: tighter polling gets Anthropic's usage
+    /// endpoint to rate-limit the account.
+    func testRefreshIntervalIsAtLeastFiveMinutes() {
         let store = ConfigStore(fileURL: fileURL, credentials: MemoryCredentialStorage())
         store.refreshMinutes = 0
-        XCTAssertEqual(store.refreshMinutes, 1)
+        XCTAssertEqual(store.refreshMinutes, 5)
+        store.refreshMinutes = 15
+        XCTAssertEqual(store.refreshMinutes, 15)
     }
 
     func testCorruptFileFallsBackToDefaults() throws {
@@ -202,10 +206,10 @@ final class ConfigStoreTests: XCTestCase {
 
     func testUnknownKeysInFileAreTolerated() throws {
         try write("""
-        {"enabled":["claude"],"refreshMinutes":2,"somethingFromAFutureVersion":true}
+        {"enabled":["claude"],"refreshMinutes":15,"somethingFromAFutureVersion":true}
         """)
         let store = ConfigStore(fileURL: fileURL, credentials: MemoryCredentialStorage())
-        XCTAssertEqual(store.refreshMinutes, 2)
+        XCTAssertEqual(store.refreshMinutes, 15)
         XCTAssertEqual(store.enabledProviders, [.claude])
     }
 }
@@ -355,11 +359,11 @@ final class ConfigResilienceTests: XCTestCase {
     func testAnUnknownProviderIsDroppedNotTheWholeList() throws {
         // What a downgrade looks like after a newer build added a provider.
         let config = try decode("""
-        {"enabled":["codex","quantum-ai","claude"],"refreshMinutes":2}
+        {"enabled":["codex","quantum-ai","claude"],"refreshMinutes":15}
         """)
 
         XCTAssertEqual(config.enabled, [.codex, .claude])
-        XCTAssertEqual(config.refreshMinutes, 2)
+        XCTAssertEqual(config.refreshMinutes, 15)
     }
 
     func testEveryEnumFieldToleratesGarbage() throws {
