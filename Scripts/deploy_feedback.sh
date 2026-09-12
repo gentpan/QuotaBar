@@ -1,9 +1,9 @@
 #!/bin/bash
-# Installs the feedback receiver on the quota.bar host and wires nginx to it.
+# Installs the feedback receiver on the quota.bar host and wires Caddy to it.
 # Idempotent: re-running updates the script and reloads the service.
 set -euo pipefail
 cd "$(dirname "$0")/.."
-HOST="${SITE_HOST:-root@5.9.73.228}"
+HOST="${SITE_HOST:-root@15.204.80.137}"
 KEY="${SITE_KEY:-$HOME/.ssh/gentpan.pem}"
 SSH="ssh -i $KEY -o BatchMode=yes -o ConnectTimeout=25"
 
@@ -16,29 +16,29 @@ mkdir -p /var/lib/quotabar && chown www-data:www-data /var/lib/quotabar
 systemctl daemon-reload
 systemctl enable --now quotabar-feedback >/dev/null
 systemctl restart quotabar-feedback
-# nginx：找到 quota.bar 的 server 块所在文件，没有 location 就插到块尾
-conf=$(grep -lR "server_name quota.bar" /etc/nginx/sites-enabled /etc/nginx/conf.d 2>/dev/null | head -1)
-if [ -z "$conf" ]; then echo "找不到 quota.bar 的 nginx 配置"; exit 1; fi
-if ! grep -q "location /api/feedback" "$conf"; then
-  python3 - "$conf" <<'PY'
-import re, sys
+# Caddy：在 quota.bar 的站点块里加 /api/feedback 的反代；没有就插到块尾
+site=/etc/caddy/sites/quota.bar.caddy
+if [ ! -f "$site" ]; then echo "找不到 $site"; exit 1; fi
+if ! grep -q "/api/feedback" "$site"; then
+  python3 - "$site" <<'PYCADDY'
+import sys
 path = sys.argv[1]; text = open(path).read()
-snippet = open('/opt/quotabar-feedback/nginx-location.conf').read()
-# 在含 server_name quota.bar 的 server 块里，把 location 插在该块最后一个 "}" 之前
-idx = text.index('server_name quota.bar')
-start = text.rfind('server {', 0, idx)
+snippet = "\thandle /api/feedback* {\n\t\treverse_proxy 127.0.0.1:8787\n\t}\n"
+idx = text.index('quota.bar {')
 depth = 0; end = None
-for i in range(start, len(text)):
+for i in range(idx, len(text)):
     if text[i] == '{': depth += 1
     elif text[i] == '}':
         depth -= 1
-        if depth == 0: end = i; break
+        if depth == 0:
+            end = i
+            break
 text = text[:end] + snippet + text[end:]
 open(path, 'w').write(text)
-print('已插入 location 到', path)
-PY
+print('已插入 handle /api/feedback 到', path)
+PYCADDY
 fi
-nginx -t && systemctl reload nginx
+caddy validate --config /etc/caddy/Caddyfile >/dev/null && systemctl reload caddy
 sleep 1
 systemctl is-active quotabar-feedback
 curl -s -o /dev/null -w 'GET 本机 %{http_code}\n' http://127.0.0.1:8787/api/feedback

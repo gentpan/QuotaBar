@@ -5,7 +5,7 @@
 配置了 GitHub 令牌后，再自动建成仓库的 issue（用户不用登录，令牌只在服务器上）。
 
 部署：`Scripts/deploy_feedback.sh`（rsync 到 `/opt/quotabar-feedback`，装 systemd 单元，
-往 quota.bar 的 nginx server 块里加 `location /api/feedback`，reload，然后 POST 一条 test 反馈验证）。
+往 `/etc/caddy/sites/quota.bar.caddy` 的站点块里加 `handle /api/feedback*` 反代，reload Caddy，然后 POST 一条 test 反馈验证）。
 
 开启 GitHub Issues：在服务器上写 `/etc/quotabar-feedback.env`：
 
