@@ -56,9 +56,9 @@ struct IslandPanel: View {
     }
 
     /// Left takes the first `slots` enabled providers, right the next.
-    private var left: [ProviderID] { Array(store.enabled.prefix(store.islandSlots)) }
+    private var left: [ProviderID] { Array(store.islandProviders.prefix(store.islandSlots)) }
     private var right: [ProviderID] {
-        Array(store.enabled.dropFirst(store.islandSlots).prefix(store.islandSlots))
+        Array(store.islandProviders.dropFirst(store.islandSlots).prefix(store.islandSlots))
     }
 
     var body: some View {

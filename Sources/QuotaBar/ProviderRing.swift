@@ -112,6 +112,9 @@ struct ProviderRing: View {
 struct ProviderCallout: View {
     @ObservedObject var store: UsageStore
     let id: ProviderID
+    /// The full card: wider, with the trend, the reset credits, when it was
+    /// fetched, and the pin row. The summary is what hover shows.
+    var detail: Bool = false
 
     /// Front: the quota windows. Back: what this provider actually consumed,
     /// from the local session logs where there are any. Flipped by the
@@ -142,7 +145,7 @@ struct ProviderCallout: View {
             }
         }
         .padding(Design.space3)
-        .frame(width: 260, alignment: .leading)
+        .frame(width: detail ? EdgeDockCoordinator.detailWidth : EdgeDockCoordinator.calloutWidth, alignment: .leading)
         .background(
             RoundedRectangle(cornerRadius: Design.radiusCard + 2, style: .continuous)
                 .fill(Color.black))
@@ -233,18 +236,80 @@ struct ProviderCallout: View {
                 .foregroundStyle(Color(hex: "FF9F0A"))
                 .fixedSize(horizontal: false, vertical: true)
         case let .loaded(snapshot), let .stale(snapshot, _):
-            if snapshot.windows.isEmpty {
-                Text(L10n.t("No quota windows reported.", "服务商未返回额度窗口。"))
-                    .font(.caption)
-                    .foregroundStyle(.white.opacity(0.6))
-            } else {
-                VStack(alignment: .leading, spacing: Design.space3) {
+            VStack(alignment: .leading, spacing: Design.space3) {
+                if snapshot.windows.isEmpty {
+                    Text(L10n.t("No quota windows reported.", "服务商未返回额度窗口。"))
+                        .font(.caption)
+                        .foregroundStyle(.white.opacity(0.6))
+                } else {
                     ForEach(snapshot.windows) { window in
                         row(window)
                     }
                 }
+                if detail {
+                    detailExtras(snapshot)
+                }
             }
         }
+    }
+
+    // MARK: Detail
+
+    @ViewBuilder
+    private func detailExtras(_ snapshot: UsageSnapshot) -> some View {
+        let history = store.history[id] ?? []
+        if history.count > 1 {
+            SparklineView(values: history, accent: Color(hex: id.accentHex))
+        }
+        if let credits = snapshot.resetCredits {
+            ResetCreditsRow(credits: credits, accent: Color(hex: id.accentHex))
+        }
+        Text(L10n.t(
+            "Updated \(QuotaFormat.age(of: snapshot.fetchedAt))",
+            "更新于 \(QuotaFormat.age(of: snapshot.fetchedAt))"))
+            .font(.system(size: 10))
+            .foregroundStyle(.white.opacity(0.4))
+        pinRow
+    }
+
+    /// Where this provider is shown on its own. Each chip is a toggle; the
+    /// menu-bar one is the glyph's selection, the others are the surface's
+    /// pin, and a pinned surface shows this provider and nothing else.
+    private var pinRow: some View {
+        VStack(alignment: .leading, spacing: Design.space1 + 2) {
+            Text(L10n.t("PIN TO", "钉到"))
+                .font(.system(size: 9, weight: .semibold, design: .monospaced))
+                .tracking(0.6)
+                .foregroundStyle(.white.opacity(0.55))
+            HStack(spacing: Design.space1 + 2) {
+                pinChip(L10n.t("Menu bar", "菜单栏"), on: store.selected == id) {
+                    store.selected = store.selected == id ? nil : id
+                }
+                pinChip(L10n.t("Island", "刘海岛"), on: store.islandPin == id) {
+                    store.setIslandPin(store.islandPin == id ? nil : id)
+                }
+                pinChip(L10n.t("Dock", "停靠条"), on: store.dockPin == id) {
+                    store.setDockPin(store.dockPin == id ? nil : id)
+                }
+                pinChip(L10n.t("Desktop card", "桌面卡片"), on: store.widgetPin == id && store.widgetScope == .pinned) {
+                    store.setWidgetPin(store.widgetPin == id && store.widgetScope == .pinned ? nil : id)
+                }
+            }
+        }
+    }
+
+    private func pinChip(_ label: String, on: Bool, action: @escaping () -> Void) -> some View {
+        Text(label)
+            .font(.system(size: 10, weight: on ? .semibold : .medium))
+            .foregroundStyle(on ? Color.black : Color.white.opacity(0.7))
+            .padding(.horizontal, 7)
+            .padding(.vertical, 4)
+            .background(
+                RoundedRectangle(cornerRadius: 5, style: .continuous)
+                    .fill(on ? Color.white.opacity(0.92) : Color.white.opacity(0.08)))
+            .contentShape(Rectangle())
+            .onTapGesture(perform: action)
+            .animation(.easeOut(duration: 0.15), value: on)
     }
 
     /// Title and reset on one line, the meter under it, the figure below —

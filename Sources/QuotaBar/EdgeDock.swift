@@ -96,11 +96,16 @@ final class EdgeDockCoordinator {
     /// appearance fades in from the ring's side. `animator()`, never
     /// `setFrame(animate:)`: the latter blocks the main thread for the whole
     /// animation (measured 341ms on the strip).
+    /// The full card is wider than the summary.
+    static let detailWidth: CGFloat = 320
+
     func showCallout<Content: View>(
         at index: Int?,
         total: Int,
+        width: CGFloat? = nil,
         @ViewBuilder content: () -> Content)
     {
+        let width = width ?? Self.calloutWidth
         guard let index, expanded, let strip = panel else {
             hideCallout()
             return
@@ -135,8 +140,8 @@ final class EdgeDockCoordinator {
         let onLeft = ConfigStore.shared.dockEdge == .left
         let x = onLeft
             ? stripFrame.maxX + Design.space2
-            : stripFrame.minX - Self.calloutWidth - Design.space2
-        let frame = NSRect(x: x, y: centreY - height / 2, width: Self.calloutWidth, height: height)
+            : stripFrame.minX - width - Design.space2
+        let frame = NSRect(x: x, y: centreY - height / 2, width: width, height: height)
 
         if appearing {
             panel.alphaValue = 0
@@ -302,7 +307,7 @@ final class EdgeDockCoordinator {
         // and reports *that*. Recording it would make the next reveal aim at
         // the handle's height and then correct itself.
         guard expanded || alwaysVisible else { return }
-        let count = ConfigStore.shared.enabledProviders.count
+        let count = ConfigStore.shared.providers(pinnedTo: ConfigStore.shared.dockPin).count
         let measured = max(80, height)
         guard measuredHeights[count] != measured else { return }
         measuredHeights[count] = measured
@@ -353,7 +358,7 @@ final class EdgeDockCoordinator {
         // changes is how wide and tall the panel is.
         let panelWidth = out ? Self.width : Self.handleWidth
         let panelHeight = out
-            ? stripHeight(providers: config.enabledProviders.count)
+            ? stripHeight(providers: config.providers(pinnedTo: config.dockPin).count)
             : Self.handleHeight
         let x = config.dockEdge == .right
             ? visible.maxX - panelWidth
@@ -442,6 +447,9 @@ struct EdgeDockView: View {
     var coordinator: EdgeDockCoordinator
     @State private var expanded = false
     @State private var hovered: ProviderID?
+    /// The ring that was clicked: its card is the full one, with the pin
+    /// row, until the strip closes.
+    @State private var detail: ProviderID?
     /// Clears `hovered` a beat after the pointer leaves a ring, unless it
     /// turns up on the callout first. Leaving a ring for the card crosses
     /// 14pt of strip and an 8pt gap; cleared at once, the card was gone
@@ -501,6 +509,9 @@ struct EdgeDockView: View {
             Toggle(L10n.t("Keep open", "锁定显示"), isOn: Binding(
                 get: { store.dockAlwaysVisible },
                 set: { store.setDockAlwaysVisible($0) }))
+            if store.dockPin != nil {
+                Button(L10n.t("Show every provider", "显示全部服务商")) { store.setDockPin(nil) }
+            }
             Button(L10n.t("Settings…", "设置…")) { SettingsWindow.open() }
             Divider()
             Button(L10n.t("Quit QuotaBar", "退出 QuotaBar")) { NSApp.terminate(nil) }
@@ -528,6 +539,7 @@ struct EdgeDockView: View {
             if !isOpen {
                 coordinator.hideCallout()
                 hovered = nil
+                detail = nil
             }
         }
     }
@@ -563,10 +575,11 @@ struct EdgeDockView: View {
     }
 
     private func presentCallout(for id: ProviderID?) {
-        let index = id.flatMap { store.enabled.firstIndex(of: $0) }
-        coordinator.showCallout(at: index, total: store.enabled.count) {
+        let index = id.flatMap { store.dockProviders.firstIndex(of: $0) }
+        let isDetail = id != nil && detail == id
+        coordinator.showCallout(at: index, total: store.dockProviders.count, width: isDetail ? EdgeDockCoordinator.detailWidth : EdgeDockCoordinator.calloutWidth) {
             if let id {
-                ProviderCallout(store: store, id: id)
+                ProviderCallout(store: store, id: id, detail: isDetail)
                     .onHover { coordinator.setCalloutHovered($0) }
             }
         }
@@ -583,7 +596,7 @@ struct EdgeDockView: View {
 
     private var strip: some View {
         VStack(spacing: Design.space3) {
-            ForEach(store.enabled) { id in
+            ForEach(store.dockProviders) { id in
                 ProviderRing(
                     id: id,
                     percent: store.states[id]?.snapshot?.headlinePercent,
@@ -607,10 +620,12 @@ struct EdgeDockView: View {
                         SettingsWindow.open()
                     }
                     .onTapGesture {
-                        // A single click only points the menu-bar glyph at this
-                        // provider. Opening a window is a bigger thing than
-                        // choosing what an icon means, so it takes two.
-                        store.selected = id
+                        // Hover is the summary; a click is the full card,
+                        // with the pin row; a second click on the same ring
+                        // folds it back. Opening a window takes two.
+                        detail = detail == id ? nil : id
+                        hovered = id
+                        presentCallout(for: id)
                     }
             }
         }

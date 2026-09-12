@@ -37,6 +37,11 @@ public struct QuotaConfig: Codable, Sendable, Equatable {
     /// Desktop level by default — a widget that floats over every window is a
     /// different thing, and an intrusive one.
     public var widgetAlwaysOnTop: Bool
+    public var widgetScope: WidgetScope
+    /// One provider pinned to a surface, shown there alone. nil = all.
+    public var islandPin: ProviderID?
+    public var dockPin: ProviderID?
+    public var widgetPin: ProviderID?
 
     /// Only ever populated by decoding a pre-Keychain config file. `ConfigStore`
     /// drains it into the keychain on load and rewrites the file without it;
@@ -71,6 +76,10 @@ public struct QuotaConfig: Codable, Sendable, Equatable {
         widgetX: Double = 0.82,
         widgetY: Double = 0.12,
         widgetAlwaysOnTop: Bool = false,
+        widgetScope: WidgetScope = .all,
+        islandPin: ProviderID? = nil,
+        dockPin: ProviderID? = nil,
+        widgetPin: ProviderID? = nil,
         legacyCredentials: [ProviderID: String] = [:])
     {
         self.enabled = enabled
@@ -95,6 +104,10 @@ public struct QuotaConfig: Codable, Sendable, Equatable {
         self.widgetX = widgetX
         self.widgetY = widgetY
         self.widgetAlwaysOnTop = widgetAlwaysOnTop
+        self.widgetScope = widgetScope
+        self.islandPin = islandPin
+        self.dockPin = dockPin
+        self.widgetPin = widgetPin
         self.legacyCredentials = legacyCredentials
     }
 
@@ -102,7 +115,7 @@ public struct QuotaConfig: Codable, Sendable, Equatable {
         case enabled, refreshMinutes, menuBarStyle, menuBarIconMode, meterMode, meterStyle, presentation, alerts, language
         case selected, updateFeed, checksForUpdates, updatePolicy
         case dockEdge, dockPosition, dockAlwaysVisible, islandSlots
-        case widgetEnabled, widgetDensity, widgetX, widgetY, widgetAlwaysOnTop
+        case widgetEnabled, widgetDensity, widgetX, widgetY, widgetAlwaysOnTop, widgetScope, islandPin, dockPin, widgetPin
         case legacyCredentials = "credentials"
     }
 
@@ -154,6 +167,10 @@ public struct QuotaConfig: Codable, Sendable, Equatable {
             (try? container.decodeIfPresent(Double.self, forKey: .widgetY)) ?? defaults.widgetY, 0), 1)
         widgetAlwaysOnTop = (try? container.decodeIfPresent(Bool.self, forKey: .widgetAlwaysOnTop))
             ?? defaults.widgetAlwaysOnTop
+        widgetScope = QuotaConfig.decodeEnum(from: container, forKey: .widgetScope) ?? defaults.widgetScope
+        islandPin = QuotaConfig.decodeEnum(from: container, forKey: .islandPin)
+        dockPin = QuotaConfig.decodeEnum(from: container, forKey: .dockPin)
+        widgetPin = QuotaConfig.decodeEnum(from: container, forKey: .widgetPin)
         legacyCredentials = QuotaConfig.decodeLegacyCredentials(from: container)
         hasLegacyCredentialKey = container.contains(.legacyCredentials)
     }
@@ -228,6 +245,10 @@ public struct QuotaConfig: Codable, Sendable, Equatable {
         try container.encode(widgetX, forKey: .widgetX)
         try container.encode(widgetY, forKey: .widgetY)
         try container.encode(widgetAlwaysOnTop, forKey: .widgetAlwaysOnTop)
+        try container.encode(widgetScope, forKey: .widgetScope)
+        try container.encodeIfPresent(islandPin, forKey: .islandPin)
+        try container.encodeIfPresent(dockPin, forKey: .dockPin)
+        try container.encodeIfPresent(widgetPin, forKey: .widgetPin)
         // `legacyCredentials` intentionally omitted.
     }
 }
@@ -508,6 +529,46 @@ public final class ConfigStore: @unchecked Sendable {
             return config.widgetAlwaysOnTop
         }
         set { mutate { $0.widgetAlwaysOnTop = newValue } }
+    }
+
+    public var widgetScope: WidgetScope {
+        get {
+            lock.lock(); defer { lock.unlock() }
+            return config.widgetScope
+        }
+        set { mutate { $0.widgetScope = newValue } }
+    }
+
+    public var islandPin: ProviderID? {
+        get {
+            lock.lock(); defer { lock.unlock() }
+            return config.islandPin
+        }
+        set { mutate { $0.islandPin = newValue } }
+    }
+
+    public var dockPin: ProviderID? {
+        get {
+            lock.lock(); defer { lock.unlock() }
+            return config.dockPin
+        }
+        set { mutate { $0.dockPin = newValue } }
+    }
+
+    public var widgetPin: ProviderID? {
+        get {
+            lock.lock(); defer { lock.unlock() }
+            return config.widgetPin
+        }
+        set { mutate { $0.widgetPin = newValue } }
+    }
+
+    /// The providers a surface shows: the pinned one when it is pinned and
+    /// still enabled, otherwise every enabled one.
+    public func providers(pinnedTo pin: ProviderID?) -> [ProviderID] {
+        let enabled = enabledProviders
+        if let pin, enabled.contains(pin) { return [pin] }
+        return enabled
     }
 
     public var widgetOrigin: (x: Double, y: Double) {

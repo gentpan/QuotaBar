@@ -13,6 +13,7 @@ import QuotaCore
 enum SettingsSection: String, CaseIterable, Identifiable {
     case providers
     case usage
+    case status
     case appearance
     case presentation
     case alerts
@@ -26,6 +27,7 @@ enum SettingsSection: String, CaseIterable, Identifiable {
         switch self {
         case .providers: L10n.t("Providers", "服务商")
         case .usage: L10n.t("Usage", "用量统计")
+        case .status: L10n.t("Service status", "服务状态")
         case .appearance: L10n.t("Appearance", "外观")
         case .presentation: L10n.t("Presentation", "展示方式")
         case .alerts: L10n.t("Alerts", "提醒")
@@ -43,6 +45,9 @@ enum SettingsSection: String, CaseIterable, Identifiable {
         case .usage:
             L10n.t("Tokens from this Mac's CLI session logs: a year grid and the figures behind it.",
                    "本机 CLI 会话日志里的 token 用量：全年热力图，以及各周期的数据量。")
+        case .status:
+            L10n.t("What each provider's public status page says right now.",
+                   "各服务商公开状态页此刻的读数，以及正在发生的事件。")
         case .appearance:
             L10n.t("What the menu-bar glyph looks like and what it counts.",
                    "菜单栏图标长什么样、数的是什么。")
@@ -68,6 +73,7 @@ enum SettingsSection: String, CaseIterable, Identifiable {
         switch self {
         case .providers: "square.grid.2x2"
         case .usage: "chart.bar.xaxis"
+        case .status: "waveform.path.ecg"
         case .appearance: "paintbrush"
         case .presentation: "macwindow"
         case .alerts: "bell"
@@ -275,6 +281,7 @@ struct SettingsView: View {
 
             if scrollable {
                 ScrollView { paneBody }
+                    .scrollIndicators(.hidden)
             } else {
                 paneBody
             }
@@ -297,6 +304,7 @@ struct SettingsView: View {
         switch section {
         case .providers: ProvidersPane(store: store, expanded: initialExpanded)
         case .usage: UsagePane(store: store)
+        case .status: StatusPane(store: store)
         case .appearance: AppearancePane(store: store)
         case .presentation: PresentationPane(store: store)
         case .alerts: AlertsPane(store: store)
@@ -316,6 +324,79 @@ struct SettingsView: View {
         let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0"
         let build = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "0"
         return "\(version) (\(build))"
+    }
+}
+
+// MARK: - Service status
+
+/// Every provider on one page: the band, the page's own sentence about
+/// what is going on, and when it was last asked. The rows in 服务商 carry
+/// the band alone; this is where the sentence fits.
+struct StatusPane: View {
+    @ObservedObject var store: UsageStore
+
+    var body: some View {
+        SettingsCard {
+            VStack(alignment: .leading, spacing: 0) {
+                ForEach(ProviderID.allCases) { id in
+                    row(id)
+                    if id != ProviderID.allCases.last {
+                        Divider().opacity(0.3)
+                    }
+                }
+            }
+        }
+        SettingFootnote(L10n.t(
+            "Read from each provider's public status page every five minutes, without signing in. xAI's page refuses automated readers; Z.ai, OpenCode, Antigravity and Qwen Cloud publish none.",
+            "每五分钟读取各服务商的公开状态页，无需登录。xAI 的页面拒绝自动读取；Z.ai、OpenCode、Antigravity 与 Qwen Cloud 没有公开状态页。"))
+    }
+
+    private func row(_ id: ProviderID) -> some View {
+        HStack(alignment: .top, spacing: Design.space3) {
+            HStack(spacing: Design.space2) {
+                ProviderGlyph(id: id, size: 18)
+                    .frame(width: 20)
+                Text(id.displayName)
+                    .font(.system(size: 13, weight: .medium))
+                    .lineLimit(1)
+            }
+            .frame(width: 150, alignment: .leading)
+
+            if let status = store.serviceStatus[id] {
+                ServiceStatusBadge(status: status, size: 12, ink: .primary)
+                    .frame(width: 90, alignment: .leading)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(status.description)
+                        .font(.system(size: 12))
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Text(L10n.t(
+                        "checked \(QuotaFormat.age(of: status.checkedAt))",
+                        "\(QuotaFormat.age(of: status.checkedAt))检查"))
+                        .font(.system(size: 11))
+                        .foregroundStyle(.tertiary)
+                }
+                Spacer(minLength: Design.space2)
+                Button {
+                    NSWorkspace.shared.open(status.pageURL)
+                } label: {
+                    Image(systemName: "arrow.up.right")
+                        .font(.system(size: 11))
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(.secondary)
+                .help(status.pageURL.absoluteString)
+            } else if StatusPages.page(for: id) != nil {
+                Text(L10n.t("Not read yet", "尚未读取"))
+                    .font(.system(size: 12))
+                    .foregroundStyle(.tertiary)
+            } else {
+                Text(L10n.t("No public status page", "没有公开状态页"))
+                    .font(.system(size: 12))
+                    .foregroundStyle(.tertiary)
+            }
+        }
+        .padding(.vertical, Design.space2 + 2)
     }
 }
 
@@ -453,9 +534,16 @@ struct ProviderSettingsRow: View {
 
             Spacer(minLength: Design.space2)
 
-            if let status = store.serviceStatus[id] {
-                ServiceStatusBadge(status: status)
+            // A fixed column, empty when there is nothing to say, so the
+            // pills after it line up down the list whatever the badges say.
+            Group {
+                if let status = store.serviceStatus[id] {
+                    ServiceStatusBadge(status: status)
+                } else {
+                    Color.clear.frame(height: 1)
+                }
             }
+            .frame(width: 76, alignment: .leading)
 
             statusPill
 
@@ -880,12 +968,27 @@ struct PresentationPane: View {
                 isOn: Binding(
                     get: { store.widgetEnabled },
                     set: { store.setWidgetEnabled($0) }))
-            SettingRow(L10n.t("Density", "信息密度")) {
+            SettingRow(
+                L10n.t("Size", "卡片大小"),
+                caption: L10n.t("Compact is the small card; detailed the large one.", "紧凑是小卡片，详细是大卡片。"))
+            {
                 GlassSegmented(
                     options: WidgetDensity.allCases.map { (value: $0, label: $0.displayName) },
                     selection: store.widgetDensity,
                     onSelect: { store.setWidgetDensity($0) })
                 .frame(maxWidth: 300)
+                .disabled(!store.widgetEnabled)
+                .opacity(store.widgetEnabled ? 1 : 0.45)
+            }
+            SettingRow(
+                L10n.t("Shows", "显示范围"),
+                caption: L10n.t("Pin one from a ring's full card in the dock.", "在停靠条里点开圆环的完整卡片可钉住一个。"))
+            {
+                GlassSegmented(
+                    options: WidgetScope.allCases.map { (value: $0, label: $0.displayName) },
+                    selection: store.widgetScope,
+                    onSelect: { store.setWidgetScope($0) })
+                .frame(maxWidth: 240)
                 .disabled(!store.widgetEnabled)
                 .opacity(store.widgetEnabled ? 1 : 0.45)
             }

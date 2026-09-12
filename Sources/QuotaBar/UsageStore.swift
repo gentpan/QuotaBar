@@ -474,6 +474,48 @@ final class UsageStore: ObservableObject {
 
     var islandSlots: Int { config.islandSlots }
 
+    // MARK: Pins
+
+    /// A surface pinned to one provider shows that provider alone. The
+    /// menu-bar glyph's equivalent is `selected`.
+    var islandPin: ProviderID? { config.islandPin }
+    var dockPin: ProviderID? { config.dockPin }
+    var widgetPin: ProviderID? { config.widgetPin }
+    var widgetScope: WidgetScope { config.widgetScope }
+
+    var islandProviders: [ProviderID] { config.providers(pinnedTo: islandPin) }
+    var dockProviders: [ProviderID] { config.providers(pinnedTo: dockPin) }
+    var widgetProviders: [ProviderID] {
+        widgetScope == .pinned ? config.providers(pinnedTo: widgetPin) : enabled
+    }
+
+    func setIslandPin(_ id: ProviderID?) {
+        config.islandPin = id
+        objectWillChange.send()
+        islandRevision &+= 1
+    }
+
+    func setDockPin(_ id: ProviderID?) {
+        config.dockPin = id
+        objectWillChange.send()
+        dockRevision &+= 1
+    }
+
+    /// Pinning to the card also puts the card into its pinned scope; there
+    /// is no point pinning one and showing all.
+    func setWidgetPin(_ id: ProviderID?) {
+        config.widgetPin = id
+        config.widgetScope = id == nil ? .all : .pinned
+        objectWillChange.send()
+        widgetRevision &+= 1
+    }
+
+    func setWidgetScope(_ scope: WidgetScope) {
+        config.widgetScope = scope
+        objectWillChange.send()
+        widgetRevision &+= 1
+    }
+
     /// Bumped when the island's strip changes width, so the coordinator
     /// re-places the panel.
     @Published var islandRevision = 0

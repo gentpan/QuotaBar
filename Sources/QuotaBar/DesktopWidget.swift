@@ -108,7 +108,7 @@ struct DesktopWidgetView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: Design.space3) {
             header
-            if store.enabled.isEmpty {
+            if store.widgetProviders.isEmpty {
                 Text(L10n.t("No providers enabled.", "尚未启用任何服务商。"))
                     .font(.caption)
                     .foregroundStyle(.white.opacity(0.6))
@@ -161,7 +161,7 @@ struct DesktopWidgetView: View {
     }
 
     private var latestFetch: Date? {
-        store.enabled.compactMap { store.states[$0]?.snapshot?.fetchedAt }.max()
+        store.widgetProviders.compactMap { store.states[$0]?.snapshot?.fetchedAt }.max()
     }
 
     @ViewBuilder
@@ -169,7 +169,7 @@ struct DesktopWidgetView: View {
         switch density {
         case .compact:
             HStack(spacing: Design.space3) {
-                ForEach(store.enabled) { id in
+                ForEach(store.widgetProviders) { id in
                     ProviderRing(
                         id: id,
                         percent: percent(id),
@@ -180,7 +180,7 @@ struct DesktopWidgetView: View {
             }
         case .standard:
             HStack(alignment: .top, spacing: Design.space4 - 2) {
-                ForEach(store.enabled) { id in
+                ForEach(store.widgetProviders) { id in
                     ProviderRing(
                         id: id,
                         percent: percent(id),
@@ -190,7 +190,7 @@ struct DesktopWidgetView: View {
             }
         case .detailed:
             VStack(alignment: .leading, spacing: Design.space3) {
-                ForEach(store.enabled) { id in
+                ForEach(store.widgetProviders) { id in
                     detailRow(id)
                 }
             }

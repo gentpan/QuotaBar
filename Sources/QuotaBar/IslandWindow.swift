@@ -122,7 +122,7 @@ final class IslandCoordinator {
         let notch = notchMetrics()
         if expanded {
             // Rows per column: the left column is the fuller one.
-            let rows = min(slots, max(1, store.enabled.count))
+            let rows = min(slots, max(1, store.islandProviders.count))
             return NSSize(
                 width: IslandPanelLayout.width(notchWidth: notch?.notchWidth),
                 height: IslandPanelLayout.height(rows: rows, notch: notch?.height ?? 0))
@@ -241,7 +241,7 @@ struct IslandView: View {
             }
             .frame(width: 20, height: 20)
 
-            ForEach(store.enabled.prefix(3)) { id in
+            ForEach(store.islandProviders.prefix(3)) { id in
                 if let used = store.states[id]?.snapshot?.headlinePercent {
                     // Same glanceable role as the menu-bar glyph, so it follows
                     // the same remaining/used preference.
@@ -295,8 +295,8 @@ struct NotchStrip: View {
     let metrics: IslandCoordinator.NotchMetrics
     var slots: Int = 1
 
-    private var left: [ProviderID] { Array(store.enabled.prefix(slots)) }
-    private var right: [ProviderID] { Array(store.enabled.dropFirst(slots).prefix(slots)) }
+    private var left: [ProviderID] { Array(store.islandProviders.prefix(slots)) }
+    private var right: [ProviderID] { Array(store.islandProviders.dropFirst(slots).prefix(slots)) }
 
     var body: some View {
         HStack(spacing: 0) {

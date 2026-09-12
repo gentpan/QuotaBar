@@ -160,6 +160,8 @@ final class ConfigStoreTests: XCTestCase {
         first.meterStyle = .continuous
         first.updatePolicy = .manual
         first.menuBarIconMode = .logo
+        first.dockPin = .claude
+        first.widgetScope = .pinned
         first.presentation = .island
         first.language = .zhHans
         first.setEnabled(.gemini, true)
@@ -171,6 +173,9 @@ final class ConfigStoreTests: XCTestCase {
         XCTAssertEqual(second.meterStyle, .continuous)
         XCTAssertEqual(second.updatePolicy, .manual)
         XCTAssertEqual(second.menuBarIconMode, .logo)
+        XCTAssertEqual(second.dockPin, .claude)
+        XCTAssertNil(second.islandPin)
+        XCTAssertEqual(second.widgetScope, .pinned)
         XCTAssertEqual(second.presentation, .island)
         XCTAssertEqual(second.language, .zhHans)
         XCTAssertTrue(second.isEnabled(.gemini))

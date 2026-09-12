@@ -95,6 +95,21 @@ public enum MeterMode: String, Codable, CaseIterable, Identifiable, Sendable {
     }
 }
 
+/// Whether the desktop card shows every enabled provider or the pinned one.
+public enum WidgetScope: String, Codable, CaseIterable, Identifiable, Sendable {
+    case all
+    case pinned
+
+    public var id: String { rawValue }
+
+    public var displayName: String {
+        switch self {
+        case .all: L10n.t("All", "全部")
+        case .pinned: L10n.t("Pinned one", "钉住的一个")
+        }
+    }
+}
+
 /// What the menu-bar item shows: a reading, the app's own mark, or nothing.
 public enum MenuBarIconMode: String, Codable, CaseIterable, Identifiable, Sendable {
     case meter
