@@ -343,8 +343,8 @@ def activity_svg(per_day, today, en):
     # The legend under the grid on the right, the caption on its own line
     # below: side by side they collide in English.
     base = top + 7 * step + 14
-    caption = (f"{total} commits in the last {WEEKS} weeks · updated {today.isoformat()}" if en
-               else f"近 {WEEKS} 周共 {total} 次提交 · 更新于 {today.isoformat()}")
+    caption = (f"{total} commits in the last {WEEKS} weeks · through {today.isoformat()}" if en
+               else f"近 {WEEKS} 周共 {total} 次提交 · 截至 {today.isoformat()}")
     parts.append(f'<g {font} font-size="10" fill="#8b949e">')
     parts.append(f'<text x="{left}" y="{base + 16}">{caption}</text>')
     legend_x = width - 5 * step - 34
@@ -381,7 +381,10 @@ def main():
         changed.append("web/index.html")
     if write_if_changed(ROOT / "web" / "changelog.html", site_page(intro, releases, index.read_text(encoding="utf-8"))):
         changed.append("web/changelog.html")
-    per_day, today = commit_days(), datetime.date.today()
+    # The calendar runs through yesterday: a finished day does not change, so
+    # running this again after today's commits leaves the chart alone rather
+    # than redrawing it with every commit that records the redraw.
+    per_day, today = commit_days(), datetime.date.today() - datetime.timedelta(days=1)
     for name, en in (("activity.svg", True), ("activity.zh.svg", False)):
         if write_if_changed(ROOT / "Assets" / "readme" / name, activity_svg(per_day, today, en)):
             changed.append(f"Assets/readme/{name}")
