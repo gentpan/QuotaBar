@@ -157,6 +157,7 @@ final class ConfigStoreTests: XCTestCase {
         let first = ConfigStore(fileURL: fileURL, credentials: keychain)
         first.refreshMinutes = 15
         first.menuBarStyle = .ring
+        first.meterStyle = .continuous
         first.presentation = .island
         first.language = .zhHans
         first.setEnabled(.gemini, true)
@@ -165,6 +166,7 @@ final class ConfigStoreTests: XCTestCase {
 
         XCTAssertEqual(second.refreshMinutes, 15)
         XCTAssertEqual(second.menuBarStyle, .ring)
+        XCTAssertEqual(second.meterStyle, .continuous)
         XCTAssertEqual(second.presentation, .island)
         XCTAssertEqual(second.language, .zhHans)
         XCTAssertTrue(second.isEnabled(.gemini))

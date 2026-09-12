@@ -384,6 +384,64 @@ public enum CostEstimator {
         return summary
     }
 
+    // MARK: Year ledger
+
+    /// The calendar year to date, one bucket per local day, split by CLI and
+    /// by model. Shares the parsed-file memo with `summary`, so once either
+    /// has read a file the other gets it for free.
+    public static func ledger(paths: CostPaths = .default, now: Date = Date()) -> UsageLedger {
+        let calendar = Calendar.current
+        let year = calendar.component(.year, from: now)
+        guard let yearStart = calendar.date(from: DateComponents(year: year, month: 1, day: 1)),
+              let yearEnd = calendar.date(byAdding: .year, value: 1, to: yearStart)
+        else { return .empty }
+        // Logs are stamped in UTC and files are keyed by mtime; a file last
+        // touched the day before the local year began can still hold its
+        // first hours.
+        let cutoff = yearStart.addingTimeInterval(-2 * 86_400)
+        var events = scanClaude(root: paths.claudeProjects, cutoff: cutoff)
+        events.append(contentsOf: scanCodex(root: paths.codexSessions, cutoff: cutoff))
+        events.append(contentsOf: scanOpenCode(database: paths.openCodeDatabase, cutoff: cutoff))
+
+        var seen = Set<String>()
+        var perDay: [Date: UsageDay] = [:]
+        var modelSources: [String: CostSource] = [:]
+        var duplicates = 0
+        for event in events {
+            if let key = event.dedupeKey {
+                guard seen.insert(key).inserted else { duplicates += 1; continue }
+            }
+            guard event.timestamp >= yearStart, event.timestamp < yearEnd else { continue }
+            let day = calendar.startOfDay(for: event.timestamp)
+            var bucket = perDay[day] ?? UsageDay(day: day)
+            let count = tokens(of: event)
+            bucket.bySource[event.source, default: 0] += count
+            bucket.byModel[event.model, default: 0] += count
+            bucket.usd += cost(of: event)
+            bucket.input += event.input
+            bucket.output += event.output
+            bucket.cacheRead += event.cacheRead
+            bucket.cacheWrite += event.cacheWrite5m + event.cacheWrite1h
+            perDay[day] = bucket
+            modelSources[event.model] = event.source
+        }
+
+        var days: [UsageDay] = []
+        var cursor = yearStart
+        while cursor < yearEnd {
+            days.append(perDay[cursor] ?? UsageDay(day: cursor))
+            guard let next = calendar.date(byAdding: .day, value: 1, to: cursor) else { break }
+            cursor = next
+        }
+        return UsageLedger(
+            year: year,
+            days: days,
+            today: calendar.startOfDay(for: now),
+            modelSources: modelSources,
+            scannedAt: now,
+            deduplicated: duplicates)
+    }
+
     /// Drops the parsed-file memo; used by tests and after a manual rescan.
     public static func resetCache() {
         lock.lock()

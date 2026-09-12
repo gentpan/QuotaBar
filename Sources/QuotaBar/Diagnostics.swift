@@ -97,6 +97,36 @@ enum Diagnostics {
         }
     }
 
+    /// `--ledger`: the year-to-date ledger behind the usage pane, with the
+    /// scan time — the first read of a big log tree is the number to watch.
+    static func printLedger() {
+        let started = Date()
+        let ledger = CostEstimator.ledger()
+        let elapsed = Date().timeIntervalSince(started)
+        var out = "Scanned \(ledger.year) in \(String(format: "%.2f", elapsed))s\n"
+        out += "Year     \(QuotaFormat.compact(ledger.total())) tokens over \(ledger.activeDays()) active days"
+        out += "  (\(ledger.deduplicated) duplicates dropped)\n"
+        for period in LedgerPeriod.allCases {
+            let sum = ledger.sum(period)
+            out += String(format: "%-8@ %@ tokens  %@  in %@ out %@ cache-read %@ cache-write %@\n",
+                          period.rawValue as NSString,
+                          QuotaFormat.compact(sum.tokens) as NSString,
+                          QuotaFormat.usd(sum.usd) as NSString,
+                          QuotaFormat.compact(sum.input) as NSString,
+                          QuotaFormat.compact(sum.output) as NSString,
+                          QuotaFormat.compact(sum.cacheRead) as NSString,
+                          QuotaFormat.compact(sum.cacheWrite) as NSString)
+        }
+        for item in ledger.sources {
+            out += "  \(item.source.displayName): \(QuotaFormat.compact(item.tokens)) tokens, "
+            out += "\(ledger.activeDays(.source(item.source))) active days\n"
+        }
+        for item in ledger.models().prefix(10) {
+            out += "    \(item.model) [\(item.source.displayName)]: \(QuotaFormat.compact(item.tokens))\n"
+        }
+        FileHandle.standardOutput.write(Data(out.utf8))
+    }
+
     static func printCost() {
         // The panel refreshes this on its own cycle; the CLI has to ask.
         let semaphore = DispatchSemaphore(value: 0)

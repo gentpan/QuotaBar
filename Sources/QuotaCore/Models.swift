@@ -95,6 +95,22 @@ public enum MeterMode: String, Codable, CaseIterable, Identifiable, Sendable {
     }
 }
 
+/// How a quota bar is drawn: one filled capsule, or a row of segments that
+/// light up in turn — codex-island's "阶梯", which the owner prefers.
+public enum MeterStyle: String, Codable, CaseIterable, Identifiable, Sendable {
+    case continuous
+    case stepped
+
+    public var id: String { rawValue }
+
+    public var displayName: String {
+        switch self {
+        case .continuous: L10n.t("Continuous", "连续")
+        case .stepped: L10n.t("Stepped", "阶梯")
+        }
+    }
+}
+
 // MARK: - Brand theme
 
 /// Neutral accent, deliberately: the panel already carries eleven provider

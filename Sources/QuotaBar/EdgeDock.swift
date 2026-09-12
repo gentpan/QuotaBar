@@ -18,6 +18,13 @@ final class EdgeDockCoordinator {
     private var calloutPanel: NSPanel?
     private var collapseTask: Task<Void, Never>?
     private var expanded = false
+    /// The pointer is over the callout. The card is a second window, so
+    /// leaving the strip for it looks, to the strip, like leaving; this is
+    /// what tells the collapse to wait.
+    private(set) var calloutHovered = false
+    /// The strip's expansion setter, kept so the callout can hand the strip
+    /// a collapse when the pointer leaves the card for empty space.
+    private var applyExpanded: ((Bool) -> Void)?
 
     static let calloutWidth: CGFloat = 260
     /// One ring, the dot row under it, and the stack spacing. No figure: the
@@ -101,10 +108,10 @@ final class EdgeDockCoordinator {
         let root = CalloutRoot(key: index, content: AnyView(content()))
         let appearing = calloutPanel == nil
         let panel = calloutPanel ?? makeCalloutPanel()
-        if let host = panel.contentView as? NSHostingView<CalloutRoot> {
+        if let host = panel.contentView as? FirstMouseHostingView<CalloutRoot> {
             withAnimation(Self.calloutFade) { host.rootView = root }
         } else {
-            let host = NSHostingView(rootView: root)
+            let host = FirstMouseHostingView(rootView: root)
             // The frame is ours to animate; the host must not fight it.
             host.sizingOptions = []
             panel.contentView = host
@@ -174,10 +181,33 @@ final class EdgeDockCoordinator {
     func hideCallout() {
         calloutPanel?.orderOut(nil)
         calloutPanel = nil
+        calloutHovered = false
+    }
+
+    /// The callout reports its own hover. Entering it cancels a pending
+    /// collapse; leaving it — for anywhere but the strip, which cancels
+    /// again on entry — collapses the strip the same way leaving the strip
+    /// would, and takes the card with it.
+    func setCalloutHovered(_ inside: Bool) {
+        calloutHovered = inside
+        if inside {
+            collapseTask?.cancel()
+            collapseTask = nil
+        } else if let apply = applyExpanded {
+            setExpanded(false, apply: apply)
+        }
+    }
+
+    /// A borderless panel cannot become key, and a click on a window that
+    /// cannot become key is spent making it key — which it never becomes —
+    /// so the card's buttons swallowed every press. This one can, and being
+    /// non-activating, does so without bringing the app forward.
+    private final class CalloutPanel: NSPanel {
+        override var canBecomeKey: Bool { true }
     }
 
     private func makeCalloutPanel() -> NSPanel {
-        let panel = NSPanel(
+        let panel = CalloutPanel(
             contentRect: NSRect(origin: .zero, size: NSSize(width: Self.calloutWidth, height: 40)),
             styleMask: [.borderless, .nonactivatingPanel],
             backing: .buffered,
@@ -188,6 +218,9 @@ final class EdgeDockCoordinator {
         panel.isOpaque = false
         panel.backgroundColor = .clear
         panel.hasShadow = true
+        // Hover and clicks on the card: it holds two buttons now.
+        panel.acceptsMouseMovedEvents = true
+        panel.becomesKeyOnlyIfNeeded = true
         panel.hidesOnDeactivate = false
         panel.isMovable = false
         // Purely informational: never take a click that was meant for the
@@ -215,7 +248,7 @@ final class EdgeDockCoordinator {
         // Borderless panels default to the utility-window behaviour, which adds
         // its own fade on top of ours.
         panel.animationBehavior = .none
-        panel.contentView = NSHostingView(
+        panel.contentView = FirstMouseHostingView(
             rootView: EdgeDockView(store: store, coordinator: self))
         self.panel = panel
         layout(expanded: false)
@@ -242,6 +275,7 @@ final class EdgeDockCoordinator {
     func setExpanded(_ value: Bool, apply: @escaping (Bool) -> Void) {
         collapseTask?.cancel()
         collapseTask = nil
+        applyExpanded = apply
         Self.trace("setExpanded(\(value))")
         if value {
             expanded = true
@@ -251,7 +285,8 @@ final class EdgeDockCoordinator {
         }
         collapseTask = Task { [weak self] in
             try? await Task.sleep(for: .milliseconds(320))
-            guard !Task.isCancelled else { return }
+            // The pointer went to the card, not away: stay open.
+            guard !Task.isCancelled, self?.calloutHovered != true else { return }
             self?.expanded = false
             withAnimation(Self.slide) { apply(false) }
             self?.hideCallout()
@@ -401,8 +436,20 @@ struct EdgeDockView: View {
     var coordinator: EdgeDockCoordinator
     @State private var expanded = false
     @State private var hovered: ProviderID?
+    /// Clears `hovered` a beat after the pointer leaves a ring, unless it
+    /// turns up on the callout first. Leaving a ring for the card crosses
+    /// 14pt of strip and an 8pt gap; cleared at once, the card was gone
+    /// before the pointer arrived.
+    @State private var hoverClearTask: Task<Void, Never>?
 
     private var onLeft: Bool { store.dockEdge == .left }
+
+    /// How far the rings sit toward the screen edge, past the strip's own
+    /// centre. A MacBook's display has a black border beyond its last pixel,
+    /// and against it the strip reads as that much wider on the edge side;
+    /// centred on the strip alone, the rings looked pushed inboard. Half
+    /// of a typical border.
+    static let edgeBias: CGFloat = 5
 
     private var showsStrip: Bool { expanded || coordinator.alwaysVisible }
 
@@ -432,6 +479,13 @@ struct EdgeDockView: View {
         // is hidden behind the notch.
         .contextMenu {
             Button(L10n.t("Refresh now", "立即刷新")) { store.refreshAll() }
+            // Pinned open: the strip stays out instead of folding to the
+            // handle. Kept above other windows either way — it is a sliver
+            // at the screen's edge, like the Dock, and a strip that could be
+            // buried would need to be found again.
+            Toggle(L10n.t("Keep open", "锁定显示"), isOn: Binding(
+                get: { store.dockAlwaysVisible },
+                set: { store.setDockAlwaysVisible($0) }))
             Button(L10n.t("Settings…", "设置…")) { SettingsWindow.open() }
             Divider()
             Button(L10n.t("Quit QuotaBar", "退出 QuotaBar")) { NSApp.terminate(nil) }
@@ -454,13 +508,20 @@ struct EdgeDockView: View {
         .environment(\.colorScheme, .dark)
         .onHover { inside in
             coordinator.setExpanded(inside) { expanded = $0 }
-            if !inside { hovered = nil }
+            if inside {
+                hoverClearTask?.cancel()
+            } else {
+                scheduleHoverClear()
+            }
         }
         .onChange(of: hovered) { _, id in
             presentCallout(for: id)
         }
         .onChange(of: expanded) { _, isOpen in
-            if !isOpen { coordinator.hideCallout() }
+            if !isOpen {
+                coordinator.hideCallout()
+                hovered = nil
+            }
         }
     }
 
@@ -498,12 +559,18 @@ struct EdgeDockView: View {
         let index = id.flatMap { store.enabled.firstIndex(of: $0) }
         coordinator.showCallout(at: index, total: store.enabled.count) {
             if let id {
-                ProviderCallout(
-                    id: id,
-                    phase: store.states[id],
-                    alerts: store.alertSettings,
-                    status: store.serviceStatus[id])
+                ProviderCallout(store: store, id: id)
+                    .onHover { coordinator.setCalloutHovered($0) }
             }
+        }
+    }
+
+    private func scheduleHoverClear() {
+        hoverClearTask?.cancel()
+        hoverClearTask = Task {
+            try? await Task.sleep(for: .milliseconds(280))
+            guard !Task.isCancelled, !coordinator.calloutHovered else { return }
+            hovered = nil
         }
     }
 
@@ -519,7 +586,12 @@ struct EdgeDockView: View {
                     hovered: hovered == id,
                     selectionDot: true)
                     .onHover { inside in
-                        hovered = inside ? id : (hovered == id ? nil : hovered)
+                        if inside {
+                            hoverClearTask?.cancel()
+                            hovered = id
+                        } else if hovered == id {
+                            scheduleHoverClear()
+                        }
                     }
                     // Declared before the single tap: SwiftUI resolves the
                     // higher count first only if it is attached first.
@@ -535,6 +607,9 @@ struct EdgeDockView: View {
                     }
             }
         }
+        // Toward the edge, by the border's half-width; layout is untouched,
+        // so the callout and the strip's frame know nothing of it.
+        .offset(x: onLeft ? -Self.edgeBias : Self.edgeBias)
         .padding(.top, EdgeDockCoordinator.stripInsetTop)
         .padding(.bottom, EdgeDockCoordinator.stripInsetBottom)
         .frame(width: EdgeDockCoordinator.width)
@@ -555,6 +630,14 @@ struct EdgeDockView: View {
 
 }
 
+
+/// A hosting view that takes the first click. The strip and the card float
+/// over other apps and are never key; AppKit spends the first click on a
+/// non-key window bringing it forward and hands the view nothing, so a
+/// single tap on a ring or a card button had to be made twice.
+final class FirstMouseHostingView<Content: View>: NSHostingView<Content> {
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
+}
 
 /// What the dock looks like at rest: a slim tab carrying the worst reading, so
 /// it is both a target to aim at and worth a glance before it is opened.

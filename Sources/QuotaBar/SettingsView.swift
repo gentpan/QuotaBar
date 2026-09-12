@@ -12,6 +12,7 @@ import QuotaCore
 /// window. Nothing was findable and the pane never fit.
 enum SettingsSection: String, CaseIterable, Identifiable {
     case providers
+    case usage
     case appearance
     case presentation
     case alerts
@@ -24,6 +25,7 @@ enum SettingsSection: String, CaseIterable, Identifiable {
     var title: String {
         switch self {
         case .providers: L10n.t("Providers", "服务商")
+        case .usage: L10n.t("Usage", "用量统计")
         case .appearance: L10n.t("Appearance", "外观")
         case .presentation: L10n.t("Presentation", "展示方式")
         case .alerts: L10n.t("Alerts", "提醒")
@@ -38,6 +40,9 @@ enum SettingsSection: String, CaseIterable, Identifiable {
         case .providers:
             L10n.t("Which services to track, and how each one signs in.",
                    "要跟踪哪些服务，以及每个服务如何登录。")
+        case .usage:
+            L10n.t("Tokens from this Mac's CLI session logs: a year grid and the figures behind it.",
+                   "本机 CLI 会话日志里的 token 用量：全年热力图，以及各周期的数据量。")
         case .appearance:
             L10n.t("What the menu-bar glyph looks like and what it counts.",
                    "菜单栏图标长什么样、数的是什么。")
@@ -62,6 +67,7 @@ enum SettingsSection: String, CaseIterable, Identifiable {
     var symbol: String {
         switch self {
         case .providers: "square.grid.2x2"
+        case .usage: "chart.bar.xaxis"
         case .appearance: "paintbrush"
         case .presentation: "macwindow"
         case .alerts: "bell"
@@ -290,6 +296,7 @@ struct SettingsView: View {
     private var pane: some View {
         switch section {
         case .providers: ProvidersPane(store: store, expanded: initialExpanded)
+        case .usage: UsagePane(store: store)
         case .appearance: AppearancePane(store: store)
         case .presentation: PresentationPane(store: store)
         case .alerts: AlertsPane(store: store)
@@ -705,6 +712,14 @@ struct AppearancePane: View {
                     options: MeterMode.allCases.map { (value: $0, label: $0.displayName) },
                     selection: store.meterMode,
                     onSelect: { store.setMeterMode($0) })
+                .frame(maxWidth: 260)
+            }
+
+            SettingRow(L10n.t("Bars", "进度条")) {
+                GlassSegmented(
+                    options: MeterStyle.allCases.map { (value: $0, label: $0.displayName) },
+                    selection: store.meterStyle,
+                    onSelect: { store.setMeterStyle($0) })
                 .frame(maxWidth: 260)
             }
 

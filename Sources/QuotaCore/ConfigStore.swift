@@ -5,6 +5,7 @@ public struct QuotaConfig: Codable, Sendable, Equatable {
     public var refreshMinutes: Int
     public var menuBarStyle: MenuBarStyle
     public var meterMode: MeterMode
+    public var meterStyle: MeterStyle
     public var presentation: Presentation
     public var alerts: AlertSettings
     public var language: L10n.Language
@@ -48,6 +49,7 @@ public struct QuotaConfig: Codable, Sendable, Equatable {
         refreshMinutes: Int = 5,
         menuBarStyle: MenuBarStyle = .dualBar,
         meterMode: MeterMode = .remaining,
+        meterStyle: MeterStyle = .stepped,
         presentation: Presentation = .menuBar,
         alerts: AlertSettings = AlertSettings(),
         language: L10n.Language = .system,
@@ -68,6 +70,7 @@ public struct QuotaConfig: Codable, Sendable, Equatable {
         self.refreshMinutes = refreshMinutes
         self.menuBarStyle = menuBarStyle
         self.meterMode = meterMode
+        self.meterStyle = meterStyle
         self.presentation = presentation
         self.alerts = alerts
         self.language = language
@@ -86,7 +89,7 @@ public struct QuotaConfig: Codable, Sendable, Equatable {
     }
 
     private enum CodingKeys: String, CodingKey {
-        case enabled, refreshMinutes, menuBarStyle, meterMode, presentation, alerts, language
+        case enabled, refreshMinutes, menuBarStyle, meterMode, meterStyle, presentation, alerts, language
         case selected, updateFeed, checksForUpdates
         case dockEdge, dockPosition, dockAlwaysVisible
         case widgetEnabled, widgetDensity, widgetX, widgetY, widgetAlwaysOnTop
@@ -107,6 +110,7 @@ public struct QuotaConfig: Codable, Sendable, Equatable {
         menuBarStyle = QuotaConfig.decodeEnum(from: container, forKey: .menuBarStyle)
             ?? defaults.menuBarStyle
         meterMode = QuotaConfig.decodeEnum(from: container, forKey: .meterMode) ?? defaults.meterMode
+        meterStyle = QuotaConfig.decodeEnum(from: container, forKey: .meterStyle) ?? defaults.meterStyle
         presentation = QuotaConfig.decodeEnum(from: container, forKey: .presentation)
             ?? defaults.presentation
         alerts = ((try? container.decodeIfPresent(AlertSettings.self, forKey: .alerts))
@@ -191,6 +195,7 @@ public struct QuotaConfig: Codable, Sendable, Equatable {
         try container.encode(enabled, forKey: .enabled)
         try container.encode(refreshMinutes, forKey: .refreshMinutes)
         try container.encode(menuBarStyle, forKey: .menuBarStyle)
+        try container.encode(meterStyle, forKey: .meterStyle)
         try container.encode(meterMode, forKey: .meterMode)
         try container.encode(presentation, forKey: .presentation)
         try container.encode(alerts, forKey: .alerts)
@@ -388,6 +393,14 @@ public final class ConfigStore: @unchecked Sendable {
             return config.meterMode
         }
         set { mutate { $0.meterMode = newValue } }
+    }
+
+    public var meterStyle: MeterStyle {
+        get {
+            lock.lock(); defer { lock.unlock() }
+            return config.meterStyle
+        }
+        set { mutate { $0.meterStyle = newValue } }
     }
 
     /// Falls back to the default feed when the stored value is malformed, so

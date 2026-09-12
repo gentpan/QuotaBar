@@ -227,29 +227,33 @@ struct DesktopWidgetView: View {
                                 .foregroundStyle(.white.opacity(0.55))
                                 .frame(width: 22, alignment: .leading)
                         }
-                        GeometryReader { proxy in
-                            ZStack(alignment: .leading) {
-                                Capsule().fill(Color.white.opacity(0.15))
-                                if let value = window.usedPercent {
-                                    Capsule()
-                                        .fill(tint(value))
-                                        .frame(width: max(3, proxy.size.width * CGFloat(value / 100)))
-                                }
-                            }
-                        }
-                        .frame(height: 4)
+                        Meter(
+                            percent: window.usedPercent,
+                            tint: window.usedPercent.map(tint) ?? .clear,
+                            style: store.meterStyle,
+                            height: 4,
+                            track: Color.white.opacity(0.15))
                     }
                 }
             }
         }
     }
 
-    /// At most two rows per provider, or a card with four providers becomes a
-    /// wall of bars.
+    /// One row per horizon, two at most: a 5-hour and a 7-day bar when the
+    /// provider reports both, one bar when it reports one. Not one per
+    /// window — Cursor's three monthly windows and Grok's per-product
+    /// weeklies all run on the same clock, and stacking them was a wall of
+    /// bars that said the same thing.
     private func windows(_ id: ProviderID) -> [UsageWindow] {
-        Array((store.states[id]?.snapshot?.windows ?? [])
-            .filter { $0.usedPercent != nil }
-            .prefix(2))
+        var seen = Set<String>()
+        var out: [UsageWindow] = []
+        for window in store.states[id]?.snapshot?.windows ?? [] where window.usedPercent != nil {
+            let horizon = window.shortLabel ?? window.title
+            guard seen.insert(horizon).inserted else { continue }
+            out.append(window)
+            if out.count == 2 { break }
+        }
+        return out
     }
 
     private func percent(_ id: ProviderID) -> Double? {

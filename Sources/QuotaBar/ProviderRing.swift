@@ -110,51 +110,31 @@ struct ProviderRing: View {
 
 /// The bubble that appears beside a ring, with one row per quota window.
 struct ProviderCallout: View {
+    @ObservedObject var store: UsageStore
     let id: ProviderID
-    let phase: ProviderPhase?
-    let alerts: AlertSettings
-    /// The provider's public status page, when it has one and it answered.
-    var status: ServiceStatus? = nil
+
+    /// Front: the quota windows. Back: what this provider actually consumed,
+    /// from the local session logs where there are any. Flipped by the
+    /// header button, with the card turning over on its vertical axis.
+    @State private var flipped = false
+    @State private var spin = 0.0
+
+    private var phase: ProviderPhase? { store.states[id] }
+    private var status: ServiceStatus? { store.serviceStatus[id] }
 
     var body: some View {
         VStack(alignment: .leading, spacing: Design.space3) {
-            // Name and plan, the way CodexIsland heads its panel — "Codex PRO"
-            // — with the account under it when the provider reports one. The
-            // word "usage" said nothing the meters below do not.
-            VStack(alignment: .leading, spacing: 3) {
-                HStack(spacing: Design.space2) {
-                    ProviderGlyph(id: id, size: 15, tint: .white)
-                    Text(id.displayName)
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundStyle(.white)
-                    if let plan = planChip {
-                        Text(plan)
-                            .font(.system(size: 9, weight: .bold, design: .monospaced))
-                            .tracking(0.6)
-                            .foregroundStyle(.white.opacity(0.78))
-                            .padding(.horizontal, 5)
-                            .padding(.vertical, 2)
-                            .background(Color.white.opacity(0.10), in: RoundedRectangle(cornerRadius: 4, style: .continuous))
-                    }
-                }
-                let account = phase?.snapshot?.account.flatMap { $0.isEmpty ? nil : $0 }
-                if account != nil || status != nil {
-                    HStack(spacing: Design.space2) {
-                        if let account {
-                            Text(account)
-                                .font(.system(size: 10, design: .monospaced))
-                                .foregroundStyle(.white.opacity(0.40))
-                                .lineLimit(1)
-                                .truncationMode(.middle)
-                        }
-                        Spacer(minLength: 0)
-                        if let status {
-                            ServiceStatusBadge(status: status, size: 10, ink: .white.opacity(0.55))
-                        }
-                    }
-                }
+            header
+            // Both faces are laid out, so the card is as tall as the taller
+            // one and the turn never resizes the panel under the pointer.
+            ZStack(alignment: .topLeading) {
+                content
+                    .opacity(flipped ? 0 : 1)
+                    .rotation3DEffect(.degrees(flipped ? 180 : 0), axis: (x: 0, y: 1, z: 0), perspective: 0.5)
+                usageFace
+                    .opacity(flipped ? 1 : 0)
+                    .rotation3DEffect(.degrees(flipped ? 0 : -180), axis: (x: 0, y: 1, z: 0), perspective: 0.5)
             }
-            content
         }
         .padding(Design.space3)
         .frame(width: 260, alignment: .leading)
@@ -163,6 +143,62 @@ struct ProviderCallout: View {
                 .fill(Color.black))
         .environment(\.colorScheme, .dark)
     }
+
+    // MARK: Header
+
+    /// Name and plan, the way codex-island heads its panel — "Codex PRO" —
+    /// with the account and the status page's reading under it, and two
+    /// small buttons: refresh this one provider, and turn the card over.
+    private var header: some View {
+        VStack(alignment: .leading, spacing: 3) {
+            HStack(spacing: Design.space2) {
+                ProviderGlyph(id: id, size: 15, tint: .white)
+                Text(id.displayName)
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(.white)
+                if let plan = planChip {
+                    Text(plan)
+                        .font(.system(size: 9, weight: .bold, design: .monospaced))
+                        .tracking(0.6)
+                        .foregroundStyle(.white.opacity(0.78))
+                        .padding(.horizontal, 5)
+                        .padding(.vertical, 2)
+                        .background(Color.white.opacity(0.10), in: RoundedRectangle(cornerRadius: 4, style: .continuous))
+                }
+                Spacer(minLength: Design.space2)
+                CalloutButton(symbol: "arrow.clockwise", help: L10n.t("Refresh \(id.displayName)", "刷新 \(id.displayName)")) {
+                    withAnimation(.easeInOut(duration: 0.6)) { spin += 360 }
+                    store.refresh(id)
+                }
+                .rotationEffect(.degrees(spin))
+                CalloutButton(
+                    symbol: flipped ? "list.bullet" : "chart.bar.xaxis",
+                    help: flipped ? L10n.t("Show quota", "显示额度") : L10n.t("Show usage", "显示用量"))
+                {
+                    if !flipped { store.wantLedger() }
+                    withAnimation(.easeInOut(duration: 0.45)) { flipped.toggle() }
+                }
+            }
+            let account = phase?.snapshot?.account.flatMap { $0.isEmpty ? nil : $0 }
+            if account != nil || status != nil {
+                HStack(spacing: Design.space2) {
+                    if let account {
+                        Text(account)
+                            .font(.system(size: 10, design: .monospaced))
+                            .foregroundStyle(.white.opacity(0.40))
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+                    }
+                    Spacer(minLength: 0)
+                    if let status {
+                        ServiceStatusBadge(status: status, size: 10, ink: .white.opacity(0.55))
+                    }
+                }
+            }
+        }
+    }
+
+    // MARK: Front: quota
 
     @ViewBuilder
     private var content: some View {
@@ -208,17 +244,10 @@ struct ProviderCallout: View {
                         .lineLimit(1)
                 }
             }
-            GeometryReader { proxy in
-                ZStack(alignment: .leading) {
-                    Capsule().fill(Color.white.opacity(0.16))
-                    if let percent = window.usedPercent {
-                        Capsule()
-                            .fill(meterTint(percent))
-                            .frame(width: max(3, proxy.size.width * CGFloat(percent / 100)))
-                    }
-                }
-            }
-            .frame(height: 5)
+            Meter(
+                percent: window.usedPercent,
+                tint: window.usedPercent.map(meterTint) ?? .clear,
+                style: store.meterStyle)
             Text(window.usedPercent.map {
                 L10n.t("\(QuotaFormat.percent($0)) used", "已用 \(QuotaFormat.percent($0))")
             } ?? (window.detail ?? "—"))
@@ -228,7 +257,7 @@ struct ProviderCallout: View {
     }
 
     private func meterTint(_ percent: Double) -> Color {
-        return Color(hex: UsageRamp.hex(used: percent))
+        Color(hex: UsageRamp.hex(used: percent))
     }
 
     /// "Pro_plus" → "PRO PLUS", "pro" → "PRO". Providers spell their tiers
@@ -238,5 +267,124 @@ struct ProviderCallout: View {
               !raw.isEmpty
         else { return nil }
         return raw.replacingOccurrences(of: "_", with: " ").uppercased()
+    }
+
+    // MARK: Back: usage
+
+    /// The CLI whose local logs this provider's traffic lands in, if any.
+    private var costSource: CostSource? {
+        switch id {
+        case .claude: .claudeCode
+        case .codex: .codexCLI
+        case .opencodeGo: .openCode
+        default: nil
+        }
+    }
+
+    @ViewBuilder
+    private var usageFace: some View {
+        if let source = costSource {
+            if store.ledger.isEmpty {
+                Text(store.isComputingLedger
+                    ? L10n.t("Reading local session logs…", "正在读取本地会话日志…")
+                    : L10n.t("Nothing logged locally yet.", "本地还没有记录。"))
+                    .font(.system(size: 11))
+                    .foregroundStyle(.white.opacity(0.55))
+            } else {
+                VStack(alignment: .leading, spacing: Design.space3) {
+                    HStack(alignment: .top, spacing: Design.space3) {
+                        ForEach([LedgerPeriod.today, .week, .month]) { period in
+                            let sum = store.ledger.sum(period, source: source)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(period.displayName.uppercased())
+                                    .font(.system(size: 9, weight: .semibold, design: .monospaced))
+                                    .tracking(0.6)
+                                    .foregroundStyle(.white.opacity(0.55))
+                                Text(QuotaFormat.compact(sum.tokens))
+                                    .font(.system(size: 15, weight: .semibold, design: .monospaced))
+                                    .foregroundStyle(.white)
+                                Text(QuotaFormat.usd(sum.usd))
+                                    .font(.system(size: 10, design: .monospaced))
+                                    .foregroundStyle(.white.opacity(0.4))
+                            }
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                        }
+                    }
+                    let recent = store.ledger.days(in: .year).suffix(14)
+                    MiniBars(
+                        values: recent.map { Double($0.bySource[source] ?? 0) },
+                        accent: Color(hex: source.accentHex))
+                    Text(L10n.t("Last 14 days · tokens incl. cache", "最近 14 天 · token 含缓存"))
+                        .font(.system(size: 10))
+                        .foregroundStyle(.white.opacity(0.4))
+                }
+            }
+        } else {
+            let history = store.history[id] ?? []
+            if history.count > 1 {
+                VStack(alignment: .leading, spacing: Design.space2) {
+                    MiniBars(values: Array(history.suffix(24)), accent: Color(hex: id.accentHex), ceiling: 100)
+                    Text(L10n.t(
+                        "Headline reading over the last \(min(history.count, 24)) refreshes",
+                        "最近 \(min(history.count, 24)) 次刷新的用量读数"))
+                        .font(.system(size: 10))
+                        .foregroundStyle(.white.opacity(0.4))
+                }
+            } else {
+                Text(L10n.t(
+                    "No local logs for this provider — only the quota readings.",
+                    "这个服务商没有本地日志，只有额度读数。"))
+                    .font(.system(size: 11))
+                    .foregroundStyle(.white.opacity(0.55))
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
+}
+
+/// A 22pt glyph button for the card header: dim until hovered, no chrome.
+struct CalloutButton: View {
+    let symbol: String
+    let help: String
+    let action: () -> Void
+    @State private var hovering = false
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: symbol)
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(.white.opacity(hovering ? 0.92 : 0.5))
+                .frame(width: 22, height: 22)
+                .background(
+                    RoundedRectangle(cornerRadius: 5, style: .continuous)
+                        .fill(Color.white.opacity(hovering ? 0.10 : 0)))
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .onHover { hovering = $0 }
+        .help(help)
+        .animation(.easeOut(duration: 0.12), value: hovering)
+    }
+}
+
+/// Bars for a short series — a fortnight of days, or the recent readings —
+/// scaled to the series' own peak unless a ceiling is given.
+struct MiniBars: View {
+    let values: [Double]
+    let accent: Color
+    var ceiling: Double? = nil
+    var height: CGFloat = 44
+
+    var body: some View {
+        let peak = max(ceiling ?? (values.max() ?? 1), 1)
+        HStack(alignment: .bottom, spacing: 2) {
+            ForEach(values.indices, id: \.self) { index in
+                RoundedRectangle(cornerRadius: 1.5, style: .continuous)
+                    .fill(accent.opacity(values[index] > 0 ? 0.9 : 0.15))
+                    .frame(height: max(2, height * CGFloat(values[index] / peak)))
+                    .frame(maxWidth: .infinity, alignment: .bottom)
+            }
+        }
+        .frame(height: height, alignment: .bottom)
     }
 }

@@ -69,6 +69,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             Diagnostics.printCost()
             NSApp.terminate(nil)
         }
+        if arguments.contains("--ledger") {
+            Diagnostics.printLedger()
+            NSApp.terminate(nil)
+        }
 
         let store = UsageStore()
         self.store = store

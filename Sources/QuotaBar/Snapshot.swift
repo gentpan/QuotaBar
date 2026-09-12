@@ -462,10 +462,7 @@ enum Snapshot {
         L10n.override = .zhHans
         let store = makeStore(selected: nil)
         let dockSheet = HStack(alignment: .top, spacing: 12) {
-            ProviderCallout(
-                id: .claude,
-                phase: store.states[.claude],
-                alerts: store.alertSettings)
+            ProviderCallout(store: store, id: .claude)
             VStack(spacing: Design.space3) {
                 ForEach(store.enabled) { id in
                     ProviderRing(

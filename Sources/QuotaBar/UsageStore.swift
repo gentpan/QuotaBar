@@ -48,6 +48,7 @@ final class UsageStore: ObservableObject {
     @Published var refreshMinutes: Int
     @Published var menuBarStyle: MenuBarStyle
     @Published var meterMode: MeterMode
+    @Published var meterStyle: MeterStyle
     @Published var presentation: Presentation
     @Published var alertSettings: AlertSettings
     @Published var language: L10n.Language
@@ -56,6 +57,13 @@ final class UsageStore: ObservableObject {
     /// of seconds, and a blank space for that long reads as "this feature is
     /// broken" rather than "still working".
     @Published var isComputingCost = false
+    /// The year-to-date ledger behind the usage pane. Built only once that
+    /// pane has been opened — it walks the same log tree as `cost`, and
+    /// someone who never looks at the grid should not pay for it — and then
+    /// kept fresh on the refresh cycle alongside the spend summary.
+    @Published var ledger: UsageLedger = .empty
+    @Published var isComputingLedger = false
+    private var ledgerWanted = false
     /// How far an update has got. Checked once per launch — often enough for
     /// a tool people leave running, and it avoids hammering an unauthenticated
     /// API that rate-limits by IP.
@@ -95,12 +103,14 @@ final class UsageStore: ObservableObject {
         enabled: [ProviderID],
         states: [ProviderID: ProviderPhase],
         cost: CostSummary = .empty,
+        ledger: UsageLedger = .empty,
         history: [ProviderID: [Double]] = [:]) -> UsageStore
     {
         let store = UsageStore(inert: true)
         store.enabled = enabled
         store.states = states
         store.cost = cost
+        store.ledger = ledger
         store.history = history
         store.selected = nil
         return store
@@ -111,6 +121,7 @@ final class UsageStore: ObservableObject {
         self.refreshMinutes = ConfigStore.shared.refreshMinutes
         self.menuBarStyle = ConfigStore.shared.menuBarStyle
         self.meterMode = ConfigStore.shared.meterMode
+        self.meterStyle = ConfigStore.shared.meterStyle
         self.presentation = .menuBar
         self.alertSettings = ConfigStore.shared.alerts
         self.language = ConfigStore.shared.language
@@ -122,6 +133,7 @@ final class UsageStore: ObservableObject {
         self.refreshMinutes = ConfigStore.shared.refreshMinutes
         self.menuBarStyle = ConfigStore.shared.menuBarStyle
         self.meterMode = ConfigStore.shared.meterMode
+        self.meterStyle = ConfigStore.shared.meterStyle
         self.presentation = ConfigStore.shared.presentation
         self.alertSettings = ConfigStore.shared.alerts
         self.language = ConfigStore.shared.language
@@ -451,7 +463,28 @@ final class UsageStore: ObservableObject {
             }.value
             self.cost = summary
             self.isComputingCost = false
+            if self.ledgerWanted { await self.buildLedger() }
         }
+    }
+
+    /// The usage pane asks for the ledger the first time it appears.
+    func wantLedger() {
+        guard !ledgerWanted else { return }
+        ledgerWanted = true
+        // A spend scan already running will build the ledger when it
+        // finishes; otherwise start now.
+        guard !isComputingCost else { return }
+        Task { await buildLedger() }
+    }
+
+    private func buildLedger() async {
+        guard !isComputingLedger else { return }
+        isComputingLedger = true
+        let built = await Task.detached(priority: .utility) {
+            CostEstimator.ledger()
+        }.value
+        ledger = built
+        isComputingLedger = false
     }
 
     // MARK: Alerts
@@ -526,6 +559,11 @@ final class UsageStore: ObservableObject {
     func setMeterMode(_ mode: MeterMode) {
         meterMode = mode
         config.meterMode = mode
+    }
+
+    func setMeterStyle(_ style: MeterStyle) {
+        meterStyle = style
+        config.meterStyle = style
     }
 
     func setPresentation(_ presentation: Presentation) {
