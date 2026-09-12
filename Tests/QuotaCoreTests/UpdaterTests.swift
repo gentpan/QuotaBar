@@ -163,3 +163,15 @@ final class UpdateConfigTests: XCTestCase {
         XCTAssertEqual(store.refreshMinutes, 7, "the rest of the file still loads")
     }
 }
+
+final class HomebrewOwnershipTests: XCTestCase {
+    func testHomebrewOwnsOnlyTheVersionItInstalled() throws {
+        let root = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("caskroom-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: root.appendingPathComponent("0.3.0"), withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        XCTAssertTrue(Updater.isManagedByHomebrew(version: "0.3.0", caskroots: [root.path]))
+        XCTAssertFalse(Updater.isManagedByHomebrew(version: "0.3.3", caskroots: [root.path]))
+        XCTAssertFalse(Updater.isManagedByHomebrew(version: nil, caskroots: [root.path]))
+        XCTAssertFalse(Updater.isManagedByHomebrew(version: "0.3.0", caskroots: ["/nonexistent/caskroom"]))
+    }
+}

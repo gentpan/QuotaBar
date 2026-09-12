@@ -1265,12 +1265,7 @@ struct UpdatesPane: View {
                 .padding(.top, 4)
             }
 
-            SettingRow(
-                L10n.t("Updates", "更新方式"),
-                caption: L10n.t(
-                    "Automatic installs a new build and relaunches as soon as it is found.",
-                    "自动：发现新版本就安装并重启；手动：只提醒，点击后安装。"))
-            {
+            SettingRow(L10n.t("Updates", "更新方式")) {
                 GlassSegmented(
                     options: UpdatePolicy.allCases.map { (value: $0, label: $0.displayName) },
                     selection: store.updatePolicy,
@@ -1291,13 +1286,8 @@ struct UpdatesPane: View {
             }
 
             if store.updateIsManagedByHomebrew {
-                SettingFootnote(L10n.t(
-                    "This copy was installed by Homebrew, which owns its updates: run `brew upgrade quotabar`.",
-                    "这个副本由 Homebrew 安装，更新由它负责：运行 `brew upgrade quotabar`。"))
+                SettingFootnote(L10n.t("Updated by Homebrew.", "由 Homebrew 更新。"))
             }
-            SettingFootnote(L10n.t(
-                "A new build replaces this one in place. It is installed only if signed by this app's developer and notarized by Apple.",
-                "新版本会原地替换当前的应用；只有经本应用开发者签名并通过 Apple 公证的下载才会被安装。"))
         }
     }
 

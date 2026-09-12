@@ -134,13 +134,17 @@ public enum Updater {
 
     /// True when Homebrew owns this install, in which case replacing the
     /// bundle behind its back would desync its metadata and the next
-    /// `brew upgrade` would fight us.
-    public static func isManagedByHomebrew() -> Bool {
-        let caskroots = [
-            "/opt/homebrew/Caskroom/quotabar",
-            "/usr/local/Caskroom/quotabar",
-        ]
-        return caskroots.contains { FileManager.default.fileExists(atPath: $0) }
+    /// `brew upgrade` would fight us. Owns, not once installed: the
+    /// Caskroom keeps its folder after the app has been replaced by hand,
+    /// so it counts only when it holds the version that is running.
+    public static func isManagedByHomebrew(
+        version: String? = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String,
+        caskroots: [String] = ["/opt/homebrew/Caskroom/quotabar", "/usr/local/Caskroom/quotabar"]) -> Bool
+    {
+        guard let version, !version.isEmpty else { return false }
+        return caskroots.contains { root in
+            FileManager.default.fileExists(atPath: "\(root)/\(version)")
+        }
     }
 
     /// Replaces the running bundle with the staged one and relaunches.
