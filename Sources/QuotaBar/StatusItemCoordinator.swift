@@ -4,11 +4,10 @@ import QuotaCore
 
 /// The menu-bar item.
 ///
-/// AppKit rather than `MenuBarExtra`: a click opens the settings window
-/// directly — the dropdown panel is gone as of 0.4 — and SwiftUI's item can
-/// only hang a menu or a popover off its primary click. The secondary click
-/// keeps the two actions worth having without a window, refresh and quit,
-/// with settings alongside for discoverability.
+/// AppKit rather than `MenuBarExtra`: a click opens the menu panel — gone in
+/// 0.4, back in 0.5 with only the numbers people check — and SwiftUI's item
+/// could only hang a menu or a popover off its primary click. The secondary
+/// click keeps refresh, settings and quit.
 @MainActor
 final class StatusItemCoordinator: NSObject {
     private var item: NSStatusItem?
@@ -41,7 +40,7 @@ final class StatusItemCoordinator: NSObject {
             button.target = self
             button.action = #selector(clicked)
             button.sendAction(on: [.leftMouseUp, .rightMouseUp])
-            button.toolTip = L10n.t("QuotaBar — click for settings", "QuotaBar — 点击打开设置")
+            button.toolTip = L10n.t("QuotaBar — click for usage, right-click for the menu", "QuotaBar — 点击查看用量，右键打开菜单")
         }
         self.item = item
         render()
@@ -75,7 +74,7 @@ final class StatusItemCoordinator: NSObject {
     /// waiting to happen.
     private func render() {
         guard let store, let item, let button = item.button else { return }
-        let key = "\(store.menuBarIconMode.rawValue)|\(store.meterReading)|\(store.menuBarStyle.rawValue)|\(store.alertLevel)|\(store.meterMode.rawValue)"
+        let key = "\(store.menuBarIconMode.rawValue)|\(store.meterReading)|\(store.menuBarStyle.rawValue)|\(store.alertLevel)|\(store.meterMode.rawValue)|\(store.isPrivacyMasked)"
         guard key != lastImageKey else { return }
         lastImageKey = key
         switch store.menuBarIconMode {
@@ -84,6 +83,10 @@ final class StatusItemCoordinator: NSObject {
             // the app again, are the ways back to Settings.
             item.isVisible = false
         case .logo:
+            item.isVisible = true
+            button.image = MenuBarIcon.appMark()
+        case .meter where store.isPrivacyMasked:
+            // Someone is watching the screen: the mark, not the numbers.
             item.isVisible = true
             button.image = MenuBarIcon.appMark()
         case .meter:
@@ -101,9 +104,10 @@ final class StatusItemCoordinator: NSObject {
         let secondary = event?.type == .rightMouseUp
             || event?.modifierFlags.contains(.control) == true
         if secondary {
+            MenuPanelController.shared.close()
             showMenu()
         } else {
-            SettingsWindow.open()
+            MenuPanelController.shared.toggle(from: item?.button)
         }
     }
 

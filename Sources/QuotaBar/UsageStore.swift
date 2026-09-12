@@ -95,10 +95,33 @@ final class UsageStore: ObservableObject {
     @Published var uptime: [String: [UptimeDay]] = [:]
     private var uptimeLoading: Set<String> = []
 
-    private var lastAlertLevel: AlertLevel = .none
-    private var notificationsReady = false
+    // MARK: 0.5
 
-    private let config = ConfigStore.shared
+    /// Everything 0.5 added to the preferences, mirrored for SwiftUI.
+    @Published var experience: ExperiencePrefs
+    /// Bumped when a preference a coordinator acts on changes — hotkey,
+    /// local API, glow — so they re-read without watching every tick.
+    @Published var experienceRevision = 0
+    /// QuotaBar's own record of local token traffic, from the archive.
+    @Published var archive: UsageArchive = UsageArchiveStore.shared.current
+    @Published var isUpdatingArchive = false
+    /// When the next automatic refresh is due, for the panel footer.
+    @Published var nextRefreshAt = Date().addingTimeInterval(300)
+    /// True while something is capturing the screen and the owner asked for
+    /// usage to be hidden then.
+    @Published var isPrivacyMasked = false
+    /// A provider whose card was copied, for the "copied" pill.
+    @Published var copiedNotice: String?
+    var captureTask: Task<Void, Never>?
+    /// Pace notifications already sent, keyed by provider, window and kind,
+    /// with the reset they belong to — so one crossing notifies once.
+    var paceNotified: [String: Date] = [:]
+    var paceBaselineTaken = false
+
+    private var lastAlertLevel: AlertLevel = .none
+    var notificationsReady = false
+
+    let config = ConfigStore.shared
     private var autoRefreshTask: Task<Void, Never>?
     private var clockTask: Task<Void, Never>?
     private var netMonitor: NWPathMonitor?
@@ -134,6 +157,7 @@ final class UsageStore: ObservableObject {
         self.presentation = .menuBar
         self.alertSettings = ConfigStore.shared.alerts
         self.language = ConfigStore.shared.language
+        self.experience = ConfigStore.shared.experience
         self.selected = nil
     }
 
@@ -147,6 +171,7 @@ final class UsageStore: ObservableObject {
         self.presentation = ConfigStore.shared.presentation
         self.alertSettings = ConfigStore.shared.alerts
         self.language = ConfigStore.shared.language
+        self.experience = ConfigStore.shared.experience
         // Restore the focused provider, dropping it if it is no longer enabled.
         let saved = ConfigStore.shared.selected
         self.selected = saved.flatMap {
@@ -154,7 +179,13 @@ final class UsageStore: ObservableObject {
         }
         for id in enabled {
             history[id] = UsageHistoryStore.shared.readings(for: id).map(\.percent)
+            // Stale-while-revalidate: last session's numbers until the first
+            // refresh lands, instead of a column of spinners.
+            if let cached = SnapshotCache.shared.snapshot(for: id) {
+                states[id] = .loaded(cached)
+            }
         }
+        HTTP.configureProxy(experience.proxy)
         prepareNotifications()
         refreshConfigured()
         checkForUpdate()
@@ -163,6 +194,7 @@ final class UsageStore: ObservableObject {
         startClock()
         startSystemObservers()
         startStatusPolling()
+        startExperience()
         refreshAll()
     }
 
@@ -353,6 +385,7 @@ final class UsageStore: ObservableObject {
         switch result {
         case let .success(snapshot):
             states[id] = .loaded(snapshot)
+            SnapshotCache.shared.store(snapshot, for: id)
             if let percent = snapshot.headlinePercent {
                 UsageHistoryStore.shared.record(id, percent: percent)
                 history[id] = UsageHistoryStore.shared.readings(for: id).map(\.percent)
@@ -370,6 +403,7 @@ final class UsageStore: ObservableObject {
     private func finishRefresh() {
         tick &+= 1
         evaluateAlerts()
+        evaluatePaceAlerts()
     }
 
     /// Re-evaluates which providers have usable credentials.
@@ -644,6 +678,7 @@ final class UsageStore: ObservableObject {
             self.cost = summary
             self.isComputingCost = false
             if self.ledgerWanted { await self.buildLedger() }
+            await self.updateArchive()
         }
     }
 
@@ -678,7 +713,7 @@ final class UsageStore: ObservableObject {
 
     /// Notifications need a bundle identifier; the dev loop runs the bare
     /// binary, where `UNUserNotificationCenter.current()` would trap.
-    private var notificationsAvailable: Bool {
+    var notificationsAvailable: Bool {
         Bundle.main.bundleIdentifier != nil
     }
 
@@ -721,6 +756,7 @@ final class UsageStore: ObservableObject {
         } else {
             enabled.removeAll { $0 == id }
             states[id] = nil
+            SnapshotCache.shared.remove(id)
             if selected == id { selected = enabled.first }
         }
     }
@@ -788,10 +824,12 @@ final class UsageStore: ObservableObject {
 
     private func startAutoRefresh() {
         autoRefreshTask?.cancel()
-        let minutes = max(1, refreshMinutes)
+        let minutes = QuotaConfig.clampRefresh(refreshMinutes)
+        nextRefreshAt = Date().addingTimeInterval(Double(minutes) * 60)
         autoRefreshTask = Task { [weak self] in
             while !Task.isCancelled {
                 try? await Task.sleep(for: .seconds(Double(minutes) * 60))
+                self?.nextRefreshAt = Date().addingTimeInterval(Double(minutes) * 60)
                 guard let self, !Task.isCancelled else { return }
                 self.refreshAll()
             }

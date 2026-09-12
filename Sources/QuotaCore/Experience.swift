@@ -41,13 +41,17 @@ public enum ClockStyle: String, Codable, CaseIterable, Identifiable, Sendable {
 public enum UrgencyStyle: String, Codable, CaseIterable, Identifiable, Sendable {
     case bar
     case figure
+    /// After openusage: the bar's colour is a verdict on the pace — green on
+    /// course, amber cutting it close, red running out before the reset.
+    case pace
 
     public var id: String { rawValue }
 
     public var displayName: String {
         switch self {
-        case .bar: L10n.t("Bar colour", "进度条变色")
-        case .figure: L10n.t("Figure colour", "数字变色")
+        case .bar: L10n.t("By usage", "按用量变色")
+        case .figure: L10n.t("Figure only", "只让数字变色")
+        case .pace: L10n.t("By pace", "按节奏变色")
         }
     }
 }

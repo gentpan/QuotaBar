@@ -857,3 +857,15 @@ public enum CostEstimator {
         return .distantPast
     }
 }
+
+extension ProviderID {
+    /// The CLI whose local session logs this provider's traffic lands in.
+    public var costSource: CostSource? {
+        switch self {
+        case .claude: .claudeCode
+        case .codex: .codexCLI
+        case .opencodeGo: .openCode
+        default: nil
+        }
+    }
+}

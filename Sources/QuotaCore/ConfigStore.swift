@@ -314,6 +314,8 @@ public final class ConfigStore: @unchecked Sendable {
     /// not be hit once per refresh — let alone once per SwiftUI render.
     private var credentialCache: [ProviderID: String?] = [:]
     public let fileURL: URL
+    /// No config file existed when this store was created: a first launch.
+    public let wasFreshInstall: Bool
 
     /// Set when the keychain rejects a write, so Settings can explain why a
     /// credential did not stick instead of appearing to save it.
@@ -324,6 +326,7 @@ public final class ConfigStore: @unchecked Sendable {
             .appendingPathComponent(".config/quotabar/config.json")
         self.fileURL = url
         self.credentials = credentials
+        self.wasFreshInstall = !FileManager.default.fileExists(atPath: url.path)
         if let data = try? Data(contentsOf: url),
            let decoded = try? JSONDecoder().decode(QuotaConfig.self, from: data)
         {

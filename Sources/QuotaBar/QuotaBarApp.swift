@@ -95,7 +95,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let store = UsageStore()
         self.store = store
         SettingsWindow.configure(store: store)
+        MenuPanelController.shared.configure(store: store)
         coordinators.start(store: store)
+        if arguments.contains("--panel-window") {
+            // Opens the menu panel under the top-right of the screen, for
+            // looking at it without clicking the item.
+            DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+                MenuPanelController.shared.open(from: nil)
+            }
+        }
+        if arguments.contains("--share-studio") {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 2) { ShareStudio.open(store: store) }
+        }
     }
 }
 
@@ -139,7 +150,22 @@ final class Coordinators {
 
     /// Only one alternate presentation is live at a time; the menu-bar item
     /// stays regardless, as the settings entry point.
+    private var privacyMasked = false
+
     private func sync(store: UsageStore) {
+        if store.isPrivacyMasked != privacyMasked {
+            privacyMasked = store.isPrivacyMasked
+            if privacyMasked {
+                island.hide()
+                dock.hide()
+                widget.hide()
+                presentation = nil
+            } else {
+                presentation = nil
+                widgetRevision = -1
+            }
+        }
+        guard !privacyMasked else { return }
         if store.presentation != presentation {
             presentation = store.presentation
             island.sync(store: store)
