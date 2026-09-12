@@ -12,8 +12,12 @@ import QuotaCore
 final class BrowserLogin: NSObject, WKNavigationDelegate, NSWindowDelegate {
     struct Target {
         let url: URL
+        /// The cookie whose arrival means the sign-in finished.
         let cookie: String
         let domain: String
+        /// Store every cookie for the domain as a Cookie header, for the
+        /// consoles that want the whole session rather than one token.
+        var wholeHeader = false
     }
 
     static func target(for id: ProviderID) -> Target? {
@@ -22,6 +26,15 @@ final class BrowserLogin: NSObject, WKNavigationDelegate, NSWindowDelegate {
             Target(url: URL(string: "https://cursor.com/dashboard")!, cookie: "WorkosCursorSessionToken", domain: "cursor.com")
         case .kimi:
             Target(url: URL(string: "https://www.kimi.com/code/console")!, cookie: "kimi-auth", domain: "kimi.com")
+        case .alibaba:
+            Target(url: URL(string: "https://bailian.console.aliyun.com/cn-beijing/?tab=model#/efm/coding_plan")!,
+                   cookie: "login_aliyunid_ticket", domain: "aliyun.com", wholeHeader: true)
+        case .mimo:
+            Target(url: URL(string: "https://platform.xiaomimimo.com/#/console/balance")!,
+                   cookie: "api-platform_serviceToken", domain: "xiaomimimo.com", wholeHeader: true)
+        case .qwen:
+            Target(url: URL(string: "https://home.qwencloud.com/billing/subscription/token-plan-individual")!,
+                   cookie: "login_aliyunid_ticket", domain: "qwencloud.com", wholeHeader: true)
         default:
             nil
         }
@@ -98,7 +111,15 @@ final class BrowserLogin: NSObject, WKNavigationDelegate, NSWindowDelegate {
         guard let match = cookies.first(where: {
             $0.name == target.cookie && $0.domain.contains(target.domain) && !$0.value.isEmpty
         }) else { return }
-        finish(with: match.value)
+        if target.wholeHeader {
+            let header = cookies
+                .filter { $0.domain.contains(target.domain) && !$0.value.isEmpty }
+                .map { "\($0.name)=\($0.value)" }
+                .joined(separator: "; ")
+            finish(with: header)
+        } else {
+            finish(with: match.value)
+        }
     }
 
     private func finish(with value: String) {

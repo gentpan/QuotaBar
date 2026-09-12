@@ -273,8 +273,27 @@ public enum ProviderID: String, CaseIterable, Codable, Sendable, Identifiable {
     case grok
     case antigravity
     case qwen
+    case alibaba
+    case volcengine
+    case zhipu
+    case moonshot
+    case copilot
+    case openrouter
+    case mimo
+    case qoder
+    case windsurf
+    case kiro
 
     public var id: String { rawValue }
+
+    /// Written from public implementations and not yet confirmed against a
+    /// live account; Settings says so beside the name.
+    public var isExperimental: Bool {
+        switch self {
+        case .alibaba, .volcengine, .zhipu, .moonshot, .openrouter, .mimo, .qoder, .windsurf, .kiro: true
+        default: false
+        }
+    }
 
     /// Brand names stay untranslated in both languages.
     public var displayName: String {
@@ -292,6 +311,16 @@ public enum ProviderID: String, CaseIterable, Codable, Sendable, Identifiable {
         case .grok: "Grok"
         case .antigravity: "Antigravity"
         case .qwen: "Qwen Cloud"
+        case .alibaba: L10n.t("Alibaba Coding Plan", "阿里云百炼")
+        case .volcengine: L10n.t("Volcengine Ark", "火山方舟")
+        case .zhipu: L10n.t("Zhipu GLM", "智谱 GLM")
+        case .moonshot: L10n.t("Moonshot API", "Kimi 开放平台")
+        case .copilot: "GitHub Copilot"
+        case .openrouter: "OpenRouter"
+        case .mimo: L10n.t("Xiaomi MiMo", "小米 MiMo")
+        case .qoder: "Qoder"
+        case .windsurf: "Windsurf"
+        case .kiro: "Kiro"
         }
     }
 
@@ -313,6 +342,16 @@ public enum ProviderID: String, CaseIterable, Codable, Sendable, Identifiable {
         case .grok: "bolt"
         case .antigravity: "arrow.up.circle"
         case .qwen: "cloud"
+        case .alibaba: "cloud.fill"
+        case .volcengine: "mountain.2"
+        case .zhipu: "circle.hexagongrid"
+        case .moonshot: "moon"
+        case .copilot: "person.2.wave.2"
+        case .openrouter: "arrow.triangle.branch"
+        case .mimo: "m.square"
+        case .qoder: "q.circle"
+        case .windsurf: "wind"
+        case .kiro: "k.circle"
         }
     }
 
@@ -332,6 +371,16 @@ public enum ProviderID: String, CaseIterable, Codable, Sendable, Identifiable {
         case .grok: "22C55E"
         case .antigravity: "8AB4F8"
         case .qwen: "C084FC"
+        case .alibaba: "FF7A1A"
+        case .volcengine: "5B9BFF"
+        case .zhipu: "7C95FF"
+        case .moonshot: "C8C8D0"
+        case .copilot: "B79CFF"
+        case .openrouter: "8F9BFF"
+        case .mimo: "FF7A00"
+        case .qoder: "34D399"
+        case .windsurf: "4FE3B8"
+        case .kiro: "B08CFF"
         }
     }
 
@@ -351,6 +400,16 @@ public enum ProviderID: String, CaseIterable, Codable, Sendable, Identifiable {
         case .grok: URL(string: "https://grok.com")
         case .antigravity: URL(string: "https://antigravity.google")
         case .qwen: URL(string: "https://home.qwencloud.com/billing/subscription/token-plan-individual")
+        case .alibaba: URL(string: "https://bailian.console.aliyun.com/cn-beijing/?tab=model#/efm/coding_plan")
+        case .volcengine: URL(string: "https://console.volcengine.com/ark/region:ark+cn-beijing/openManagement")
+        case .zhipu: URL(string: "https://bigmodel.cn/coding-plan/personal/usage")
+        case .moonshot: URL(string: "https://platform.moonshot.cn/console/account")
+        case .copilot: URL(string: "https://github.com/settings/copilot")
+        case .openrouter: URL(string: "https://openrouter.ai/settings/credits")
+        case .mimo: URL(string: "https://platform.xiaomimimo.com/#/console/balance")
+        case .qoder: URL(string: "https://qoder.com/account/usage")
+        case .windsurf: URL(string: "https://windsurf.com/subscription/usage")
+        case .kiro: URL(string: "https://app.kiro.dev/account/usage")
         }
     }
 
@@ -391,6 +450,28 @@ public enum ProviderID: String, CaseIterable, Codable, Sendable, Identifiable {
             return L10n.t(
                 "API key (platform.deepseek.com → API Keys).",
                 "API Key（platform.deepseek.com → API Keys）。")
+        case .alibaba:
+            return L10n.t(
+                "Full Cookie header from bailian.console.aliyun.com (or the international Model Studio console), signed in.",
+                "bailian.console.aliyun.com 登录后的完整 Cookie 头（国际站 Model Studio 控制台也可以）。")
+        case .zhipu:
+            return L10n.t("API key (bigmodel.cn → API Keys).", "API Key（bigmodel.cn → API Keys）。")
+        case .moonshot:
+            return L10n.t("API key (platform.moonshot.cn → API Keys).", "API Key（platform.moonshot.cn → API Keys）。")
+        case .copilot:
+            return L10n.t(
+                "Optional; otherwise the GitHub CLI's sign-in is used (`gh auth login`).",
+                "可选；留空则使用 GitHub CLI 的登录（`gh auth login`）。")
+        case .openrouter:
+            return L10n.t("API key (openrouter.ai → Keys).", "API Key（openrouter.ai → Keys）。")
+        case .mimo:
+            return L10n.t(
+                "Full Cookie header from platform.xiaomimimo.com, signed in (needs api-platform_serviceToken and userId).",
+                "platform.xiaomimimo.com 登录后的完整 Cookie 头（需含 api-platform_serviceToken 和 userId）。")
+        case .qoder:
+            return L10n.t("Full Cookie header from qoder.com, signed in.", "qoder.com 登录后的完整 Cookie 头。")
+        case .volcengine, .windsurf, .kiro:
+            return nil
         }
     }
 
@@ -408,6 +489,18 @@ public enum ProviderID: String, CaseIterable, Codable, Sendable, Identifiable {
         case .antigravity: return L10n.t(
             "Open Antigravity and sign in once; its token is read from ~/.gemini.",
             "打开 Antigravity 并登录一次，令牌会从 ~/.gemini 读取。")
+        case .volcengine: return L10n.t(
+            "Install arkcli and run `arkcli auth login`.",
+            "安装 arkcli 并运行 `arkcli auth login` 登录。")
+        case .windsurf: return L10n.t(
+            "Open Windsurf and sign in once; the plan it caches on this Mac is read.",
+            "打开 Windsurf 并登录一次，会读取它在本机缓存的套餐信息。")
+        case .kiro: return L10n.t(
+            "Install kiro-cli and sign in (`kiro-cli login`).",
+            "安装 kiro-cli 并登录（`kiro-cli login`）。")
+        case .copilot: return L10n.t(
+            "Sign in with the GitHub CLI (`gh auth login`), or paste a token in Settings.",
+            "用 GitHub CLI 登录（`gh auth login`），或在设置里粘贴 token。")
         default: return credentialHint ?? ""
         }
     }

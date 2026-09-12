@@ -229,6 +229,40 @@ enum Diagnostics {
         FileHandle.standardOutput.write(Data(out.utf8))
     }
 
+    /// `QuotaBar --provider <id>`: one provider's reading, fetched now,
+    /// whether or not it is enabled. Never the credential.
+    static func printProvider(_ raw: String) {
+        guard let id = ProviderID(rawValue: raw) else {
+            FileHandle.standardError.write(Data("Unknown provider. One of: \(ProviderID.allCases.map(\.rawValue).joined(separator: ", "))\n".utf8))
+            return
+        }
+        let box = LimitsBox()
+        let semaphore = DispatchSemaphore(value: 0)
+        Task.detached {
+            let provider = ProviderRegistry.make(id)
+            let configured = provider.isConfigured(config: ConfigStore.shared)
+            do {
+                box.append((id, try await provider.fetch(config: ConfigStore.shared), configured ? nil : "not configured"))
+            } catch {
+                box.append((id, nil, error.localizedDescription))
+            }
+            semaphore.signal()
+        }
+        _ = semaphore.wait(timeout: .now() + 45)
+        guard let item = box.items.first else { return }
+        var out = "\(id.displayName)\n"
+        if let snapshot = item.1 {
+            out += "  plan: \(snapshot.planName ?? "—")\n"
+            for window in snapshot.windows {
+                let used = window.usedPercent.map { QuotaFormat.percent($0) + " used" } ?? "—"
+                let reset = window.resetsAt.map { " · " + QuotaFormat.resetLabel(to: $0) } ?? ""
+                out += "  \(window.title): \(used)\(window.detail.map { " · " + $0 } ?? "")\(reset)\n"
+            }
+        }
+        if let error = item.2 { out += "  error: \(error)\n" }
+        FileHandle.standardOutput.write(Data(out.utf8))
+    }
+
     static func printCost() {
         // The panel refreshes this on its own cycle; the CLI has to ask.
         let semaphore = DispatchSemaphore(value: 0)

@@ -238,6 +238,16 @@ public enum ProviderRegistry {
         case .grok: GrokProvider()
         case .antigravity: AntigravityProvider()
         case .qwen: QwenProvider()
+        case .alibaba: AlibabaCodingPlanProvider()
+        case .volcengine: VolcengineArkProvider()
+        case .zhipu: ZhipuProvider()
+        case .moonshot: MoonshotBalanceProvider()
+        case .copilot: CopilotProvider()
+        case .openrouter: OpenRouterProvider()
+        case .mimo: MiMoProvider()
+        case .qoder: QoderProvider()
+        case .windsurf: WindsurfProvider()
+        case .kiro: KiroProvider()
         }
     }
 

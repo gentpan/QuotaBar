@@ -97,6 +97,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             Diagnostics.printStatus()
             NSApp.terminate(nil)
         }
+        if let index = arguments.firstIndex(of: "--provider"), index + 1 < arguments.count {
+            Diagnostics.printProvider(arguments[index + 1])
+            NSApp.terminate(nil)
+        }
         if arguments.contains("--archive-timing") {
             Diagnostics.printArchiveTiming()
             NSApp.terminate(nil)

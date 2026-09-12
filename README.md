@@ -12,7 +12,7 @@
 [![License](https://img.shields.io/badge/license-MIT-black)](LICENSE)
 
 A menu-bar app that reads how much of each AI coding provider's quota you have
-used and when each window resets. Thirteen providers, no servers, no accounts.
+used and when each window resets. Twenty-three providers, no servers, no accounts.
 
 [Download](https://github.com/gentpan/quotabar/releases/latest) ·
 [Website](web/) ·
@@ -53,6 +53,16 @@ Requires macOS 14 (Sonoma) or later. Apple Silicon and Intel.
 | Manus | `api.manus.im` credits | manual session token |
 | DeepSeek | `api.deepseek.com/user/balance` | manual API key |
 | Qwen Cloud | `home.qwencloud.com` console → token plan usage | manual Cookie header |
+| GitHub Copilot | GitHub CLI sign-in (`gh auth token`) → `api.github.com/copilot_internal/user` | automatic / manual |
+| 阿里云百炼 Coding Plan *(experimental)* | Bailian console gateway → coding plan quota | Cookie header / in-app sign-in |
+| 火山方舟 *(experimental)* | `arkcli usage plan --format json` | automatic (arkcli login) |
+| 智谱 GLM *(experimental)* | `open.bigmodel.cn/api/monitor/usage/quota/limit` | manual API key |
+| Kimi 开放平台 *(experimental)* | `api.moonshot.cn/v1/users/me/balance` | manual API key |
+| OpenRouter *(experimental)* | `openrouter.ai/api/v1/credits` + `/key` | manual API key |
+| 小米 MiMo *(experimental)* | `platform.xiaomimimo.com/api/v1` balance + token plan | Cookie header / in-app sign-in |
+| Qoder *(experimental)* | `qoder.com/api/v2/me/usages/big_model_credits` | manual Cookie header |
+| Windsurf *(experimental)* | Windsurf's own `state.vscdb` cached plan | automatic |
+| Kiro *(experimental)* | `kiro-cli` session → AWS `GetUsageLimits` | automatic |
 
 **Nothing leaves your Mac.** Automatic providers reuse the session your CLI already
 created — the app never asks for a password. Manually entered tokens go to the **macOS

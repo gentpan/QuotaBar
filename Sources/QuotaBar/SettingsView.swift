@@ -361,8 +361,8 @@ struct StatusPane: View {
             }
         }
         SettingFootnote(L10n.t(
-            "Read from each provider's public status page every five minutes, without signing in. Click a row for the page's own account of what is going on. Not listed: xAI's page refuses automated readers; Z.ai, OpenCode, Antigravity and Qwen Cloud publish none.",
-            "每五分钟读取各服务商的公开状态页，无需登录。点击一行可看状态页对当前情况的说明。未列出的：xAI 的页面拒绝自动读取；Z.ai、OpenCode、Antigravity 与 Qwen Cloud 没有公开状态页。"))
+            "Read from each provider's public status page every five minutes, without signing in. Click a row for the page's own account of what is going on. Providers without a page anyone can read are not listed.",
+            "每五分钟读取各服务商的公开状态页，无需登录。点击一行可看状态页对当前情况的说明。没有可公开读取状态页的服务商不在此列出。"))
     }
 
     /// One line per provider — name, band, when it was asked — and the
@@ -705,6 +705,18 @@ struct ProviderSettingsRow: View {
 
             Text(id.displayName)
                 .font(.system(size: 13, weight: .medium))
+
+            if id.isExperimental {
+                Text(L10n.t("Experimental", "实验性"))
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundStyle(.secondary)
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 2)
+                    .background(Capsule().strokeBorder(Color.secondary.opacity(0.4), lineWidth: 1))
+                    .help(L10n.t(
+                        "Built from a public implementation of this service and not yet checked against a live account. Tell us if the numbers look wrong.",
+                        "按这个服务的公开实现编写，还没有用真实账号验证过。数字不对请在反馈里告诉我们。"))
+            }
 
             Spacer(minLength: Design.space2)
 

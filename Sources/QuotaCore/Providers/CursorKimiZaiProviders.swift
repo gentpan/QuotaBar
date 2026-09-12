@@ -296,7 +296,12 @@ public struct ZaiProvider: QuotaProvider {
         guard let key = config.credential(for: .zai) else {
             throw ProviderError.notConfigured(hint: ProviderID.zai.setupHint)
         }
-        let url = URL(string: "https://api.z.ai/api/monitor/usage/quota/limit")!
+        return try await Self.fetchQuota(host: "https://api.z.ai", key: key)
+    }
+
+    /// The GLM Coding Plan quota endpoint, on z.ai or on bigmodel.cn.
+    static func fetchQuota(host: String, key: String) async throws -> UsageSnapshot {
+        let url = URL(string: "\(host)/api/monitor/usage/quota/limit")!
         let response = try await HTTP.get(url, headers: [
             "Authorization": "Bearer \(key)",
             "Accept": "application/json",
