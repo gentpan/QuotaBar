@@ -415,19 +415,39 @@ private struct PanelFooter: View {
     @ViewBuilder
     private var refreshLine: some View {
         TimelineView(.periodic(from: .now, by: 15)) { context in
-            Text(store.isForceRefreshing ? L10n.t("Refreshing…", "正在刷新…") : nextRefresh(now: context.date))
+            Text(store.isForceRefreshing ? L10n.t("Refreshing…", "正在刷新…") : refreshStatus(now: context.date))
                 .font(.system(size: 11))
                 .monospacedDigit()
                 .foregroundStyle(.white.opacity(0.45))
+                .help(refreshHelp)
         }
     }
 
-    private func nextRefresh(now: Date) -> String {
+    /// "Just updated" for a minute after a refresh finishes — the timer has
+    /// just started over, and a fresh "5 minutes" read as if the button had
+    /// done nothing — then the countdown to the next automatic one.
+    private func refreshStatus(now: Date) -> String {
+        if let last = store.lastRefreshAt, now.timeIntervalSince(last) < 60 {
+            return L10n.t("Updated just now", "刚刚更新")
+        }
         let seconds = max(0, store.nextRefreshAt.timeIntervalSince(now))
         let minutes = Int((seconds / 60).rounded(.up))
         return minutes <= 1
-            ? L10n.t("Next update in a minute", "1 分钟内刷新")
-            : L10n.t("Next update in \(minutes)m", "\(minutes) 分钟后刷新")
+            ? L10n.t("Auto-refresh within a minute", "1 分钟内自动刷新")
+            : L10n.t("Auto-refresh in \(minutes)m", "\(minutes) 分钟后自动刷新")
+    }
+
+    private var refreshHelp: String {
+        let clock = DateFormatter()
+        clock.locale = L10n.locale
+        clock.dateStyle = .none
+        clock.timeStyle = .short
+        let every = QuotaConfig.clampRefresh(store.refreshMinutes)
+        let next = L10n.t(
+            "Next automatic refresh at \(clock.string(from: store.nextRefreshAt)), every \(every) minutes.",
+            "下次自动刷新 \(clock.string(from: store.nextRefreshAt))，每 \(every) 分钟一次。")
+        guard let last = store.lastRefreshAt else { return next }
+        return L10n.t("Last updated at \(clock.string(from: last)). ", "上次更新 \(clock.string(from: last))。") + next
     }
 }
 

@@ -106,6 +106,10 @@ final class UsageStore: ObservableObject {
     @Published var isUpdatingArchive = false
     /// When the next automatic refresh is due, for the panel footer.
     @Published var nextRefreshAt = Date().addingTimeInterval(300)
+    /// When a refresh last finished — the footer says "just updated" for a
+    /// minute after it, so a refresh that restarts the timer does not read
+    /// as nothing having happened.
+    @Published var lastRefreshAt: Date?
     /// The footer's refresh-everything is running.
     @Published var isForceRefreshing = false
     /// True while something is capturing the screen and the owner asked for
@@ -444,6 +448,7 @@ final class UsageStore: ObservableObject {
     }
 
     private func finishRefresh() {
+        lastRefreshAt = Date()
         tick &+= 1
         evaluateAlerts()
         evaluatePaceAlerts()
