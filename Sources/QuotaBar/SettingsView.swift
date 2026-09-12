@@ -447,14 +447,15 @@ private struct ComponentRow: View {
                 pageURL: URL(string: "https://example.invalid")!, checkedAt: .distantPast), size: 11)
                 .frame(width: 80, alignment: .leading)
             // The page keeps 90 days; the owner found that a wall of ticks.
-            // The last 30 are shown and the figure covers the same 30.
+            // The last 30 are shown and the figure covers the same 30 — the
+            // figure first, the strip running out to the row's end.
             if let days, !days.isEmpty {
                 let recent = Array(days.suffix(30))
-                UptimeStrip(days: recent)
                 Text(uptimeFigure(recent))
-                    .font(.system(size: 11, design: .monospaced))
+                    .font(.system(size: 10, design: .monospaced))
                     .foregroundStyle(.secondary)
-                    .frame(width: 52, alignment: .trailing)
+                    .frame(width: 48, alignment: .trailing)
+                UptimeStrip(days: recent)
             } else {
                 Spacer(minLength: 0)
             }
@@ -476,8 +477,12 @@ private struct UptimeStrip: View {
             let width = max(1, (proxy.size.width - gap * CGFloat(days.count - 1)) / CGFloat(days.count))
             HStack(spacing: gap) {
                 ForEach(days.indices, id: \.self) { index in
+                    // A clean day in the same green the quota bars start
+                    // from, at full strength; the paler tint read as washed out.
                     RoundedRectangle(cornerRadius: 1, style: .continuous)
-                        .fill(Color(hex: days[index].level.colorHex).opacity(days[index].level == .operational ? 0.55 : 1))
+                        .fill(days[index].level == .operational
+                            ? Color(hex: UsageRamp.hex(used: 0))
+                            : Color(hex: days[index].level.colorHex))
                         .frame(width: width)
                         .help(help(days[index]))
                 }
