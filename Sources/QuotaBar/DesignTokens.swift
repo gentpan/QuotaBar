@@ -23,6 +23,13 @@ enum Design {
     // Settings window metrics. A form only reads as a form when every control
     // in it is the same height and starts at the same x.
     static let fieldHeight: CGFloat = 30
+    /// The gap between a control's edge and what sits inside it — the
+    /// selection block in a segmented control. Inner corners are the outer
+    /// radius less this, so the two curves stay concentric.
+    static let controlInset: CGFloat = 3
+    /// Drops a one-line 13pt label (16pt tall) to the centre of a field-height
+    /// control beside it.
+    static let rowLabelInset: CGFloat = 7
     static let labelColumn: CGFloat = 132
     static let sidebarWidth: CGFloat = 180
     /// Clears the traffic lights once the titlebar is transparent.
@@ -84,6 +91,11 @@ enum Design {
     /// on their own — a fixed white hairline is invisible in light mode.
     static let glassEdge = Color.primary.opacity(0.12)
     static let fieldFill = Color.primary.opacity(0.04)
+
+    /// A switch that is on. The one place a hue other than graphite is the
+    /// point: on/off has to read at a glance down a column of switches, and
+    /// graphite-on-grey did not. The same green the usage ramp starts from.
+    static let switchOn = Color(hex: "34C759")
 
     /// Resolves per appearance: graphite-on-white in light mode, and the
     /// inverse in dark mode so the selection block never sinks into the window.

@@ -152,7 +152,6 @@ struct GlassActionStyle: ButtonStyle {
     @Environment(\.glassDisabled) private var glassDisabled
 
     func makeBody(configuration: Configuration) -> some View {
-        let shape = RoundedRectangle(cornerRadius: Design.radiusField, style: .continuous)
         let destructive = configuration.role == .destructive
         return configuration.label
             .font(.system(size: 12, weight: prominent ? .semibold : .medium))
@@ -160,11 +159,25 @@ struct GlassActionStyle: ButtonStyle {
             .padding(.horizontal, compact ? Design.space3 : Design.space3 + Design.space1)
             .frame(minWidth: compact ? 0 : 76, minHeight: Design.fieldHeight)
             .foregroundStyle(prominent ? Design.ink : (destructive ? Color(hex: "E5484D") : Color.primary))
-            .background(shape.fill(prominent ? Design.accent : Design.fieldFill))
-            .overlay(shape.strokeBorder(prominent ? Color.clear : Design.glassEdge, lineWidth: 1))
+            .controlChrome(fill: prominent ? Design.accent : Design.fieldFill, edge: !prominent)
             .opacity(isEnabled ? (configuration.isPressed ? 0.7 : 1) : 0.45)
-            .contentShape(shape)
+            .contentShape(RoundedRectangle(cornerRadius: Design.radiusField, style: .continuous))
             .animation(.easeOut(duration: 0.12), value: configuration.isPressed)
+    }
+}
+
+/// The well every field-height control in the settings window sits in:
+/// buttons, text fields, pop-ups and the segmented control's track.
+///
+/// One definition because they drifted apart as four. The segmented track was
+/// a borderless grey at a 9pt corner, the buttons and fields a hairline-edged
+/// well at 7pt, and the pop-ups were AppKit's own 22pt bezel — side by side in
+/// one row they read as three toolkits. Same corner, same fill, same edge.
+extension View {
+    func controlChrome(fill: Color = Design.fieldFill, edge: Bool = true) -> some View {
+        let shape = RoundedRectangle(cornerRadius: Design.radiusField, style: .continuous)
+        return background(shape.fill(fill))
+            .overlay(shape.strokeBorder(edge ? Design.glassEdge : Color.clear, lineWidth: 1))
     }
 }
 
@@ -310,11 +323,28 @@ struct SettingRow<Control: View>: View {
                 }
             }
             .frame(width: Design.labelColumn, alignment: .leading)
-            .padding(.top, 4)
+            .padding(.top, Design.rowLabelInset)
 
             control
                 .frame(maxWidth: .infinity, alignment: .leading)
         }
+    }
+}
+
+/// A switch in the window's own on colour.
+///
+/// Explicit style because an unstyled `Toggle` is a checkbox on macOS, and
+/// an explicit tint because the window tints everything graphite — which
+/// left an "on" switch a dark grey barely apart from an "off" one.
+struct GlassSwitch: View {
+    let isOn: Binding<Bool>
+
+    var body: some View {
+        Toggle("", isOn: isOn)
+            .labelsHidden()
+            .toggleStyle(.switch)
+            .controlSize(.small)
+            .tint(Design.switchOn)
     }
 }
 
@@ -333,7 +363,10 @@ struct SettingToggle: View {
     }
 
     var body: some View {
-        HStack(alignment: .top, spacing: Design.space3) {
+        // A one-line switch row is as tall as a field row, so a card that
+        // mixes the two keeps one rhythm; a captioned one keeps the switch
+        // level with its title.
+        HStack(alignment: caption == nil ? .center : .top, spacing: Design.space3) {
             VStack(alignment: .leading, spacing: 2) {
                 Text(title)
                     .font(.system(size: 13))
@@ -346,12 +379,9 @@ struct SettingToggle: View {
                 }
             }
             Spacer(minLength: Design.space3)
-            Toggle("", isOn: isOn)
-                .labelsHidden()
-                .toggleStyle(.switch)
-                .controlSize(.small)
+            GlassSwitch(isOn: isOn)
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .frame(maxWidth: .infinity, minHeight: Design.fieldHeight, alignment: .leading)
     }
 }
 
@@ -425,10 +455,12 @@ struct GlassSegmented<Value: Hashable>: View {
                         .font(.system(size: 12, weight: isSelected ? .semibold : .regular))
                         .lineLimit(1)
                         .frame(maxWidth: .infinity)
-                        .frame(height: Design.fieldHeight - 6)
+                        .frame(height: Design.fieldHeight - Design.controlInset * 2)
                         .background {
                             if isSelected {
-                                RoundedRectangle(cornerRadius: Design.radiusTile - 2, style: .continuous)
+                                RoundedRectangle(
+                                    cornerRadius: Design.radiusField - Design.controlInset,
+                                    style: .continuous)
                                     .fill(Design.accent)
                                     .matchedGeometryEffect(id: "selection", in: namespace)
                             }
@@ -439,11 +471,169 @@ struct GlassSegmented<Value: Hashable>: View {
                 .buttonStyle(.plain)
             }
         }
-        .padding(3)
-        .background(
-            RoundedRectangle(cornerRadius: Design.radiusTile + 1, style: .continuous)
-                .fill(Design.surfaceStrong))
+        .padding(Design.controlInset)
+        .controlChrome()
         .animation(.snappy(duration: 0.22), value: selection)
+    }
+}
+
+/// A single choice from a list, as a field-height control that opens a menu.
+///
+/// Replaces `Picker` in this window for the same reason `GlassSegmented`
+/// replaced `.pickerStyle(.segmented)`: AppKit's pop-up button is 22pt with
+/// its own bezel, and in a row with a segmented control and a button it sat
+/// 8pt short of both. The label is SwiftUI, so it wears `controlChrome` like
+/// its neighbours; the list is a real `NSMenu`, so choosing still feels like
+/// macOS — the current item opens over the control, ticked.
+struct GlassPopUp<Value: Hashable>: View {
+    let options: [(value: Value, label: String)]
+    let selection: Value
+    let onSelect: (Value) -> Void
+
+    @State private var anchor = ControlAnchor.Handle()
+
+    private var current: String {
+        options.first { $0.value == selection }?.label ?? ""
+    }
+
+    var body: some View {
+        Button {
+            anchor.popUp(
+                options.map { option in
+                    (option.label, option.value == selection, { onSelect(option.value) })
+                },
+                overControl: true)
+        } label: {
+            HStack(spacing: Design.space2) {
+                Text(current)
+                    .font(.system(size: 12))
+                    .truncationMode(.tail)
+                Spacer(minLength: 0)
+                Image(systemName: "chevron.up.chevron.down")
+                    .font(.system(size: 9, weight: .semibold))
+                    .foregroundStyle(.secondary)
+            }
+            .frame(maxWidth: .infinity)
+        }
+        .glassAction(compact: true)
+        .background(ControlAnchor(handle: anchor))
+    }
+}
+
+/// A button that opens a menu of actions — "Add a card ▾". The same chrome as
+/// `glassAction`, so it lines up with the buttons beside it.
+struct GlassMenuButton: View {
+    let title: String
+    var systemImage: String?
+    let items: [(title: String, action: () -> Void)]
+
+    @State private var anchor = ControlAnchor.Handle()
+
+    var body: some View {
+        Button {
+            anchor.popUp(items.map { ($0.title, false, $0.action) }, overControl: false)
+        } label: {
+            HStack(spacing: Design.space1 + 2) {
+                if let systemImage {
+                    Image(systemName: systemImage)
+                }
+                Text(title)
+                Image(systemName: "chevron.down")
+                    .font(.system(size: 9, weight: .semibold))
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .glassAction()
+        .background(ControlAnchor(handle: anchor))
+    }
+}
+
+/// An invisible `NSView` behind a SwiftUI control, so AppKit has something to
+/// open a menu — or a sharing picker — against.
+///
+/// Left out when rendering off-screen: `ImageRenderer` draws any AppKit view
+/// as a yellow placeholder, and this one has nothing to show anyway.
+struct ControlAnchor: View {
+    @MainActor
+    final class Handle {
+        fileprivate weak var view: NSView?
+
+        /// `overControl` opens a pop-up the way `NSPopUpButton` does, with
+        /// the ticked item laid over the control; otherwise the menu drops
+        /// below it, the way a pull-down does.
+        func popUp(_ items: [(title: String, isOn: Bool, action: () -> Void)], overControl: Bool) {
+            guard let view else { return }
+            let menu = NSMenu()
+            menu.autoenablesItems = false
+            // Over the control, the menu starts further left so its titles —
+            // which sit past the tick column — line up with the control's.
+            let shift = overControl ? Self.menuTitleInset - Design.space3 : 0
+            menu.minimumWidth = view.bounds.width + shift
+            var targets: [ClosureTarget] = []
+            var ticked: NSMenuItem?
+            for entry in items {
+                let target = ClosureTarget(entry.action)
+                targets.append(target)
+                let item = NSMenuItem(title: entry.title, action: #selector(ClosureTarget.fire), keyEquivalent: "")
+                item.target = target
+                item.state = entry.isOn ? .on : .off
+                if entry.isOn { ticked = item }
+                menu.addItem(item)
+            }
+            if overControl, let ticked {
+                // The point names the item's top-left corner, not its centre:
+                // at `midY` the ticked row hung half a control below it.
+                menu.popUp(
+                    positioning: ticked,
+                    at: NSPoint(x: -shift, y: (view.bounds.height - Self.menuRowHeight) / 2),
+                    in: view)
+            } else {
+                menu.popUp(positioning: nil, at: NSPoint(x: 0, y: view.bounds.maxY + Design.space1), in: view)
+            }
+            // `popUp` tracks the menu before it returns; the targets only
+            // have to outlive that.
+            withExtendedLifetime(targets) {}
+        }
+
+        /// The anchor itself, for AppKit presenters that are not menus.
+        var nsView: NSView? { view }
+
+        /// A menu row's height, and how far its title sits from the menu's
+        /// left edge. AppKit publishes neither; both were measured from a
+        /// live `NSMenu` on macOS 26 by reading the menu window's frame and
+        /// a capture of it mid-tracking. Older systems draw slightly tighter
+        /// rows, which costs a point or two of alignment, nothing more.
+        private static let menuRowHeight: CGFloat = 24
+        private static let menuTitleInset: CGFloat = 28
+    }
+
+    let handle: Handle
+    @Environment(\.glassDisabled) private var rendering
+
+    var body: some View {
+        if !rendering {
+            Representable(handle: handle)
+        }
+    }
+
+    private struct Representable: NSViewRepresentable {
+        let handle: Handle
+
+        final class Flipped: NSView {
+            // Top-left origin, so a y measured down from the control's top
+            // edge means the same thing here as it does in SwiftUI.
+            override var isFlipped: Bool { true }
+        }
+
+        func makeNSView(context: Context) -> NSView {
+            let view = Flipped(frame: .zero)
+            handle.view = view
+            return view
+        }
+
+        func updateNSView(_ view: NSView, context: Context) {
+            handle.view = view
+        }
     }
 }
 
@@ -493,12 +683,7 @@ struct GlassTextField: View {
         }
         .padding(.horizontal, Design.space3)
         .frame(height: Design.fieldHeight)
-        .background {
-            let shape = RoundedRectangle(cornerRadius: Design.radiusField, style: .continuous)
-            shape
-                .fill(Design.fieldFill)
-                .overlay { shape.strokeBorder(Design.glassEdge, lineWidth: 1) }
-        }
+        .controlChrome()
     }
 }
 

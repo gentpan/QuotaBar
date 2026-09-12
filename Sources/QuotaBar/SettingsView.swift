@@ -705,17 +705,12 @@ struct ProviderSettingsRow: View {
             statusPill
                 .frame(width: 68, alignment: .leading)
 
-            Toggle("", isOn: Binding(
+            GlassSwitch(isOn: Binding(
                 get: { store.isEnabled(id) },
                 set: { on in
                     store.setEnabled(id, on)
                     if on, !store.isConfigured(id) { onEnabledUnconfigured() }
                 }))
-                .labelsHidden()
-                // Explicit: an unstyled Toggle is a checkbox on macOS, and the
-                // rest of this window is switches.
-                .toggleStyle(.switch)
-                .controlSize(.small)
                 .help(L10n.t("Show in the menu", "在菜单中显示"))
         }
     }
@@ -816,7 +811,9 @@ private struct CredentialEditor: View {
                 .font(.system(size: 11))
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
-                .padding(.top, 5)
+                // 11pt under a 13pt label: two more points down puts the
+                // first line on the label's baseline.
+                .padding(.top, Design.rowLabelInset + 2)
             }
 
             // The page's reading, in full, here rather than behind a link:
@@ -1247,15 +1244,12 @@ struct PresentationPane: View {
             }
             SettingRow(L10n.t("Add", "添加")) {
                 HStack(spacing: Design.space2) {
-                    Menu {
-                        ForEach(DeskCardStyle.allCases) { style in
-                            Button(style.displayName) { store.addDeskCard(style: style, near: store.experience.deskCards.last) }
-                        }
-                    } label: {
-                        Label(L10n.t("Add a card", "添加卡片"), systemImage: "plus")
-                    }
-                    .menuStyle(.button)
-                    .fixedSize()
+                    GlassMenuButton(
+                        title: L10n.t("Add a card", "添加卡片"),
+                        systemImage: "plus",
+                        items: DeskCardStyle.allCases.map { style in
+                            (style.displayName, { store.addDeskCard(style: style, near: store.experience.deskCards.last) })
+                        })
                     Button(L10n.t("Restore the default pair", "恢复默认两张")) {
                         store.updateExperience { $0.deskCards = DeskCard.defaults(provider: nil) }
                         if !store.widgetEnabled { store.setWidgetEnabled(true) }
@@ -1294,13 +1288,10 @@ private struct DeskCardSettingsRow: View {
     var body: some View {
         SettingRow(L10n.t("Card \(number)", "卡片 \(number)")) {
             HStack(spacing: Design.space2) {
-                Picker("", selection: Binding(
-                    get: { card.style },
-                    set: { style in store.updateDeskCard(card.id) { $0.style = style } }))
-                {
-                    ForEach(DeskCardStyle.allCases) { Text($0.displayName).tag($0) }
-                }
-                .labelsHidden()
+                GlassPopUp(
+                    options: DeskCardStyle.allCases.map { (value: $0, label: $0.displayName) },
+                    selection: card.style,
+                    onSelect: { style in store.updateDeskCard(card.id) { $0.style = style } })
                 .frame(width: 118)
 
                 GlassSegmented(
@@ -1310,24 +1301,25 @@ private struct DeskCardSettingsRow: View {
                 .frame(width: 120)
 
                 if card.style.readsLogs {
-                    Picker("", selection: Binding(
-                        get: { card.source?.rawValue ?? "" },
-                        set: { raw in store.updateDeskCard(card.id) { $0.source = CostSource(rawValue: raw) } }))
-                    {
-                        Text(L10n.t("Every CLI", "全部来源")).tag("")
-                        ForEach(CostSource.allCases, id: \.self) { Text($0.displayName).tag($0.rawValue) }
-                    }
-                    .labelsHidden()
+                    GlassPopUp(
+                        options: [(value: CostSource?.none, label: L10n.t("Every CLI", "全部来源"))]
+                            + CostSource.allCases.map { (value: Optional($0), label: $0.displayName) },
+                        selection: card.source,
+                        onSelect: { source in store.updateDeskCard(card.id) { $0.source = source } })
                     .frame(width: 128)
                 } else {
-                    Picker("", selection: Binding(
-                        get: { card.provider?.rawValue ?? "" },
-                        set: { raw in store.updateDeskCard(card.id) { $0.provider = ProviderID(rawValue: raw) } }))
-                    {
-                        Text(card.style.singleProvider ? L10n.t("Follow menu bar", "跟随菜单栏") : L10n.t("Every provider", "全部服务商")).tag("")
-                        ForEach(store.enabled) { Text($0.displayName).tag($0.rawValue) }
-                    }
-                    .labelsHidden()
+                    GlassPopUp(
+                        options: [(
+                            value: ProviderID?.none,
+                            label: card.style.singleProvider
+                                ? L10n.t("Follow menu bar", "跟随菜单栏")
+                                : L10n.t("Every provider", "全部服务商"))]
+                            // A card pinned to a provider since switched off
+                            // still names it, rather than showing a blank.
+                            + (store.enabled + [card.provider].compactMap { $0 }.filter { !store.enabled.contains($0) })
+                                .map { (value: Optional($0), label: $0.displayName) },
+                        selection: card.provider,
+                        onSelect: { provider in store.updateDeskCard(card.id) { $0.provider = provider } })
                     .frame(width: 128)
                 }
 
@@ -1455,15 +1447,12 @@ struct GeneralPane: View {
 
         SettingsCard(L10n.t("Figures", "数据口径")) {
             SettingRow(L10n.t("Currency", "货币"), caption: L10n.t("Daily reference rates; prices stay in dollars.", "按每日参考汇率换算，价格本身仍以美元计。")) {
-                Picker("", selection: Binding(
-                    get: { store.experience.currency },
-                    set: { value in store.updateExperience { $0.currency = value } }))
-                {
-                    ForEach(CurrencyRates.supported, id: \.self) { code in
-                        Text("\(CurrencyRates.displayName(for: code)) · \(code)").tag(code)
-                    }
-                }
-                .labelsHidden()
+                GlassPopUp(
+                    options: CurrencyRates.supported.map { code in
+                        (value: code, label: "\(CurrencyRates.displayName(for: code)) · \(code)")
+                    },
+                    selection: store.experience.currency,
+                    onSelect: { value in store.updateExperience { $0.currency = value } })
                 .frame(width: 200)
             }
             SettingRow(L10n.t("Tokens", "token 统计"), caption: L10n.t("All tokens includes cache reads and writes.", "全部 token 包含缓存读写。")) {
@@ -1557,7 +1546,7 @@ struct UpdatesPane: View {
                             .foregroundStyle(.secondary)
                     }
                 }
-                .padding(.top, 4)
+                .padding(.top, Design.rowLabelInset)
             }
 
             SettingRow(L10n.t("Updates", "更新方式")) {

@@ -331,12 +331,13 @@ struct ShareStudioView: View {
             picker(L10n.t("Format", "比例"), ShareFormat.allCases, selection: $format, label: \.displayName)
 
             VStack(alignment: .leading, spacing: 6) {
-                Toggle(L10n.t("Sign it", "署名"), isOn: $showsSignature)
-                    .toggleStyle(.switch)
-                    .controlSize(.small)
-                TextField(L10n.t("Your name or @handle", "你的名字或 @账号"), text: $signature)
-                    .textFieldStyle(.roundedBorder)
+                switchRow(L10n.t("Sign it", "署名"), isOn: $showsSignature)
+                GlassTextField(
+                    placeholder: L10n.t("Your name or @handle", "你的名字或 @账号"),
+                    text: $signature,
+                    monospaced: false)
                     .disabled(!showsSignature)
+                    .opacity(showsSignature ? 1 : 0.45)
             }
 
             let tier = ShareTier.earned(metric == .apiValue ? summary.usd : Double(summary.tokens), metric: metric)
@@ -347,9 +348,7 @@ struct ShareStudioView: View {
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
 
-            Toggle(L10n.t("Actual size", "实际大小"), isOn: $actualSize)
-                .toggleStyle(.switch)
-                .controlSize(.small)
+            switchRow(L10n.t("Actual size", "实际大小"), isOn: $actualSize)
 
             Spacer()
 
@@ -357,12 +356,16 @@ struct ShareStudioView: View {
                 TransientPill(symbol: "checkmark.circle.fill", text: notice)
             }
             ShareButton(items: { shareItems() })
-                .frame(height: 30)
-            HStack {
-                Button(L10n.t("Save PNG…", "保存 PNG…")) { save() }
-                Button(L10n.t("Copy", "复制")) { copy() }
+            HStack(spacing: Design.space2) {
+                Button { save() } label: {
+                    Text(L10n.t("Save PNG…", "保存 PNG…")).frame(maxWidth: .infinity)
+                }
+                .glassAction()
+                Button { copy() } label: {
+                    Text(L10n.t("Copy", "复制")).frame(maxWidth: .infinity)
+                }
+                .glassAction()
             }
-            .controlSize(.regular)
             Text(L10n.t("Counted by local calendar day, cache included unless Settings says otherwise. Dollars are estimates at API prices, not a bill. Made on this Mac.", "按本地日历日统计，是否包含缓存以设置为准。金额为按 API 价格的估算，并非订阅账单。全部在本机生成。"))
                 .font(.system(size: 10))
                 .foregroundStyle(.tertiary)
@@ -374,11 +377,22 @@ struct ShareStudioView: View {
     private func picker<T: Hashable & Identifiable>(_ title: String, _ options: [T], selection: Binding<T>, label: KeyPath<T, String>) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             Text(title).font(.system(size: 11, weight: .medium)).foregroundStyle(.secondary)
-            Picker(title, selection: selection) {
-                ForEach(options) { option in Text(option[keyPath: label]).tag(option) }
-            }
-            .labelsHidden()
+            GlassPopUp(
+                options: options.map { (value: $0, label: $0[keyPath: label]) },
+                selection: selection.wrappedValue,
+                onSelect: { selection.wrappedValue = $0 })
         }
+    }
+
+    /// Title left, switch right — the settings window's switch row, so the
+    /// two windows agree on where a switch sits and what colour "on" is.
+    private func switchRow(_ title: String, isOn: Binding<Bool>) -> some View {
+        HStack(spacing: Design.space3) {
+            Text(title).font(.system(size: 13))
+            Spacer(minLength: Design.space3)
+            GlassSwitch(isOn: isOn)
+        }
+        .frame(minHeight: Design.fieldHeight)
     }
 
     // MARK: Output
@@ -440,32 +454,25 @@ struct ShareStudioView: View {
 }
 
 /// The macOS share menu, anchored to a real button.
-private struct ShareButton: NSViewRepresentable {
+/// The window's primary action, in the same chrome as every other button.
+/// The sharing picker still needs an `NSView` to hang from; the anchor is it.
+private struct ShareButton: View {
     let items: () -> [Any]
 
-    func makeNSView(context: Context) -> NSButton {
-        let button = NSButton(title: L10n.t("Share…", "分享…"), target: context.coordinator, action: #selector(Coordinator.share(_:)))
-        button.bezelStyle = .rounded
-        button.keyEquivalent = "\r"
-        button.image = NSImage(systemSymbolName: "square.and.arrow.up", accessibilityDescription: nil)
-        button.imagePosition = .imageLeading
-        return button
-    }
+    @State private var anchor = ControlAnchor.Handle()
 
-    func updateNSView(_ nsView: NSButton, context: Context) {
-        context.coordinator.items = items
-    }
-
-    func makeCoordinator() -> Coordinator { Coordinator(items: items) }
-
-    final class Coordinator: NSObject {
-        var items: () -> [Any]
-        init(items: @escaping () -> [Any]) { self.items = items }
-
-        @objc func share(_ sender: NSButton) {
-            let picker = NSSharingServicePicker(items: items())
-            picker.show(relativeTo: sender.bounds, of: sender, preferredEdge: .minY)
+    var body: some View {
+        Button {
+            guard let view = anchor.nsView else { return }
+            NSSharingServicePicker(items: items())
+                .show(relativeTo: view.bounds, of: view, preferredEdge: .minY)
+        } label: {
+            Label(L10n.t("Share…", "分享…"), systemImage: "square.and.arrow.up")
+                .frame(maxWidth: .infinity)
         }
+        .glassAction(prominent: true)
+        .keyboardShortcut(.defaultAction)
+        .background(ControlAnchor(handle: anchor))
     }
 }
 
@@ -484,6 +491,10 @@ enum ShareStudio {
                 defer: false)
             window.title = L10n.t("Share Usage Card", "分享用量卡片")
             window.isReleasedWhenClosed = false
+            // The content is pinned dark; the window follows, or the pop-up
+            // menus open light and `Design.accent` resolves to its light-mode
+            // graphite — a selection block that sinks into the dark sidebar.
+            window.appearance = NSAppearance(named: .darkAqua)
             window.contentView = NSHostingView(rootView: ShareStudioView(store: store))
             window.center()
             return window
