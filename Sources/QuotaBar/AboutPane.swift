@@ -101,8 +101,8 @@ struct AboutPane: View {
 
         SettingsCard(L10n.t("Acknowledgements", "开源致谢")) {
             SettingFootnote(L10n.t(
-                "QuotaBar learned from these open-source projects and is set in this typeface. Thank you.",
-                "QuotaBar 参考了以下开源项目，并使用了这款字体，在此致谢。"))
+                "QuotaBar builds on these open-source projects and this typeface. Thank you.",
+                "QuotaBar 参考或使用了以下开源项目和字体，在此致谢。"))
             VStack(spacing: Design.space1) {
                 ForEach(Self.credits, id: \.name) { credit in
                     CreditRow(credit: credit)
@@ -151,8 +151,8 @@ struct AboutPane: View {
         let url: String
     }
 
-    /// The projects QuotaBar borrowed from, with the licences that ask for the
-    /// notice, and the wordmark's typeface.
+    /// The projects QuotaBar borrowed from or ships, with the licences that
+    /// ask for the notice, and the wordmark's typeface.
     private static var credits: [Credit] {
         [
             Credit(name: "codex-island", author: "Eric Park", license: "MIT",
@@ -164,6 +164,9 @@ struct AboutPane: View {
             Credit(name: "CodexBar", author: "Peter Steinberger", license: "MIT",
                    use: L10n.t("How providers report their usage", "各服务商用量的读取方式"),
                    url: "https://github.com/steipete/CodexBar"),
+            Credit(name: "theSVG", author: "thesvg.org", license: "MIT",
+                   use: L10n.t("The vector masters of the provider logos", "服务商标志的矢量原图"),
+                   url: "https://github.com/GLINCKER/thesvg"),
             Credit(name: "Sora", author: "The Sora Project Authors", license: "SIL OFL 1.1",
                    use: L10n.t("The typeface of the QuotaBar wordmark", "QuotaBar 字标所用的字体"),
                    url: "https://github.com/sora-xor/sora-font"),
