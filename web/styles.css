@@ -49,7 +49,7 @@
 
 @font-face {
   font-family: "Sora";
-  src: url("assets/fonts/Sora-VariableFont_wght.ttf?v=f7e7ad71") format("truetype-variations");
+  src: url("assets/fonts/Sora-VariableFont_wght.ttf?v=8112b8e3") format("truetype-variations");
   font-weight: 100 800;
   font-display: swap;
 }
@@ -211,6 +211,19 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
 @keyframes island-drop {
   from { opacity: 0; transform: translateX(-50%) translateY(-18px) scale(var(--panel-scale)); }
   to { opacity: 1; transform: translateX(-50%) scale(var(--panel-scale)); }
+}
+
+/* 桌面卡片：像真桌面上那样待在左下角，压在壁纸上、文案之下 */
+.desktop__widget {
+  position: absolute;
+  left: 40px;
+  bottom: 150px;
+  z-index: 12;
+}
+.reveal .desktop__widget { animation: widget-in 640ms cubic-bezier(.2,.8,.25,1) 420ms both; }
+@keyframes widget-in {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: none; }
 }
 
 .desktop__panel {
@@ -521,7 +534,7 @@ section { position: relative; }
      多加一级 .desktop：这两个元素同时挂着 .qb-dock / .qb-panel，那两条
      规则特异度相同却在 replica.css 里后加载 —— 单写 .desktop__strip 会被
      .qb-dock 的 display: flex 压掉，窄屏根本没收起来过。 */
-  .desktop .desktop__strip { display: none; }
+  .desktop .desktop__strip, .desktop .desktop__widget { display: none; }
   /* 窄屏放不下 380px 的面板和 74px 的条子，整体缩一档，并让文案落到面板下面 */
   .desktop .desktop__panel { top: 34px; right: 8px; --panel-scale: .52; }
   .desktop .desktop__island { --panel-scale: .62; }
