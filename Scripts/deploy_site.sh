@@ -24,13 +24,14 @@ python3 Scripts/sync_changelog.py ${CHANGELOG_FILE:+--changelog "$CHANGELOG_FILE
 # 图片也算进去：只换了截图或分享图时，指纹不变的话 CDN 会继续给旧图。
 STAMP="$( { cat web/styles.css web/replica.css web/app.js web/replica.js \
            | /usr/bin/sed -E 's/\?v=[A-Za-z0-9]+//g'
-           find web/assets -type f \( -name '*.png' -o -name '*.jpg' \) | sort | xargs cat; } \
+           find web/assets -type f \( -name '*.png' -o -name '*.jpg' -o -name '*.webp' \) | sort | xargs cat; } \
          | shasum -a 256 | cut -c1-8)"
 echo "内容指纹 v=$STAMP"
 
 # Rewrite every ?v=… in the HTML, and the font URL the stylesheet carries.
 /usr/bin/sed -i '' -E "s/\?v=[A-Za-z0-9]+/?v=$STAMP/g" web/index.html web/changelog.html
 /usr/bin/sed -i '' -E "s/(InstrumentSans-Variable\.ttf)\?v=[A-Za-z0-9]+/\1?v=$STAMP/" web/styles.css
+/usr/bin/sed -i '' -E "s/(wallpaper-[a-z0-9-]+\.webp)\?v=[A-Za-z0-9]+/\1?v=$STAMP/g" web/styles.css
 # replica.js 里的 LOGOV 也要跟上，否则 JS 渲染出的那些 logo 拿的是旧指纹。
 /usr/bin/sed -i '' -E "s/(var LOGOV = \")\?v=[A-Za-z0-9]+/\1?v=$STAMP/" web/replica.js
 

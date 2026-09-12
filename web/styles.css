@@ -133,27 +133,21 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
   isolation: isolate;
 }
 
-/* 壁纸：原创的抽象光带，不是任何现成图片 */
+/* 壁纸：macOS Mojave 的沙丘。深色模式用夜晚那张，浅色模式用白天那张；
+   窄屏换 1280 宽的小图。图片没加载出来之前先是和夜景同色的底。 */
 .desktop__wall {
   position: absolute;
   inset: 0;
-  background:
-    radial-gradient(130% 95% at 14% 4%, rgba(110, 224, 43, 0.34) 0%, rgba(110, 224, 43, 0) 52%),
-    radial-gradient(95% 85% at 86% 16%, rgba(65, 65, 255, 0.5) 0%, rgba(65, 65, 255, 0) 58%),
-    radial-gradient(120% 110% at 52% 108%, rgba(0, 190, 255, 0.28) 0%, rgba(0, 190, 255, 0) 55%),
-    linear-gradient(165deg, #0e1a28 0%, #0a0e16 52%, #07090d 100%);
+  background: #1b2438 url("assets/wallpaper-dark.webp?v=e92ca10a") center 62% / cover no-repeat;
 }
-.desktop__wall::after {
-  content: "";
-  position: absolute;
-  inset: -25%;
-  background: conic-gradient(from 205deg at 38% 42%,
-    rgba(110, 224, 43, 0.20) 0deg,
-    rgba(65, 65, 255, 0.26) 105deg,
-    rgba(0, 0, 0, 0) 185deg,
-    rgba(110, 224, 43, 0.12) 295deg,
-    rgba(110, 224, 43, 0.20) 360deg);
-  filter: blur(70px);
+@media (max-width: 900px) {
+  .desktop__wall { background-image: url("assets/wallpaper-dark-1280.webp?v=e92ca10a"); }
+}
+@media (prefers-color-scheme: light) {
+  .desktop__wall { background-color: #7aa3d6; background-image: url("assets/wallpaper-light.webp?v=e92ca10a"); }
+}
+@media (prefers-color-scheme: light) and (max-width: 900px) {
+  .desktop__wall { background-image: url("assets/wallpaper-light-1280.webp?v=e92ca10a"); }
 }
 /* 底部压暗，让 Dock 立得住，也和下面的内容区接得上 */
 .desktop__wall::before {
@@ -353,6 +347,11 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
   margin-bottom: var(--s-6);
 }
 .eyebrow b { color: var(--brand); font-weight: 600; }
+/* 白天的沙丘很亮：标签换深一点的底，文字才立得住 */
+@media (prefers-color-scheme: light) {
+  .eyebrow { background: rgba(20, 22, 28, 0.38); border-color: rgba(255, 255, 255, 0.22); color: rgba(255, 255, 255, 0.92); }
+  .hero__sub { text-shadow: 0 1px 12px rgba(40, 24, 8, 0.45); }
+}
 
 h1 {
   margin: 0;
