@@ -88,6 +88,14 @@ line in `CHANGELOG.md`, in Chinese, under 未发布 and the day's date, in the
 same commit or the one right after. A release moves those lines under its
 version heading. Server moves, the site and build tooling are not recorded.
 
+The log is also shown where people look: the "recent updates" blocks in
+`README.md` and `README.zh-CN.md`, the home page's 更新日志 section and
+`web/changelog.html` are generated from it, with the commit calendar in
+`Assets/readme/`. After editing the changelog run
+`python3 Scripts/sync_changelog.py` and commit what it rewrites;
+`deploy_site.sh` runs it before every publish. Never edit between the
+`<!-- changelog:start -->` markers by hand.
+
 ### Credentials
 
 Manually entered tokens/cookies/API keys go to the **login keychain only**, via

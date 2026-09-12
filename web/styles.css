@@ -507,6 +507,88 @@ section { position: relative; }
   color: var(--ink);
 }
 
+/* ── 更新日志 ───────────────────────────────────────────────────────────
+ * 首页的「最近三天」和 changelog.html 整页，内容都由
+ * Scripts/sync_changelog.py 从 CHANGELOG.md 生成。 */
+.log { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--s-6); }
+.log__day {
+  border: 1px solid var(--line);
+  border-radius: var(--r-xl);
+  background: #0d0f10;
+  padding: var(--s-6);
+  display: flex;
+  flex-direction: column;
+}
+.log__head { display: flex; align-items: center; gap: var(--s-2); }
+.log__head time { font-size: 17px; font-weight: 550; letter-spacing: -0.01em; font-variant-numeric: tabular-nums; }
+.log__tag {
+  font-size: 12px;
+  line-height: 1;
+  padding: 4px 8px;
+  border-radius: var(--r-full);
+  color: var(--brand);
+  background: rgba(110, 224, 43, 0.12);
+  border: 1px solid rgba(110, 224, 43, 0.22);
+}
+.log__counts { margin: var(--s-2) 0 var(--s-4); font-size: 13px; color: var(--muted); }
+.log__list { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--s-3); }
+.log__list li { font-size: 14px; line-height: 1.55; color: var(--body); }
+.log__kind {
+  display: inline-block;
+  margin-right: var(--s-2);
+  font-size: 12px;
+  color: var(--ink);
+  padding: 0 6px;
+  border-radius: var(--r-xs);
+  background: rgba(255, 255, 255, 0.07);
+}
+.log__more { margin-top: auto; padding-top: var(--s-4); font-size: 13px; color: var(--muted); }
+.log__more:hover, .log__all a:hover { color: #fff; }
+.log__all { margin: var(--s-10) 0 0; text-align: center; font-size: 14px; color: var(--body); }
+.log code, .logdoc code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.92em;
+  padding: 1px 5px;
+  border-radius: var(--r-xs);
+  background: rgba(255, 255, 255, 0.07);
+  color: var(--ink);
+}
+
+.logbar { position: sticky; top: 0; z-index: 10; border-bottom: 1px solid var(--line); background: rgba(16, 17, 18, 0.86); backdrop-filter: blur(16px); }
+.logbar__inner { display: flex; align-items: center; gap: var(--s-6); height: 56px; }
+.logbar__brand { display: inline-flex; align-items: center; gap: var(--s-2); font-size: 16px; }
+.logbar__brand img { border-radius: var(--r-xs); }
+.logbar__links { margin-left: auto; display: flex; gap: var(--s-6); font-size: 14px; color: var(--body); }
+.logbar__links a:hover { color: #fff; }
+
+.logdoc { max-width: 820px; padding-block: var(--s-16) var(--s-30); }
+.logdoc h1 { margin: 0; font-size: clamp(32px, 5vw, 48px); font-weight: 600; letter-spacing: -0.025em; line-height: 1.1; }
+.logdoc__intro { margin: var(--s-4) 0 0; color: var(--body); }
+.logdoc__versions { display: flex; flex-wrap: wrap; gap: var(--s-2); margin: var(--s-9) 0 var(--s-4); }
+.logdoc__versions a {
+  font-size: 13px;
+  padding: 4px 10px;
+  border-radius: var(--r-full);
+  border: 1px solid var(--line-strong);
+  color: var(--body);
+}
+.logdoc__versions a:hover { color: #fff; border-color: rgba(255, 255, 255, 0.3); }
+.logdoc__release { padding-top: var(--s-12); scroll-margin-top: 56px; }
+.logdoc__release h2 {
+  display: flex; align-items: baseline; gap: var(--s-3);
+  margin: 0 0 var(--s-4); padding-bottom: var(--s-3);
+  border-bottom: 1px solid var(--line);
+  font-size: 26px; font-weight: 600; letter-spacing: -0.02em;
+}
+.logdoc__release h2 time { font-size: 14px; font-weight: 400; color: var(--muted); }
+.logdoc__release h2 .log__tag { align-self: center; }
+.logdoc__day { scroll-margin-top: 72px; }
+.logdoc__day h3 { margin: var(--s-6) 0 0; font-size: 17px; font-weight: 550; font-variant-numeric: tabular-nums; }
+.logdoc__day h4 { margin: var(--s-4) 0 var(--s-2); font-size: 13px; font-weight: 500; color: var(--muted); }
+.logdoc__day ul { margin: 0; padding-left: 1.2em; display: grid; gap: var(--s-2); }
+.logdoc__day li { font-size: 15px; line-height: 1.65; color: var(--body); }
+.logdoc__day li::marker { color: var(--muted); }
+
 /* ── Footer ─────────────────────────────────────────────────────────── */
 .footer { border-top: 1px solid var(--line); padding-block: var(--s-16) var(--s-12); text-align: center; }
 .footer__icon { width: 34px; height: 34px; margin: 0 auto var(--s-6); border-radius: var(--r-md); }
@@ -526,6 +608,8 @@ section { position: relative; }
 /* ── 响应式：768 以下单列 ───────────────────────────────────────────── */
 @media (max-width: 900px) {
   .faq { grid-template-columns: 1fr; gap: var(--s-6); }
+  .log { grid-template-columns: 1fr; }
+  .logbar__links a:nth-child(3) { display: none; }
   .features { grid-template-columns: 1fr; gap: var(--s-10); }
   .cards { grid-template-columns: 1fr; }
   .band { padding-block: var(--s-16); }

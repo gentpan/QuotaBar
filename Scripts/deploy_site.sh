@@ -18,13 +18,16 @@ ROOT="${SITE_ROOT:-/var/www/quota.bar}"
 # touches anything is cheap enough to re-fetch the rest.
 # 先把 ?v= 本身洗掉再算：这些文件里也带指纹，不洗的话指纹会自己喂自己，
 # 内容没动也会每次换一个值，等于每次部署都让全站资源重新下载一遍。
+# README 与官网里的更新日志、热力图都从 CHANGELOG.md 和提交记录生成，发布前先同步。
+python3 Scripts/sync_changelog.py ${CHANGELOG_FILE:+--changelog "$CHANGELOG_FILE"}
+
 STAMP="$(cat web/styles.css web/replica.css web/app.js web/replica.js \
          | /usr/bin/sed -E 's/\?v=[A-Za-z0-9]+//g' \
          | shasum -a 256 | cut -c1-8)"
 echo "内容指纹 v=$STAMP"
 
 # Rewrite every ?v=… in the HTML, and the font URL the stylesheet carries.
-/usr/bin/sed -i '' -E "s/\?v=[A-Za-z0-9]+/?v=$STAMP/g" web/index.html
+/usr/bin/sed -i '' -E "s/\?v=[A-Za-z0-9]+/?v=$STAMP/g" web/index.html web/changelog.html
 /usr/bin/sed -i '' -E "s/(Sora-VariableFont_wght\.ttf)\?v=[A-Za-z0-9]+/\1?v=$STAMP/" web/styles.css
 # replica.js 里的 LOGOV 也要跟上，否则 JS 渲染出的那些 logo 拿的是旧指纹。
 /usr/bin/sed -i '' -E "s/(var LOGOV = \")\?v=[A-Za-z0-9]+/\1?v=$STAMP/" web/replica.js
