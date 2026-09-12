@@ -42,7 +42,7 @@
   // 指纹由 deploy_site.sh 统一改写（和 index.html、styles.css 里的字体一样）。
   // 写死 ?v=1 的话，指纹一升级，JS 渲染出的这些图不会跟着刷新。
   var LOGO = "assets/logos/";
-  var LOGOV = "?v=b996ee81";
+  var LOGOV = "?v=e92ca10a";
   var DATA = {
     codex: {
       name: "Codex", logo: "codex.png", plan: "Pro", acct: "you@example.com",

@@ -21,8 +21,10 @@ ROOT="${SITE_ROOT:-/var/www/quota.bar}"
 # README 与官网里的更新日志、热力图都从 CHANGELOG.md 和提交记录生成，发布前先同步。
 python3 Scripts/sync_changelog.py ${CHANGELOG_FILE:+--changelog "$CHANGELOG_FILE"}
 
-STAMP="$(cat web/styles.css web/replica.css web/app.js web/replica.js \
-         | /usr/bin/sed -E 's/\?v=[A-Za-z0-9]+//g' \
+# 图片也算进去：只换了截图或分享图时，指纹不变的话 CDN 会继续给旧图。
+STAMP="$( { cat web/styles.css web/replica.css web/app.js web/replica.js \
+           | /usr/bin/sed -E 's/\?v=[A-Za-z0-9]+//g'
+           find web/assets -type f \( -name '*.png' -o -name '*.jpg' \) | sort | xargs cat; } \
          | shasum -a 256 | cut -c1-8)"
 echo "内容指纹 v=$STAMP"
 
