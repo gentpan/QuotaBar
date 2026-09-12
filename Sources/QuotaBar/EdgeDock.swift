@@ -364,10 +364,17 @@ final class EdgeDockCoordinator {
             ? visible.maxX - panelWidth
             : visible.minX
 
-        // dockPosition is a fraction from the top; AppKit measures from the
-        // bottom, and the panel is kept fully on screen at either extreme.
-        let travel = max(0, visible.height - panelHeight)
-        let y = visible.maxY - panelHeight - travel * CGFloat(config.dockPosition)
+        // dockPosition is a fraction of the handle's travel from the top;
+        // AppKit measures from the bottom. The strip is centred on the
+        // handle it grows out of — placing it by its own travel put its
+        // centre somewhere else at every position but the middle, so the
+        // reveal jumped up or down — and is kept on screen at the extremes.
+        let handleTravel = max(0, visible.height - Self.handleHeight)
+        let handleY = visible.maxY - Self.handleHeight - handleTravel * CGFloat(config.dockPosition)
+        let centred = handleY + Self.handleHeight / 2 - panelHeight / 2
+        let y = out
+            ? min(max(centred, visible.minY), visible.maxY - panelHeight)
+            : handleY
         let frame = NSRect(x: x, y: y, width: panelWidth, height: panelHeight)
         let decision = DockSlide.decide(
             target: frame, pending: targetFrame, animated: animated)
@@ -414,12 +421,15 @@ final class EdgeDockCoordinator {
 
     /// Records where the user dragged the strip to, as a fraction of the
     /// available travel.
+    /// Stored as the handle's position, whichever state was dragged: the
+    /// handle sits at the strip's centre, so the centre is what is kept.
     func persistPosition() {
         guard let panel, let screen = Self.hostScreen else { return }
         let visible = screen.visibleFrame
-        let travel = max(1, visible.height - panel.frame.height)
-        let fromTop = visible.maxY - panel.frame.maxY
-        ConfigStore.shared.dockPosition = Double(fromTop / travel)
+        let travel = max(1, visible.height - Self.handleHeight)
+        let handleTop = panel.frame.midY + Self.handleHeight / 2
+        let fromTop = visible.maxY - handleTop
+        ConfigStore.shared.dockPosition = Double(min(max(fromTop / travel, 0), 1))
     }
 
     func move(byVertical delta: CGFloat) {

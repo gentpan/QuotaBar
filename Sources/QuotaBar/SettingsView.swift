@@ -334,6 +334,8 @@ struct SettingsView: View {
 /// the band alone; this is where the sentence fits.
 struct StatusPane: View {
     @ObservedObject var store: UsageStore
+    /// The row that has been opened to show the page's own sentence.
+    @State private var expanded: ProviderID?
 
     var body: some View {
         SettingsCard {
@@ -347,53 +349,73 @@ struct StatusPane: View {
             }
         }
         SettingFootnote(L10n.t(
-            "Read from each provider's public status page every five minutes, without signing in. xAI's page refuses automated readers; Z.ai, OpenCode, Antigravity and Qwen Cloud publish none.",
-            "每五分钟读取各服务商的公开状态页，无需登录。xAI 的页面拒绝自动读取；Z.ai、OpenCode、Antigravity 与 Qwen Cloud 没有公开状态页。"))
+            "Read from each provider's public status page every five minutes, without signing in. Click a row for the page's own account of what is going on. xAI's page refuses automated readers; Z.ai, OpenCode, Antigravity and Qwen Cloud publish none.",
+            "每五分钟读取各服务商的公开状态页，无需登录。点击一行可看状态页对当前情况的说明。xAI 的页面拒绝自动读取；Z.ai、OpenCode、Antigravity 与 Qwen Cloud 没有公开状态页。"))
     }
 
+    /// One line per provider — name, band, when it was asked — and the
+    /// page's sentence only once the row is opened. A band is enough to
+    /// scan the list; the sentence is for the row you stopped at.
     private func row(_ id: ProviderID) -> some View {
-        HStack(alignment: .top, spacing: Design.space3) {
-            HStack(spacing: Design.space2) {
+        let status = store.serviceStatus[id]
+        let isOpen = expanded == id
+        return VStack(alignment: .leading, spacing: Design.space2) {
+            HStack(spacing: Design.space2 + 2) {
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundStyle(status == nil ? Color.clear : Color.secondary)
+                    .rotationEffect(.degrees(isOpen ? 90 : 0))
+                    .frame(width: 10)
                 ProviderGlyph(id: id, size: 18)
                     .frame(width: 20)
                 Text(id.displayName)
                     .font(.system(size: 13, weight: .medium))
                     .lineLimit(1)
-            }
-            .frame(width: 150, alignment: .leading)
-
-            if let status = store.serviceStatus[id] {
-                ServiceStatusBadge(status: status, size: 12, ink: .primary)
-                    .frame(width: 90, alignment: .leading)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(status.description)
-                        .font(.system(size: 12))
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
+                    .frame(width: 130, alignment: .leading)
+                if let status {
+                    ServiceStatusBadge(status: status, size: 12, ink: .primary)
+                        .frame(width: 96, alignment: .leading)
+                    Spacer(minLength: Design.space2)
                     Text(L10n.t(
                         "checked \(QuotaFormat.age(of: status.checkedAt))",
                         "\(QuotaFormat.age(of: status.checkedAt))检查"))
                         .font(.system(size: 11))
                         .foregroundStyle(.tertiary)
+                        .lineLimit(1)
+                } else {
+                    Text(StatusPages.page(for: id) != nil
+                        ? L10n.t("Not read yet", "尚未读取")
+                        : L10n.t("No public status page", "没有公开状态页"))
+                        .font(.system(size: 12))
+                        .foregroundStyle(.tertiary)
+                    Spacer(minLength: Design.space2)
                 }
-                Spacer(minLength: Design.space2)
-                Button {
-                    NSWorkspace.shared.open(status.pageURL)
-                } label: {
-                    Image(systemName: "arrow.up.right")
-                        .font(.system(size: 11))
+            }
+            .contentShape(Rectangle())
+            .onTapGesture {
+                guard status != nil else { return }
+                withAnimation(.snappy(duration: 0.2)) { expanded = isOpen ? nil : id }
+            }
+
+            if isOpen, let status {
+                VStack(alignment: .leading, spacing: Design.space2) {
+                    Text(status.description)
+                        .font(.system(size: 12))
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .textSelection(.enabled)
+                    Button {
+                        NSWorkspace.shared.open(status.pageURL)
+                    } label: {
+                        Label(L10n.t("Open the status page", "打开状态页"), systemImage: "arrow.up.right")
+                            .font(.system(size: 11))
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(.secondary)
+                    .help(status.pageURL.absoluteString)
                 }
-                .buttonStyle(.plain)
-                .foregroundStyle(.secondary)
-                .help(status.pageURL.absoluteString)
-            } else if StatusPages.page(for: id) != nil {
-                Text(L10n.t("Not read yet", "尚未读取"))
-                    .font(.system(size: 12))
-                    .foregroundStyle(.tertiary)
-            } else {
-                Text(L10n.t("No public status page", "没有公开状态页"))
-                    .font(.system(size: 12))
-                    .foregroundStyle(.tertiary)
+                .padding(.leading, 10 + Design.space2 + 2 + 20 + Design.space2 + 2)
+                .padding(.bottom, Design.space1)
             }
         }
         .padding(.vertical, Design.space2 + 2)
@@ -545,7 +567,11 @@ struct ProviderSettingsRow: View {
             }
             .frame(width: 76, alignment: .leading)
 
+            // Also a fixed slot: the row is anchored at its right end, so a
+            // pill that varies by a character would shift the badge column
+            // with it.
             statusPill
+                .frame(width: 68, alignment: .leading)
 
             Toggle("", isOn: Binding(
                 get: { store.isEnabled(id) },
