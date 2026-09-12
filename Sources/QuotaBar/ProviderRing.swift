@@ -418,15 +418,53 @@ struct ProviderCallout: View {
 struct CalloutButton: View {
     let symbol: String
     let help: String
+    /// When set, the glyph is scaled to fit a square of this side, so marks
+    /// of different proportions — a circle, an arrow out of a box, two
+    /// sheets — come out the same size and on the same centre line. Left
+    /// nil, the glyph is drawn at the text size, as everywhere else.
+    var glyphSide: CGFloat? = nil
+    var box: CGFloat = 22
     let action: () -> Void
     @State private var hovering = false
     @State private var pressed = false
 
+    init(symbol: String, help: String, glyphSide: CGFloat? = nil, box: CGFloat = 22, action: @escaping () -> Void) {
+        self.symbol = symbol
+        self.help = help
+        self.glyphSide = glyphSide
+        self.box = box
+        self.action = action
+    }
+
+    @ViewBuilder
+    private var glyph: some View {
+        if let glyphSide {
+            let trim = Self.opticalTrim[symbol] ?? (scale: 1, dy: 0)
+            Image(systemName: symbol)
+                .resizable()
+                .fontWeight(.medium)
+                .scaledToFit()
+                .frame(width: glyphSide, height: glyphSide)
+                .scaleEffect(trim.scale)
+                .offset(y: trim.dy)
+        } else {
+            Image(systemName: symbol)
+                .font(.system(size: 11, weight: .semibold))
+        }
+    }
+
+    /// Symbols whose image carries empty room inside its box, measured off
+    /// a 2x render: scaled and nudged so the drawn mark matches its
+    /// neighbours' height and centre. The box-with-arrow sits 2px short and
+    /// 1px low against the circle and the two sheets.
+    private static let opticalTrim: [String: (scale: CGFloat, dy: CGFloat)] = [
+        "square.and.arrow.up": (scale: 1.08, dy: -0.5),
+    ]
+
     var body: some View {
-        Image(systemName: symbol)
-            .font(.system(size: 11, weight: .semibold))
+        glyph
             .foregroundStyle(.white.opacity(hovering ? 0.92 : 0.5))
-            .frame(width: 22, height: 22)
+            .frame(width: box, height: box)
             .background(
                 RoundedRectangle(cornerRadius: 5, style: .continuous)
                     .fill(Color.white.opacity(hovering ? 0.10 : 0)))

@@ -72,18 +72,20 @@ struct SpendCardView: View {
             }
             Spacer(minLength: 8)
             if !forExport {
-                HStack(spacing: 2) {
+                HStack(spacing: 4) {
                     InfoButton(text: sourcesNote)
-                    CalloutButton(symbol: "square.and.arrow.up", help: L10n.t("Share usage card", "分享用量卡片")) {
+                    CalloutButton(symbol: "square.and.arrow.up", help: L10n.t("Share usage card", "分享用量卡片"),
+                                  glyphSide: SpendHeader.glyph, box: SpendHeader.row) {
                         ShareStudio.open(store: store)
                     }
-                    CalloutButton(symbol: "doc.on.doc", help: L10n.t("Copy as image", "复制为图片")) {
+                    CalloutButton(symbol: "doc.on.doc", help: L10n.t("Copy as image", "复制为图片"),
+                                  glyphSide: SpendHeader.glyph, box: SpendHeader.row) {
                         copyImage()
                     }
                 }
             }
         }
-        .frame(height: 24)
+        .frame(height: SpendHeader.row)
     }
 
     private var sourcesNote: String {
@@ -292,7 +294,7 @@ private struct MetricPicker: View {
                 .rotationEffect(.degrees(open ? 180 : 0))
         }
         .padding(.horizontal, 8)
-        .frame(height: 24)
+        .frame(height: SpendHeader.row)
         .background(
             RoundedRectangle(cornerRadius: 6, style: .continuous)
                 .fill(Color.white.opacity(hovered || open ? 0.10 : 0)))
@@ -342,7 +344,7 @@ private struct InfoButton: View {
     @State private var open = false
 
     var body: some View {
-        CalloutButton(symbol: "info.circle", help: text) { open.toggle() }
+        CalloutButton(symbol: "info.circle", help: text, glyphSide: SpendHeader.glyph, box: SpendHeader.row) { open.toggle() }
             .popover(isPresented: $open, arrowEdge: .bottom) {
                 Text(text)
                     .font(.system(size: 12))
@@ -354,4 +356,12 @@ private struct InfoButton: View {
                     .environment(\.colorScheme, .dark)
             }
     }
+}
+
+
+/// The header's one row: every control in it is this tall and centred on
+/// it, and the three icons share one glyph square.
+enum SpendHeader {
+    static let row: CGFloat = 26
+    static let glyph: CGFloat = 14
 }
