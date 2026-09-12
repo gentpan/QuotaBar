@@ -234,35 +234,6 @@ enum Snapshot {
         }
     }
 
-    /// Renders the overview panel once per candidate accent, for picking a
-    /// theme against real content rather than against a colour swatch.
-    static func themePreview(directory: String) {
-        let base = URL(fileURLWithPath: directory)
-        try? FileManager.default.createDirectory(at: base, withIntermediateDirectories: true)
-        let candidates: [(name: String, accent: String, ink: String)] = [
-            ("00-current-neon", "69EA28", "101010"),
-            ("01-emerald", "0E9F6E", "FFFFFF"),
-            ("02-indigo", "4F46E5", "FFFFFF"),
-            ("03-graphite", "3F3F46", "FFFFFF"),
-            ("04-slate-blue", "1D4ED8", "FFFFFF"),
-        ]
-        let savedAccent = QuotaTheme.accentHex
-        let savedInk = QuotaTheme.inkHex
-        L10n.override = .zhHans
-        for candidate in candidates {
-            QuotaTheme.accentHex = candidate.accent
-            QuotaTheme.inkHex = candidate.ink
-            write(
-                MenuContentView(store: makeStore(selected: nil), scrollable: false),
-                to: base,
-                name: "theme-\(candidate.name)")
-        }
-        QuotaTheme.accentHex = savedAccent
-        QuotaTheme.inkHex = savedInk
-        L10n.override = ConfigStore.shared.language
-        FileHandle.standardOutput.write(Data("Wrote theme previews to \(base.path)\n".utf8))
-    }
-
     /// Renders every menu-bar style across a range of levels, so a style can
     /// be judged on whether its gradations are actually readable rather than
     /// on how it sounds.
@@ -468,32 +439,15 @@ enum Snapshot {
         let base = URL(fileURLWithPath: directory)
         try? FileManager.default.createDirectory(at: base, withIntermediateDirectories: true)
 
-        let panels: [(String, ProviderID?)] = [
-            ("overview", nil),
-            ("codex", .codex),
-            ("claude", .claude),
-            ("stale", .cursor),
-            ("failed", .zai),
-        ]
-
+        // The menu panel as it opens, in both languages. It is dark whatever
+        // the system appearance, so there is no second pass for dark mode.
         for language in [L10n.Language.en, .zhHans] {
             L10n.override = language
-            let suffix = language == .en ? "en" : "zh"
-            for (name, selected) in panels {
-                write(
-                    MenuContentView(store: makeStore(selected: selected), scrollable: false),
-                    to: base,
-                    name: "panel-\(name)-\(suffix)")
-            }
-            // Dark mode has its own accent pair; render it so a selection block
-            // sinking into the window is visible here rather than in the wild.
-            for (name, selected) in panels {
-                write(
-                    MenuContentView(store: makeStore(selected: selected), scrollable: false),
-                    to: base,
-                    name: "panel-\(name)-\(suffix)-dark",
-                    dark: true)
-            }
+            write(
+                MenuPanelView(store: makeStore(selected: nil), scrollable: false),
+                to: base,
+                name: "panel-\(language == .en ? "en" : "zh")",
+                dark: true)
         }
         L10n.override = ConfigStore.shared.language
 

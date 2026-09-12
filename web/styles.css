@@ -289,31 +289,6 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
   to { opacity: 1; transform: none; }
 }
 
-.desktop__panel {
-  position: absolute;
-  top: 36px;
-  /* 停靠条 74px 宽、贴右缘，面板也贴右缘，两者必然叠在一起 —— 视口高度不到
-     993px 时一直重叠，压住的正是面板右侧的重置时间和底部那两个按钮。
-     74 + 18 的间隙，让面板整体让开条子。 */
-  right: 92px;
-  /* 宽度由组件自己定（380px，与应用一致）；这里只管位置和落影 */
-  z-index: 15;
-  /* 缩放一律走这个变量、由 drop 的关键帧读出去。本元素带 animation，而动画
-     产生的值压过普通声明 —— 直接写 transform: scale() 会被 to 帧的
-     transform 覆盖掉，窄屏那档缩放就是这么失效的。 */
-  --panel-scale: 1;
-  transform-origin: top right;
-  /* 同一个值也要静态写一份：prefers-reduced-motion 会把 animation 整个关掉，
-     只活在关键帧里的 transform 会一起消失，窄屏那档缩放就没了。 */
-  transform: scale(var(--panel-scale));
-  box-shadow: rgba(0, 0, 0, 0.62) 0 22px 60px 0, rgba(255, 255, 255, 0.1) 0 0 0 1px;
-  animation: drop 720ms cubic-bezier(0.2, 0.9, 0.25, 1) both 300ms;
-}
-@keyframes drop {
-  from { opacity: 0; transform: translateY(-16px) scale(calc(var(--panel-scale) * 0.98)); }
-  to { opacity: 1; transform: scale(var(--panel-scale)); }
-}
-
 /* 停靠条贴右缘 */
 .desktop__strip {
   position: absolute;
@@ -719,8 +694,6 @@ section { position: relative; }
      规则特异度相同却在 replica.css 里后加载 —— 单写 .desktop__strip 会被
      .qb-dock 的 display: flex 压掉，窄屏根本没收起来过。 */
   .desktop .desktop__strip, .desktop .desktop__widget { display: none; }
-  /* 窄屏放不下 380px 的面板和 74px 的条子，整体缩一档，并让文案落到面板下面 */
-  .desktop .desktop__panel { top: 34px; right: 8px; --panel-scale: .52; }
   .desktop .desktop__island { --panel-scale: .62; }
   .desktop__copy { justify-content: flex-end; padding: 30px 24px 120px; }
   .menubar { padding-inline: 6px; font-size: 12px; }
@@ -735,14 +708,13 @@ section { position: relative; }
 /* 矮视口（横放的手机、带浏览器界面的小笔记本）：面板、文案、Dock 三段
    在 780px 高以下叠不下，面板再缩一档，文案也往下压一点。 */
 @media (max-width: 900px) and (max-height: 780px) {
-  .desktop .desktop__panel { --panel-scale: .40; }
   .desktop .desktop__island { --panel-scale: .46; }
   .desktop__copy { padding-bottom: 96px; }
 }
 
 /* 再矮就真排不下了（横过来的手机）：面板也收掉，桌面的意象剩菜单栏和 Dock */
 @media (max-width: 900px) and (max-height: 700px) {
-  .desktop .desktop__panel, .desktop .desktop__island { display: none; }
+  .desktop .desktop__island { display: none; }
 }
 
 /* ── 进场 ────────────────────────────────────────────────────────────

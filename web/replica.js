@@ -1,10 +1,10 @@
-/* 让重建出来的界面动起来，并且能像应用一样切换服务商。
+/* 让重建出来的刘海岛面板、停靠条和桌面卡片动起来，停靠条悬停出卡片。
  *
  * 颜色用的是应用里同一条连续色标 —— 同样的 9 个 stop、同样的 sRGB 混合，
  * 所以页面上看到的绿/金/橙/红就是装上之后会看到的那几个。
  *
- * 默认那一屏（Codex）是写在 HTML 里的，不是这里生成的：脚本没跑时页面
- * 依然是正确的最终状态，只是不能切换。内容不该挂在脚本上。
+ * 读数写在 HTML 的 data-used 上，不是这里生成的：脚本没跑时页面依然是
+ * 正确的最终状态，只是不会动。内容不该挂在脚本上。
  */
 (function () {
   "use strict";
@@ -38,47 +38,11 @@
     return "#" + out.toUpperCase();
   }
 
-  /* ── 每个服务商的面板内容 ────────────────────────────────────────── */
+  /* ── 图片路径 ───────────────────────────────────────────────────── */
   // 指纹由 deploy_site.sh 统一改写（和 index.html、styles.css 里的字体一样）。
   // 写死 ?v=1 的话，指纹一升级，JS 渲染出的这些图不会跟着刷新。
   var LOGO = "assets/logos/";
   var LOGOV = "?v=afdd49a5";
-  var DATA = {
-    codex: {
-      name: "Codex", logo: "codex.png", plan: "Pro", acct: "you@example.com",
-      windows: [
-        { badge: "7d", active: true, used: 36, reset: "5 天 16 小时后重置",
-          pace: "预计 2 天 13 小时后耗尽" },
-        { badge: "5h", scope: "GPT-5.3-Codex-Spark", used: 0, reset: "4 小时 59 分后重置" },
-      ],
-      credits: "1 次可用",
-    },
-    claude: {
-      name: "Claude", logo: "claude.png", acct: "you@example.com",
-      windows: [
-        { badge: "5h", active: true, used: 18, reset: "2 小时 41 分后重置" },
-        { badge: "7d", used: 58, reset: "4 天 9 小时后重置" },
-        { badge: "7d", scope: "Fable", used: 10, reset: "4 天 9 小时后重置" },
-      ],
-    },
-    cursor: {
-      name: "Cursor", logo: "cursor.png", plan: "Pro", acct: "you@example.com",
-      windows: [
-        { badge: "月", scope: "月度套餐", used: 86, detail: "$17.20 / $20.00",
-          reset: "9 天 2 小时后重置", pace: "预计 3 天 8 小时后耗尽" },
-      ],
-    },
-    overview: {
-      name: "总览", overview: true,
-      rows: [
-        { logo: "codex.png", name: "Codex", used: 36 },
-        { logo: "claude.png", name: "Claude", used: 58 },
-        { logo: "cursor.png", name: "Cursor", used: 86 },
-        { logo: "opencode-go.png", name: "OpenCode Go", used: 84 },
-      ],
-    },
-  };
-
   /* ── 停靠条悬停卡片的内容 ────────────────────────────────────────
    * 行标题取 scope ?? title，和 ProviderCallout.row 一致：有作用域就显示
    * 作用域名（Fable），否则显示窗口名（周窗口）。
@@ -104,71 +68,16 @@
 
   function esc(v) { return String(v).replace(/[<>&]/g, ""); }
 
-  function winMarkup(w) {
-    var c = rampHex(w.used);
-    return '<div class="qb-win" data-used="' + w.used + '">' +
-      '<div class="qb-win__top">' +
-        '<span class="qb-pill">' + esc(w.badge) + "</span>" +
-        (w.active ? '<span class="qb-pill qb-pill--active">生效中</span>' : "") +
-        (w.scope && !w.active ? '<span class="qb-win__scope">' + esc(w.scope) + "</span>" : "") +
-        '<span class="qb-win__pct" style="color:' + c + '">' + Math.round(w.used) + "%</span>" +
-      "</div>" +
-      '<div class="qb-bar"><span class="qb-bar__fill" style="width:' + w.used +
-        "%;background:" + c + '"></span></div>' +
-      '<div class="qb-win__meta">' + (w.detail ? esc(w.detail) + " · " : "") + esc(w.reset) + "</div>" +
-      (w.pace
-        ? '<div class="qb-win__pace">' +
-          '<svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M6.5 1.5 12 11.5H1z"/><path d="M6.5 5.5v2.2"/><circle cx="6.5" cy="9.6" r=".7" fill="currentColor" stroke="none"/></svg>' +
-          esc(w.pace) + "</div>"
-        : "") +
-      "</div>";
-  }
-
-  function detailMarkup(id) {
-    var d = DATA[id];
-    if (!d) return "";          // 同 calloutMarkup：DATA 比 CALLOUT 少一项
-    if (d.overview) {
-      return d.rows.map(function (r) {
-        var c = rampHex(r.used);
-        return '<div class="qb-ovrow" data-used="' + r.used + '">' +
-          '<img src="' + LOGO + r.logo + LOGOV + '" alt="">' +
-          '<span class="qb-ovrow__name">' + esc(r.name) + "</span>" +
-          '<span class="qb-win__pct" style="color:' + c + '">' + Math.round(r.used) + "%</span>" +
-          '<div class="qb-bar"><span class="qb-bar__fill" style="width:' + r.used +
-            "%;background:" + c + '"></span></div>' +
-          "</div>";
-      }).join("");
-    }
-    return '<div class="qb-head">' +
-        '<img src="' + LOGO + d.logo + LOGOV + '" alt="">' +
-        '<span class="qb-head__name">' + esc(d.name) + "</span>" +
-        (d.plan ? '<span class="qb-badge">' + esc(d.plan) + "</span>" : "") +
-        '<span class="qb-head__acct">' + esc(d.acct) + "</span>" +
-      "</div>" +
-      '<div class="qb-spark"><div class="qb-spark__box">' +
-        '<svg viewBox="0 0 356 44" preserveAspectRatio="none" aria-hidden="true">' +
-        '<path d="M2 33 L42 32 L82 30 L122 29 L162 26 L202 25 L242 22 L282 19 L322 16 L354 13"/>' +
-        "</svg></div><span class=\"qb-spark__cap\">趋势 · 最近 96 次刷新</span></div>" +
-      d.windows.map(winMarkup).join("") +
-      (d.credits
-        ? '<div class="qb-sep"></div><div class="qb-row">' +
-          '<svg width="15" height="15" viewBox="0 0 15 15" fill="none" stroke="#0a68d0" stroke-width="1.5" stroke-linecap="round"><circle cx="7.5" cy="7.5" r="6"/><path d="M7.5 4.2v3.6l2.4 1.4"/></svg>' +
-          '限额重置额度<span class="qb-row__val">' + esc(d.credits) + "</span></div>"
-        : "") +
-      '<div class="qb-note">更新于 刚刚</div>';
-  }
-
   /* ── 把读数画上去 ───────────────────────────────────────────────── */
   function paint(el, used) {
     var colour = rampHex(used);
-    var fill = el.querySelector(".qb-bar__fill, .qb-tile__fill, .qb-steps__fill");
+    var fill = el.querySelector(".qb-steps__fill");
     if (fill) {
       fill.style.width = used + "%";
-      // 岛面板图块的条是品牌色，不随读数变色；卡片与面板里的走色标。
-      if (fill.classList.contains("is-brand")) { /* 保持品牌色 */ }
-      else if (fill.classList.contains("qb-steps__fill")) {
+      // 岛面板图块的条是品牌色，不随读数变色；停靠条卡片里的走色标。
+      if (!fill.classList.contains("is-brand")) {
         fill.style.background = "repeating-linear-gradient(90deg," + colour + " 0 5px,transparent 5px 7px)";
-      } else { fill.style.background = colour; }
+      }
     }
     // 岛面板图块的数字：白色，到了提醒档才变琥珀 / 红，和应用里一样
     var ipct = el.querySelector(".qb-ipct");
@@ -183,11 +92,8 @@
       arc.style.strokeDashoffset = len * (1 - used / 100);
       arc.style.stroke = colour;
     }
-    var pct = el.querySelector(".qb-win__pct, .qb-ring__pct");
-    if (pct) {
-      pct.textContent = Math.round(used) + "%";
-      if (!pct.classList.contains("qb-ring__pct")) pct.style.color = colour;
-    }
+    var pct = el.querySelector(".qb-ring__pct");
+    if (pct) pct.textContent = Math.round(used) + "%";
   }
 
   var readings = [];
@@ -196,9 +102,6 @@
     Array.prototype.forEach.call(document.querySelectorAll("[data-used]"), function (el) {
       var v = parseFloat(el.getAttribute("data-used"));
       readings.push({ el: el, used: v, base: v });
-    });
-    Array.prototype.forEach.call(document.querySelectorAll(".qb-spark__box path"), function (p) {
-      p.style.setProperty("--len", p.getTotalLength());
     });
   }
 
@@ -218,66 +121,6 @@
 
   collect();
 
-  /* ── 切换服务商 ─────────────────────────────────────────────────── */
-  var detail = document.getElementById("qbDetail");
-  var tiles = document.querySelectorAll(".qb-tile[data-id]");
-  var hint = document.getElementById("qbHint");
-  var current = "codex";
-  var touched = false;
-  var cycle;
-
-  function select(id) {
-    if (!detail || id === current) return;
-    current = id;
-    Array.prototype.forEach.call(tiles, function (t) {
-      var on = t.getAttribute("data-id") === id;
-      t.classList.toggle("is-on", on);
-      t.setAttribute("aria-pressed", on ? "true" : "false");
-    });
-
-    if (reduced()) {
-      detail.innerHTML = detailMarkup(id);
-      collect();
-      settle();
-      return;
-    }
-
-    // 高度也要动 —— 不同服务商的窗口数不同，而应用本身就是按内容定高的
-    detail.style.height = detail.offsetHeight + "px";
-    detail.classList.add("is-swapping");
-    setTimeout(function () {
-      detail.innerHTML = detailMarkup(id);
-      collect();
-      readings.forEach(function (r) { paint(r.el, 0); });
-      detail.style.height = detail.scrollHeight + "px";
-      detail.classList.remove("is-swapping");
-      void detail.offsetHeight;
-      settle();
-      setTimeout(function () { detail.style.height = "auto"; }, 380);
-    }, 180);
-  }
-
-  Array.prototype.forEach.call(tiles, function (t) {
-    t.addEventListener("click", function () {
-      touched = true;
-      if (cycle) { clearInterval(cycle); cycle = null; }
-      if (hint) hint.classList.add("is-gone");
-      select(t.getAttribute("data-id"));
-    });
-  });
-
-  /* 访客未必知道这几个格子能点，所以先自己演一遍；一旦有人动手就停下，
-     不再跟用户抢方向盘。 */
-  if (!reduced() && detail && tiles.length) {
-    var order = ["claude", "cursor", "overview", "codex"];
-    var step = 0;
-    cycle = setInterval(function () {
-      if (touched || document.hidden) return;
-      select(order[step % order.length]);
-      step++;
-    }, 4200);
-  }
-
   /* ── 首次进入视口时再跑，滚到才看得见 ───────────────────────────── */
   if (reduced()) {
     settle();
@@ -289,7 +132,7 @@
         io.disconnect();
       });
     }, { rootMargin: "0px 0px -10% 0px" });
-    io.observe(document.querySelector(".qb-island, .qb-panel") || readings[0].el);
+    io.observe(document.querySelector(".qb-island") || readings[0].el);
     setTimeout(function () { if (readings.length) settle(); }, 2500);
   } else {
     setTimeout(animateIn, 120);

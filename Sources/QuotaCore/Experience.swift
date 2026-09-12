@@ -147,8 +147,6 @@ public struct PaceAlertPrefs: Codable, Equatable, Sendable {
         self.willRunOut = willRunOut
     }
 
-    public var anyEnabled: Bool { almostOut || cuttingClose || willRunOut }
-
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         almostOut = (try? container.decodeIfPresent(Bool.self, forKey: .almostOut)) ?? false

@@ -538,25 +538,3 @@ struct DailyBars<Trailing: View>: View {
         return "\(date) · \(QuotaFormat.compact(tokens)) · \(QuotaFormat.usd(day.usd * share))"
     }
 }
-
-/// Bars for a short series — a fortnight of days, or the recent readings —
-/// scaled to the series' own peak unless a ceiling is given.
-struct MiniBars: View {
-    let values: [Double]
-    let accent: Color
-    var ceiling: Double? = nil
-    var height: CGFloat = 44
-
-    var body: some View {
-        let peak = max(ceiling ?? (values.max() ?? 1), 1)
-        HStack(alignment: .bottom, spacing: 2) {
-            ForEach(values.indices, id: \.self) { index in
-                RoundedRectangle(cornerRadius: 1.5, style: .continuous)
-                    .fill(accent.opacity(values[index] > 0 ? 0.9 : 0.15))
-                    .frame(height: max(2, height * CGFloat(values[index] / peak)))
-                    .frame(maxWidth: .infinity, alignment: .bottom)
-            }
-        }
-        .frame(height: height, alignment: .bottom)
-    }
-}

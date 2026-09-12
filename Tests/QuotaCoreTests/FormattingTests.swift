@@ -468,9 +468,8 @@ final class WindowPaceTests: XCTestCase {
         let pace = try XCTUnwrap(window(used: 50, hoursLeft: 84).pace(now: now))
 
         XCTAssertEqual(pace.expectedPercent, 50, accuracy: 0.5)
-        XCTAssertEqual(pace.deltaPercent, 0, accuracy: 0.5)
-        XCTAssertFalse(pace.isNotable)
-        XCTAssertFalse(pace.willExhaustBeforeReset)
+        XCTAssertEqual(pace.projectedPercent, 100, accuracy: 1)
+        XCTAssertNil(pace.runOutSeconds)
     }
 
     func testBurningFasterThanTheWindowRefills() throws {
@@ -478,9 +477,8 @@ final class WindowPaceTests: XCTestCase {
         let pace = try XCTUnwrap(window(used: 75, hoursLeft: 126).pace(now: now))
 
         XCTAssertEqual(pace.expectedPercent, 25, accuracy: 0.5)
-        XCTAssertGreaterThan(pace.deltaPercent, 45)
-        XCTAssertTrue(pace.isNotable)
-        XCTAssertTrue(pace.willExhaustBeforeReset, "at this rate it runs out first")
+        XCTAssertGreaterThan(pace.projectedPercent, 250)
+        XCTAssertNotNil(pace.runOutSeconds, "at this rate it runs out first")
     }
 
     func testExhaustionIsEquivalentToBeingAheadOfPace() throws {
@@ -490,7 +488,7 @@ final class WindowPaceTests: XCTestCase {
         for used in stride(from: 5.0, through: 95.0, by: 5.0) {
             let pace = try XCTUnwrap(window(used: used, hoursLeft: 84).pace(now: now))
             XCTAssertEqual(
-                pace.willExhaustBeforeReset, pace.deltaPercent > 0,
+                pace.runOutSeconds != nil, pace.projectedPercent > 100.001,
                 "at \(used)% the two signals disagree")
         }
     }
@@ -499,8 +497,8 @@ final class WindowPaceTests: XCTestCase {
         // Half the window gone, a quarter spent.
         let pace = try XCTUnwrap(window(used: 25, hoursLeft: 84).pace(now: now))
 
-        XCTAssertLessThan(pace.deltaPercent, 0)
-        XCTAssertFalse(pace.willExhaustBeforeReset)
+        XCTAssertLessThan(pace.projectedPercent, 100)
+        XCTAssertNil(pace.runOutSeconds)
     }
 
     func testProjectsTheExhaustionMoment() throws {
@@ -514,7 +512,7 @@ final class WindowPaceTests: XCTestCase {
     func testNothingUsedYieldsNoProjection() throws {
         let pace = try XCTUnwrap(window(used: 0, hoursLeft: 84).pace(now: now))
         XCTAssertNil(pace.secondsToExhaustion)
-        XCTAssertFalse(pace.willExhaustBeforeReset)
+        XCTAssertNil(pace.runOutSeconds)
     }
 
     func testNoPaceWithoutTheInputsItNeeds() {

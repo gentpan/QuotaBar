@@ -194,27 +194,6 @@ extension View {
 /// built before it is attached and no further update ever arrives. It worked in
 /// the debug window (`--settings-window`), whose window exists before the
 /// hosting view is installed, and silently did nothing in the one users open.
-/// Pins the menu panel's *window* to the dark appearance.
-///
-/// `.environment(\.colorScheme, .dark)` takes care of everything SwiftUI
-/// draws, but the popover window itself — its rounded corners, the vibrancy
-/// material under the content — is drawn by AppKit in the window's own
-/// appearance, which follows the system. Black content inside a light window
-/// leaves a light hairline around the corners. Same `viewDidMoveToWindow`
-/// hook as `WindowChrome`, for the same reason: the window is nil at
-/// `makeNSView` time.
-struct PanelAppearance: NSViewRepresentable {
-    final class Anchor: NSView {
-        override func viewDidMoveToWindow() {
-            super.viewDidMoveToWindow()
-            window?.appearance = NSAppearance(named: .darkAqua)
-        }
-    }
-
-    func makeNSView(context: Context) -> NSView { Anchor(frame: .zero) }
-    func updateNSView(_ view: NSView, context: Context) {}
-}
-
 struct WindowChrome: NSViewRepresentable {
     final class Anchor: NSView {
         override func viewDidMoveToWindow() {

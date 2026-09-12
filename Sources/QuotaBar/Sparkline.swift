@@ -1,0 +1,100 @@
+import SwiftUI
+import QuotaCore
+
+// MARK: - Small shared pieces
+//
+// Kept from the 0.4 panel when it was removed: the trend line, the reset
+// credits row and the settings tile style are still used elsewhere.
+
+/// Snappy press feedback for grid tiles.
+struct TileButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .scaleEffect(configuration.isPressed ? 0.94 : 1)
+            .opacity(configuration.isPressed ? 0.75 : 1)
+            .animation(.easeOut(duration: 0.12), value: configuration.isPressed)
+    }
+}
+
+/// Mini trend line of recorded headline readings (0–100% scale).
+struct SparklineView: View {
+    let values: [Double]
+    let accent: Color
+    var height: CGFloat = 26
+
+    var body: some View {
+        if values.count > 1 {
+            VStack(alignment: .leading, spacing: 3) {
+                GeometryReader { proxy in
+                    // Fixed 0–100 scale: an auto-scaled axis would make 3% look
+                    // as dramatic as 90%, which is the opposite of useful here.
+                    // The plot area is drawn so the headroom above a low line
+                    // reads as "plenty left", not as a layout gap.
+                    // Line only, no area fill. A series pinned at 100% — which
+                    // is exactly what an exhausted quota looks like — fills the
+                    // whole plot and stops reading as a trend at all.
+                    line(in: proxy.size).stroke(
+                        accent.opacity(0.9),
+                        style: StrokeStyle(lineWidth: 1.5, lineCap: .round, lineJoin: .round))
+                }
+                .frame(height: height)
+                .padding(.horizontal, 1)
+                .background(
+                    RoundedRectangle(cornerRadius: Design.radiusTile - 2, style: .continuous)
+                        .fill(Design.track.opacity(0.35)))
+                HStack(spacing: Design.space1) {
+                    Text(L10n.t(
+                        "trend · last \(values.count) refreshes",
+                        "趋势 · 最近 \(values.count) 次刷新"))
+                    if let last = values.last, let peak = values.max(), peak > last {
+                        Text(L10n.t("· peak \(QuotaFormat.percent(peak))",
+                                    "· 峰值 \(QuotaFormat.percent(peak))"))
+                    }
+                }
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+            }
+        }
+    }
+
+    private func point(_ index: Int, in size: CGSize) -> CGPoint {
+        let stepX = size.width / CGFloat(values.count - 1)
+        let clamped = min(max(values[index], 0), 100)
+        return CGPoint(x: CGFloat(index) * stepX, y: size.height * (1 - CGFloat(clamped / 100)))
+    }
+
+    private func line(in size: CGSize) -> Path {
+        Path { path in
+            for index in values.indices {
+                let next = point(index, in: size)
+                if index == 0 { path.move(to: next) } else { path.addLine(to: next) }
+            }
+        }
+    }
+
+}
+
+/// Early-reset credits, when the plan grants them.
+struct ResetCreditsRow: View {
+    let credits: ResetCredits
+    let accent: Color
+
+    var body: some View {
+        HStack(spacing: Design.space2) {
+            Image(systemName: "arrow.clockwise.circle")
+                .foregroundStyle(accent)
+            Text(L10n.t("Early resets", "限额重置额度"))
+                .font(.callout.weight(.medium))
+            Spacer()
+            Text(L10n.t(
+                "\(credits.available) available",
+                "\(credits.available) 次可用"))
+                .font(.callout.weight(.semibold))
+                .monospacedDigit()
+                .foregroundStyle(accent)
+        }
+        .help(L10n.t(
+            "Credits that reset a rate-limit window early. \(credits.applicable ?? 0) apply to the window limiting you right now.",
+            "可提前重置限额窗口的次数。当前正在限流的窗口可用 \(credits.applicable ?? 0) 次。"))
+    }
+}

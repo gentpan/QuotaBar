@@ -658,22 +658,6 @@ public struct WindowPace: Sendable, Equatable {
         self.secondsToReset = secondsToReset
     }
 
-    /// Positive means ahead of pace — burning faster than the window refills.
-    public var deltaPercent: Double { actualPercent - expectedPercent }
-
-    /// True when linear extrapolation runs the window out before it resets.
-    ///
-    /// Under a linear projection this is *equivalent* to being ahead of pace
-    /// at all — the algebra reduces to `actualPercent > expectedPercent`. It
-    /// is kept because it is the phrasing that means something to a reader,
-    /// not because it is a stricter test than `deltaPercent > 0`.
-    public var willExhaustBeforeReset: Bool {
-        guard let secondsToExhaustion else { return false }
-        return secondsToExhaustion < secondsToReset
-    }
-
-    /// Ignore noise: a few points either side of even is not worth flagging.
-    public var isNotable: Bool { abs(deltaPercent) >= 8 }
 }
 
 /// Quota windows split into two questions a glance should answer separately:
@@ -898,17 +882,6 @@ public enum QuotaFormat {
         return L10n.t(
             "resets in \(countdown(to: date, from: now))",
             "\(countdown(to: date, from: now))后重置")
-    }
-
-    /// "预计 1 天 15 小时后耗尽" / "on pace" — what a window's rate implies.
-    public static func paceLabel(_ pace: WindowPace, now: Date = .now) -> String? {
-        guard pace.isNotable else { return nil }
-        if pace.willExhaustBeforeReset, let seconds = pace.secondsToExhaustion {
-            let when = countdown(to: now.addingTimeInterval(seconds), from: now)
-            return L10n.t("runs out in \(when)", "预计 \(when)后耗尽")
-        }
-        let spare = QuotaFormat.percent(abs(pace.deltaPercent))
-        return L10n.t("\(spare) under pace", "比匀速少用 \(spare)")
     }
 
     /// "3 minutes ago" — how old a snapshot is.

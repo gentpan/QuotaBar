@@ -79,11 +79,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             Snapshot.islandPreview(directory: directory)
             NSApp.terminate(nil)
         }
-        if let index = arguments.firstIndex(of: "--theme-preview") {
-            let directory = index + 1 < arguments.count ? arguments[index + 1] : "./themes"
-            Snapshot.themePreview(directory: directory)
-            NSApp.terminate(nil)
-        }
         if let index = arguments.firstIndex(of: "--settings-window") {
             // `--settings-window status` opens straight to a section.
             let section = index + 1 < arguments.count ? SettingsSection(rawValue: arguments[index + 1]) : nil

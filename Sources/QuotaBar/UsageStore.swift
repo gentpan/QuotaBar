@@ -592,11 +592,6 @@ final class UsageStore: ObservableObject {
         widgetRevision &+= 1
     }
 
-    func setWidgetDensity(_ density: WidgetDensity) {
-        config.widgetDensity = density
-        widgetRevision &+= 1
-    }
-
     func setWidgetAlwaysOnTop(_ on: Bool) {
         config.widgetAlwaysOnTop = on
         widgetRevision &+= 1
@@ -619,9 +614,6 @@ final class UsageStore: ObservableObject {
     var islandProviders: [ProviderID] { surfaceProviders(.island, pin: islandPin) }
     var dockProviders: [ProviderID] { surfaceProviders(.dock, pin: dockPin) }
     var panelProviders: [ProviderID] { experience.visible(enabled, on: .panel) }
-    var widgetProviders: [ProviderID] {
-        widgetScope == .pinned ? config.providers(pinnedTo: widgetPin) : experience.visible(enabled, on: .desktop)
-    }
 
     private func surfaceProviders(_ surface: DisplaySurface, pin: ProviderID?) -> [ProviderID] {
         if let pin, enabled.contains(pin) { return [pin] }
@@ -684,12 +676,6 @@ final class UsageStore: ObservableObject {
         widgetEnabled && experience.deskCards.contains { $0.provider == id && $0.style.singleProvider }
     }
 
-    func setWidgetScope(_ scope: WidgetScope) {
-        config.widgetScope = scope
-        objectWillChange.send()
-        widgetRevision &+= 1
-    }
-
     // MARK: Screen
 
     var displayScreen: String? { config.displayScreen }
@@ -731,25 +717,6 @@ final class UsageStore: ObservableObject {
         objectWillChange.send()
         dockRevision &+= 1
     }
-    var updateFeedValue: String { config.updateFeed.configValue }
-
-    func setChecksForUpdates(_ on: Bool) {
-        config.checksForUpdates = on
-        objectWillChange.send()
-        if on { checkForUpdate() } else { updateStage = .idle }
-    }
-
-    /// Returns false when the value is not a usable source, so the field can
-    /// say so instead of silently storing something that never resolves.
-    @discardableResult
-    func setUpdateFeed(_ value: String) -> Bool {
-        guard let feed = UpdateFeed(configValue: value) else { return false }
-        config.updateFeed = feed
-        objectWillChange.send()
-        checkForUpdate()
-        return true
-    }
-
     func refreshCost() {
         Task { await refreshCostNow() }
     }

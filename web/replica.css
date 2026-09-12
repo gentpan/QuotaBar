@@ -21,113 +21,6 @@
   -webkit-font-smoothing: antialiased;
 }
 
-/* ── 菜单面板 ─────────────────────────────────────────────────────── */
-.qb-panel {
-  /* 不要在这里写 position —— hero 里 .desktop__panel 已经是 absolute，而它
-     本身就是后代绝对定位的包含块。在这里加 relative 会因为 replica.css 后
-     加载、特异度又相同而盖掉它，面板会掉回文档流。 */
-  width: 380px;
-  padding: 12px;                 /* Design.space3 */
-  background: var(--qb-bg);
-  border-radius: 12px;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.qb-grid {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 8px;                      /* Design.space2 */
-}
-
-.qb-tile {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 5px;
-  padding: 10px 4px 8px;
-  border-radius: 8px;            /* Design.radiusTile */
-  background: var(--qb-surface);
-  font-size: 11px;
-  font-weight: 500;
-  line-height: 1.1;
-  text-align: center;
-  color: var(--qb-ink);
-}
-.qb-tile.is-on { background: var(--qb-accent); color: var(--qb-on-accent); }
-.qb-tile img { width: 18px; height: 18px; object-fit: contain; }
-.qb-tile.is-on img { filter: brightness(0) invert(1); }
-.qb-tile__glyph {
-  width: 18px; height: 18px;
-  display: grid; place-items: center;
-  color: currentColor; opacity: 0.75;
-}
-.qb-tile__meter {
-  /* block：宽高在非替换型行内元素上不生效，这两条是 <span> */
-  display: block;
-  width: 100%; height: 3px;
-  border-radius: 2px;
-  background: var(--qb-track);
-  overflow: hidden;
-}
-.qb-tile.is-on .qb-tile__meter { background: rgba(255, 255, 255, 0.25); }
-.qb-tile__fill { display: block; height: 100%; border-radius: 2px; width: 0; }
-
-.qb-sep { height: 1px; background: rgba(0, 0, 0, 0.1); }
-
-.qb-head { display: flex; align-items: center; gap: 8px; }
-.qb-head img { width: 22px; height: 22px; object-fit: contain; }
-.qb-head__name { font-size: 17px; font-weight: 600; letter-spacing: -0.01em; }
-.qb-badge {
-  font-size: 11px; font-weight: 500;
-  padding: 2px 8px; border-radius: 999px;
-  background: rgba(10, 132, 255, 0.14); color: #0a68d0;
-}
-.qb-head__acct { margin-left: auto; font-size: 12px; color: var(--qb-faint); }
-
-/* 趋势折线 */
-.qb-spark { display: flex; flex-direction: column; gap: 4px; }
-.qb-spark__box {
-  height: 44px; border-radius: 6px;
-  background: var(--qb-surface); position: relative; overflow: hidden;
-}
-.qb-spark__box svg { position: absolute; inset: 0; width: 100%; height: 100%; }
-.qb-spark__box path {
-  fill: none; stroke: #0a84ff; stroke-width: 1.5;
-  stroke-linecap: round; stroke-linejoin: round;
-}
-.qb-spark__cap { font-size: 11px; color: var(--qb-faint); }
-
-/* 额度窗口 */
-.qb-win { display: flex; flex-direction: column; gap: 6px; }
-.qb-win__top { display: flex; align-items: center; gap: 8px; }
-.qb-pill {
-  font-size: 11px; font-weight: 600;
-  padding: 3px 9px; border-radius: 999px;
-  background: rgba(10, 132, 255, 0.13); color: #0a68d0;
-}
-.qb-pill--active { background: rgba(10, 132, 255, 0.13); color: #0a68d0; }
-.qb-win__scope { font-size: 13px; }
-.qb-win__pct {
-  margin-left: auto; font-size: 15px; font-weight: 600;
-  font-variant-numeric: tabular-nums;
-}
-.qb-bar { height: 5px; border-radius: 3px; background: var(--qb-track); overflow: hidden; }
-.qb-bar__fill { display: block; height: 100%; border-radius: 3px; width: 0; }
-.qb-win__meta { font-size: 11px; color: var(--qb-faint); text-align: right; }
-.qb-win__pace {
-  display: flex; align-items: center; gap: 6px;
-  font-size: 12px; font-weight: 500; color: #c2410c;
-}
-
-/* 页脚 */
-.qb-row { display: flex; align-items: center; gap: 8px; font-size: 13px; }
-.qb-row__val { margin-left: auto; font-weight: 600; color: #0a68d0; }
-.qb-note { font-size: 11px; color: var(--qb-faint); }
-.qb-foot { display: flex; align-items: center; font-size: 11px; color: var(--qb-faint); }
-.qb-foot__icons { margin-left: auto; display: flex; gap: 14px; color: var(--qb-dim); }
-
 /* ── 边缘停靠条 ───────────────────────────────────────────────────── */
 .qb-dock {
   width: 74px;
@@ -157,80 +50,15 @@
   font-variant-numeric: tabular-nums;
 }
 
-/* ── 动画 ─────────────────────────────────────────────────────────── */
-.qb-bar__fill, .qb-tile__fill { transition: width 1100ms cubic-bezier(.2,.8,.25,1); }
 .qb-ring__arc { transition: stroke-dashoffset 1200ms cubic-bezier(.2,.8,.25,1); }
-.qb-spark__box path {
-  stroke-dasharray: var(--len); stroke-dashoffset: var(--len);
-  transition: stroke-dashoffset 1400ms ease-out;
-}
-.qb.is-live .qb-spark__box path { stroke-dashoffset: 0; }
 
 /* 刷新时轻轻脉冲一下，说明它是活的 */
-@keyframes qb-tick { 0%, 100% { opacity: 1 } 50% { opacity: 0.45 } }
-.qb-foot__icons svg:first-child { animation: qb-tick 2.4s ease-in-out infinite 3s; }
 
 @media (prefers-reduced-motion: reduce) {
-  .qb-bar__fill, .qb-tile__fill, .qb-ring__arc, .qb-spark__box path {
+  .qb-ring__arc {
     transition: none !important;
   }
-  .qb-foot__icons svg:first-child { animation: none !important; }
 }
-
-/* ── 切换服务商 ───────────────────────────────────────────────────── */
-.qb-tile {
-  border: 0;
-  cursor: pointer;
-  /* 只继承字族。写 font 简写会把上面 .qb-tile 的 font-size: 11px /
-     font-weight: 500 / line-height: 1.1 一起重置掉（特异度相同、这条在后），
-     标签会变成继承来的 16px/400。 */
-  font-family: inherit;
-  transition: background-color 160ms ease-out, color 160ms ease-out;
-}
-.qb-tile:hover:not(.is-on) { background: var(--qb-surface-2); }
-.qb-tile:focus-visible { outline: 2px solid #0a84ff; outline-offset: 2px; }
-
-/* 详情区在切换时淡出、换内容、再淡入；高度也跟着走，因为不同服务商的
-   窗口数不同 —— 这正是应用本身的行为（面板按内容定高，不是钉死的）。 */
-.qb-detail {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  overflow: hidden;
-  transition: height 340ms cubic-bezier(.2, .8, .25, 1),
-              opacity 170ms ease-out,
-              transform 170ms ease-out;
-}
-.qb-detail.is-swapping { opacity: 0; transform: translateY(6px); }
-
-/* 「点一下试试」的提示，交互一次后消失 */
-.qb-hint {
-  position: absolute;
-  left: 50%;
-  bottom: -26px;
-  transform: translateX(-50%);
-  white-space: nowrap;
-  font-size: 11px;
-  color: rgba(255, 255, 255, 0.55);
-  transition: opacity 300ms ease-out;
-}
-.qb-hint.is-gone { opacity: 0; }
-
-@media (prefers-reduced-motion: reduce) {
-  .qb-detail { transition: none !important; }
-  .qb-detail.is-swapping { opacity: 1; transform: none; }
-}
-
-/* 总览：每行一个服务商 */
-.qb-ovrow {
-  display: grid;
-  grid-template-columns: 22px 1fr auto;
-  align-items: center;
-  gap: 4px 10px;
-}
-.qb-ovrow img { width: 20px; height: 20px; object-fit: contain; }
-.qb-ovrow__name { font-size: 14px; font-weight: 500; }
-.qb-ovrow .qb-bar { grid-column: 1 / -1; margin-top: 2px; }
 
 /* ── 停靠条的悬停卡片 ─────────────────────────────────────────────────
  * 规格直接抄自 Sources/QuotaBar/ProviderRing.swift 的 ProviderCallout：
@@ -280,11 +108,6 @@
   margin-left: auto; font-size: 11px;
   color: rgba(255, 255, 255, 0.55); white-space: nowrap;
 }
-.qb-crow__meter {
-  display: block; height: 5px; border-radius: 999px;
-  background: rgba(255, 255, 255, 0.16); overflow: hidden;
-}
-.qb-crow__fill { display: block; height: 100%; border-radius: 999px; }
 .qb-crow__used { font-size: 11px; color: rgba(255, 255, 255, 0.55); }
 
 /* 悬停时那一格微微亮起，和应用里的选中标记同一个语气 */

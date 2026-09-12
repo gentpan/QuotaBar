@@ -180,41 +180,22 @@ private struct PanelHeightKey: PreferenceKey {
 
 struct MenuPanelView: View {
     @ObservedObject var store: UsageStore
+    /// Off for off-screen renders, which draw a ScrollView's content as nothing.
+    var scrollable = true
     @State private var scrollHeight: CGFloat = 0
     @State private var footerHeight: CGFloat = 52
 
     var body: some View {
         VStack(spacing: 0) {
-            ScrollView {
-                VStack(spacing: store.experience.panelDensity == .compact ? 8 : 10) {
-                    if !store.experience.welcomeDismissed {
-                        WelcomeCard(store: store)
+            if scrollable {
+                ScrollView { cards }
+                    .scrollIndicators(.never)
+                    .onPreferenceChange(PanelHeightKey.self) { height in
+                        scrollHeight = height
+                        MenuPanelController.shared.setContentHeight(height + footerHeight)
                     }
-                    UpdateBanner(store: store)
-                    if store.experience.showSpendCard {
-                        SpendCardView(store: store)
-                    }
-                    if store.enabled.isEmpty {
-                        emptyState
-                    }
-                    ForEach(store.panelProviders) { id in
-                        ProviderCardView(store: store, id: id)
-                    }
-                    let hidden = store.hiddenProviders(on: .panel)
-                    if !hidden.isEmpty {
-                        HiddenProvidersNote(store: store, hidden: hidden)
-                    }
-                }
-                .padding(10)
-                .background(GeometryReader { proxy in
-                    Color.clear.preference(key: PanelHeightKey.self, value: proxy.size.height)
-                })
-                .animation(Motion.animation(Motion.spring), value: store.experience.expandedCards)
-            }
-            .scrollIndicators(.never)
-            .onPreferenceChange(PanelHeightKey.self) { height in
-                scrollHeight = height
-                MenuPanelController.shared.setContentHeight(height + footerHeight)
+            } else {
+                cards
             }
 
             PanelFooter(store: store)
@@ -244,6 +225,33 @@ struct MenuPanelView: View {
         .animation(Motion.animation(Motion.spring), value: store.copiedNotice)
         .environment(\.colorScheme, .dark)
         .honoursReducedMotion()
+    }
+
+    private var cards: some View {
+                VStack(spacing: store.experience.panelDensity == .compact ? 8 : 10) {
+                    if !store.experience.welcomeDismissed {
+                        WelcomeCard(store: store)
+                    }
+                    UpdateBanner(store: store)
+                    if store.experience.showSpendCard {
+                        SpendCardView(store: store)
+                    }
+                    if store.enabled.isEmpty {
+                        emptyState
+                    }
+                    ForEach(store.panelProviders) { id in
+                        ProviderCardView(store: store, id: id)
+                    }
+                    let hidden = store.hiddenProviders(on: .panel)
+                    if !hidden.isEmpty {
+                        HiddenProvidersNote(store: store, hidden: hidden)
+                    }
+                }
+                .padding(10)
+                .background(GeometryReader { proxy in
+                    Color.clear.preference(key: PanelHeightKey.self, value: proxy.size.height)
+                })
+                .animation(Motion.animation(Motion.spring), value: store.experience.expandedCards)
     }
 
     private var emptyState: some View {

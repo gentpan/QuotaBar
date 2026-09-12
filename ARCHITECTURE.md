@@ -378,8 +378,7 @@ The accent is a neutral graphite **and inverts between appearances**
 (`QuotaTheme.accentHex` / `accentDarkHex`): a dark selection block sinks into a
 dark window, so dark mode gets a light block with dark ink. It is neutral on
 purpose — the panel already carries thirteen provider brand colours and a fourteenth
-competing hue makes none of them legible. `QuotaBar --theme-preview <dir>`
-renders the panel across candidate accents if it ever needs revisiting.
+competing hue makes none of them legible.
 
 The glyph reports whichever provider the panel is focused on — `selected` in
 the config, persisted, because it decides what the icon means and a choice that

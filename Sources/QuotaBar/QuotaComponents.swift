@@ -11,9 +11,6 @@ enum Motion {
     static let chartSwap = Animation.timingCurve(0.23, 1, 0.32, 1, duration: 0.22)
     static let hoverFade = Animation.easeOut(duration: 0.12)
     static let pageSwipe = Animation.timingCurve(0.25, 0.82, 0.25, 1, duration: 0.36)
-    /// Opening is leisurely, closing is snappy.
-    static let openMorph = Animation.spring(response: 0.42, dampingFraction: 0.82)
-    static let closeMorph = Animation.spring(response: 0.30, dampingFraction: 0.88)
     static let spring = Animation.spring(response: 0.42, dampingFraction: 0.80)
 
     /// The owner's Reduce Animations switch, or the system's Reduce Motion.
@@ -57,16 +54,6 @@ extension AnyTransition {
         .modifier(active: BlurModifier(radius: 2), identity: BlurModifier(radius: 0))
             .combined(with: .opacity)
             .combined(with: .scale(scale: 0.98, anchor: .top))
-    }
-}
-
-/// Scales a pressed surface to 0.94 for 110ms: a press that is seen to land.
-struct PressableStyle: ButtonStyle {
-    var scale: CGFloat = 0.94
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .scaleEffect(configuration.isPressed ? scale : 1)
-            .animation(.easeOut(duration: 0.11), value: configuration.isPressed)
     }
 }
 
