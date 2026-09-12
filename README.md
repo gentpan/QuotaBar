@@ -50,10 +50,10 @@ English and Simplified Chinese and follows the system language unless you pick o
 <!-- changelog:start -->
 <!-- Generated from CHANGELOG.md by Scripts/sync_changelog.py. Do not edit by hand. -->
 
-Latest release **0.4.0** (2026-09-12) · **62** changes in development · [full changelog](CHANGELOG.md) (kept in Chinese)
+Latest release **0.4.0** (2026-09-12) · **65** changes in development · [full changelog](CHANGELOG.md) (kept in Chinese)
 
 <details open>
-<summary><b>2026-09-13</b> · Unreleased · 34 added · 7 style · 12 fixed</summary>
+<summary><b>2026-09-13</b> · Unreleased · 34 added · 10 style · 12 fixed</summary>
 
 **Added**
 
@@ -101,6 +101,9 @@ Latest release **0.4.0** (2026-09-12) · **62** changes in development · [full 
 - 花费卡片头部重构：左侧改为下拉标题，点开在花费、Token、每百万 token 花费之间选择；右侧说明、分享、复制改为三个同样大小、对齐的按钮，点说明会显示数据来源。三个图标缩放到同一个方框内，高度一致，并与左侧下拉标题的中心线对齐。
 - 按钮按下时轻微缩小，动画曲线统一；图表切换时带轻微模糊过渡。支持"减少动画"，并跟随系统的减弱动态效果设置。
 - 设置里桌面卡片的尺寸切换在英文界面下改为 S / M / L，不再把 Medium 截成 Med...；桌面多服务商卡片英文底栏写作"4 providers · % left"，大数字卡片的窗口名和"left"之间补上空格；"屏幕"说明的英文措辞重写。
+- 设置窗口的控件统一为一套样式：下拉选择、分段切换、按钮、输入框同为 30pt 高，同样的圆角、底色和细边框，放在一行里高度对齐。桌面卡片的样式与服务商、货币选择改为新的下拉控件，点开时当前项叠在控件上并打勾，文字与控件对齐；"添加卡片"改为同款带箭头的按钮。
+- 设置里的开关打开时显示为绿色，不再是深灰。只有一行标题的开关行与输入行等高，卡片内的行距一致；左侧标签与右侧控件垂直居中。
+- 分享用量卡片窗口的下拉、署名输入框、开关和分享、保存、复制按钮换成同一套控件样式。
 
 **Fixed**
 
