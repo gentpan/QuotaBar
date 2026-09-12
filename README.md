@@ -50,9 +50,18 @@ English and Simplified Chinese and follows the system language unless you pick o
 <!-- changelog:start -->
 <!-- Generated from CHANGELOG.md by Scripts/sync_changelog.py. Do not edit by hand. -->
 
-Latest release **0.5.0** (2026-09-13) · [full changelog](CHANGELOG.md) (kept in Chinese)
+Latest release **0.5.0** (2026-09-13) · **1** changes in development · [full changelog](CHANGELOG.md) (kept in Chinese)
 
 <details open>
+<summary><b>2026-09-13</b> · Unreleased · 1 style</summary>
+
+**Style**
+
+- 分享用量卡片窗口不再有单独的灰色标题栏：标题栏改为透明，卡片预览和右侧设置一直铺到窗口顶部，和设置窗口一样是一整块；卡片和右侧标题避开左上角的红绿灯按钮并上下对齐。
+
+</details>
+
+<details>
 <summary><b>2026-09-13</b> · 0.5.0 · 40 added · 10 style · 13 fixed</summary>
 
 **Added**
@@ -149,54 +158,6 @@ Latest release **0.5.0** (2026-09-13) · [full changelog](CHANGELOG.md) (kept in
 
 - Codex 的状态读不到 CLI 组件：OpenAI 状态页的汇总接口不含 CLI，现在缺少时会补读完整组件列表。
 - 重装或更新后，打开应用又弹出「Claude Code-credentials」钥匙串授权对话框。现在改为通过系统自带的 security 工具读取，与 Claude Code 自己的读取方式相同，不再因应用签名变化而重复询问。
-
-</details>
-
-<details>
-<summary><b>2026-09-12</b> · 0.4.0 · 18 added · 10 style · 6 fixed</summary>
-
-**Added**
-
-- 服务状态：读取 Claude、OpenAI（Codex）、Cursor、Manus、MiniMax、Kimi、DeepSeek、Gemini 的公开状态页，每五分钟一次，无需登录。故障会显示在悬浮卡片和设置里。
-- 设置新增「服务状态」页：每个服务商一行，点开可看各组件状态和最近 30 天的在线情况。
-- 设置新增「用量统计」页：本机 Claude Code、Codex CLI、OpenCode 会话日志的全年热力图和 token 用量。
-- 新服务商 Antigravity 和 Qwen Cloud。
-- Cursor 增加 Grok Bot 额度；Grok 和 Claude 卡片显示登录账号。
-- 刘海岛重做：刘海两侧各显示 1 到 3 个服务商，悬停时从顶部展开完整面板。面板底部可切换阶梯或连续进度条、已用或剩余、额度或用量。
-- 停靠条单击圆环打开完整卡片，可把服务商「钉到」菜单栏、刘海岛、停靠条或桌面卡片。
-- 停靠条右键菜单增加立即刷新、锁定显示、显示全部服务商。
-- 悬浮卡片可以翻面查看用量：今日、7 天、14 天、30 天的用量与日均，柱形图悬停显示当天数值。
-- 悬浮卡片的刷新按钮可单独刷新该服务商，刷新时旋转。
-- 菜单栏图标可选显示读数、QuotaBar 白色 logo，或不显示。
-- 点击菜单栏图标直接打开设置窗口，不再弹出下拉面板。
-- 开启一个还没登录的服务商时，会自动展开并给出登录指引。Cursor 和 Kimi 支持在应用内浏览器登录。
-- 更新可选自动下载安装并重启，或手动安装；更新页显示当前版本。
-- 反馈页：无需登录，直接提交到 quota.bar。
-- 关于页加入官网、GitHub 和 X 链接。
-- 设置里的进度条默认改为阶梯样式，可切回连续样式。
-- 桌面卡片可选显示全部服务商或只显示钉住的一个。
-
-**Style**
-
-- 停靠条圆角改为 14pt，去掉直角选项。
-- 停靠条圆环里的 logo 放大；去掉圆环下方的百分比，选中的服务商在圆环下方显示绿点。
-- 停靠条向屏幕边缘偏移，抵消屏幕自带的黑边，视觉上居中。
-- 停靠条圆环悬停时微微放大，卡片在圆环之间移动时平滑过渡。
-- 刘海岛两侧的 logo 与数字使用同一种品牌色。
-- Kimi 的 logo 去掉黑色底块；Qwen 和 Antigravity 换成官方品牌 logo。
-- 设置里的按钮统一加高加宽；服务商列表的状态标记对齐成一列。
-- 用量统计卡片改为浅色。
-- 在线状态条使用与额度进度条相同的绿色，在线率数字放在状态条前面。
-- 桌面卡片每个服务商按时间段显示，最多两条进度条。
-
-**Fixed**
-
-- 悬浮卡片里的按钮能高亮但点击没有反应。
-- 停靠条展开时出现空白条、收起时整体往上跳。
-- 在线状态条颜色和在线率计算错误，正常的日子显示为红色。
-- 切换停靠边缘后，停靠条仍停在原来那一侧。
-- 新版 Grok CLI 的登录文件读不到，Grok 一直显示未配置。
-- 本机残留旧版 Homebrew 安装记录时，被误判为 Homebrew 安装而无法应用内更新。
 
 </details>
 

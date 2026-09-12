@@ -296,6 +296,8 @@ struct ShareStudioView: View {
                     .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
                     .shadow(color: .black.opacity(0.25), radius: 18, y: 8)
                     .padding(28)
+                    // Clear of the traffic lights, which now sit over the preview.
+                    .padding(.top, Design.titlebarInset - 8)
                     .animation(Motion.animation(Motion.chartSwap), value: format)
             }
             .scrollIndicators(.never)
@@ -307,6 +309,11 @@ struct ShareStudioView: View {
                 .background(Color(white: 0.16))
         }
         .frame(minWidth: 760, minHeight: 620)
+        // One surface, top to bottom: the titlebar is transparent and the
+        // preview and the controls run up under it, as in Settings — a grey
+        // title strip over the two panes read as a separate window part.
+        .background(WindowChrome())
+        .ignoresSafeArea()
         .environment(\.colorScheme, .dark)
         .onChange(of: signature) { _, value in store.updateExperience { $0.shareSignature = value } }
         .onChange(of: showsSignature) { _, value in store.updateExperience { $0.shareShowsSignature = value } }
@@ -372,6 +379,8 @@ struct ShareStudioView: View {
                 .fixedSize(horizontal: false, vertical: true)
         }
         .padding(20)
+        // Level with the card's top edge across the window.
+        .padding(.top, Design.titlebarInset)
     }
 
     private func picker<T: Hashable & Identifiable>(_ title: String, _ options: [T], selection: Binding<T>, label: KeyPath<T, String>) -> some View {
