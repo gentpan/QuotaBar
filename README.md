@@ -12,7 +12,7 @@
 [![License](https://img.shields.io/badge/license-MIT-black)](LICENSE)
 
 A menu-bar app that reads how much of each AI coding provider's quota you have
-used and when each window resets. Eleven providers, no servers, no accounts.
+used and when each window resets. Thirteen providers, no servers, no accounts.
 
 [Download](https://github.com/gentpan/quotabar/releases/latest) ·
 [Website](web/) ·
@@ -44,6 +44,7 @@ Requires macOS 14 (Sonoma) or later. Apple Silicon and Intel.
 | Claude | Claude Code keychain item → `api.anthropic.com/api/oauth/usage` | automatic |
 | Gemini | `~/.gemini/oauth_creds.json` → `cloudcode-pa.googleapis.com` | automatic |
 | Grok | `~/.grok/auth.json` → `cli-chat-proxy.grok.com/v1/billing` | automatic / manual |
+| Antigravity | `~/.gemini/jetski-standalone-oauth-token` → `cloudcode-pa.googleapis.com` | automatic |
 | Cursor | Cursor's own `state.vscdb` session → `cursor.com/api/usage-summary` | automatic / manual |
 | OpenCode Go | `~/.local/share/opencode/auth.json` → `opencode.ai/zen/go/v1/usage` | automatic / manual |
 | Kimi Code | `kimi.com` billing gateway | manual `kimi-auth` JWT |
@@ -51,6 +52,7 @@ Requires macOS 14 (Sonoma) or later. Apple Silicon and Intel.
 | MiniMax | `api.minimax.io` coding-plan remains | manual token / cookie |
 | Manus | `api.manus.im` credits | manual session token |
 | DeepSeek | `api.deepseek.com/user/balance` | manual API key |
+| Qwen Cloud | `home.qwencloud.com` console → token plan usage | manual Cookie header |
 
 **Nothing leaves your Mac.** Automatic providers reuse the session your CLI already
 created — the app never asks for a password. Manually entered tokens go to the **macOS

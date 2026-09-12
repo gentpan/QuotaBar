@@ -381,24 +381,30 @@ final class EdgeDockCoordinator {
         case .animate:
             targetFrame = frame
         }
-        // Not `setFrame(_:display:animate:)`. That one steps the resize on a
-        // *blocking* run-loop loop — measured at 341ms of stalled main thread
-        // for this size change — and relayouts the hosting view on every step,
-        // so the content's own animation cannot run at all while it is going.
-        // The animator hands the frame to Core Animation and returns in under
-        // a millisecond.
-        sliding = true
-        NSAnimationContext.runAnimationGroup({ context in
-            context.duration = Self.slideDuration
-            context.timingFunction = CAMediaTimingFunction(name: .easeOut)
-            context.allowsImplicitAnimation = true
-            panel.animator().setFrame(frame, display: true)
-        }, completionHandler: {
-            MainActor.assumeIsolated {
+        // The window is never animated. Animating its frame — even through
+        // the animator — repaints a transparent window a step behind its
+        // new bounds, and the owner saw that as a blank sliver down the
+        // strip's inboard side on every reveal. Instead the window snaps to
+        // the larger of the two frames and the black silhouette grows or
+        // shrinks *inside* it, on SwiftUI's spring, out of the edge: on the
+        // way open the window goes first, on the way shut it goes last.
+        // Both frames share a midpoint, so nothing visibly moves at the
+        // snap. (`setFrame(_:display:animate:)` was worse still: it blocks
+        // the main thread for the whole resize, measured at 341ms.)
+        if frame.width >= panel.frame.width {
+            sliding = false
+            panel.setFrame(frame, display: true)
+            Self.trace("snapped open")
+        } else {
+            sliding = true
+            Task { [weak self] in
+                try? await Task.sleep(for: .seconds(Self.slideDuration))
+                guard let self, self.targetFrame == frame else { return }
                 self.sliding = false
-                Self.trace("slide finished")
+                panel.setFrame(frame, display: true)
+                Self.trace("snapped shut")
             }
-        })
+        }
     }
 
     /// Records where the user dragged the strip to, as a fraction of the
@@ -454,26 +460,35 @@ struct EdgeDockView: View {
     private var showsStrip: Bool { expanded || coordinator.alwaysVisible }
 
     var body: some View {
-        Group {
-            if showsStrip {
-                // Slides in from the docked edge as the window grows, so the
-                // rings come out of the screen's side. A plain fade put them
-                // at their final position at 0% opacity and brightened them
-                // there, which read as the strip materialising next to the
-                // edge rather than emerging from it.
-                strip.transition(.move(edge: onLeft ? .leading : .trailing).combined(with: .opacity))
-            } else {
-                handle.transition(.opacity)
+        ZStack(alignment: onLeft ? .leading : .trailing) {
+            // The silhouette, sized by state rather than by the window: it
+            // grows from the handle's 18x92 to the strip's full size on the
+            // same spring the content uses, so the reveal is one shape
+            // swelling out of the edge. The window has already snapped to
+            // the larger frame by then, and shrinks only after this has.
+            Self.dockShape(onLeft: onLeft)
+                .fill(Color.black)
+                .frame(width: showsStrip ? EdgeDockCoordinator.width : EdgeDockCoordinator.handleWidth)
+                .frame(maxHeight: showsStrip ? .infinity : EdgeDockCoordinator.handleHeight)
+            Group {
+                if showsStrip {
+                    // Slides in from the docked edge as the silhouette grows,
+                    // so the rings come out of the screen's side. A plain
+                    // fade put them at their final position at 0% opacity
+                    // and brightened them there, which read as the strip
+                    // materialising next to the edge rather than emerging
+                    // from it.
+                    strip.transition(.move(edge: onLeft ? .leading : .trailing).combined(with: .opacity))
+                } else {
+                    handle.transition(.opacity)
+                }
             }
+            // Fixed at its own size and pinned to the docked edge, so the
+            // silhouette growing around it reveals it instead of reflowing
+            // it. Vertically centred because both frames share a midpoint:
+            // 18x92 and 74x332 have the same centre.
+            .fixedSize()
         }
-        // Fixed at its own size and pinned to the docked edge, so the panel
-        // growing around it reveals it instead of reflowing it. Without this
-        // the four rings are laid out again on every frame of the reveal —
-        // squeezed into the handle's 92pt at the start and relaxing over the
-        // next 240ms, which looks like the content fighting the window.
-        // Vertically centred because the panel grows symmetrically about its
-        // own centre: 18x92 and 74x332 share a midpoint.
-        .fixedSize()
         // The same three actions the menu-bar item offers on its secondary
         // click, so the dock is complete on its own when the menu-bar item
         // is hidden behind the notch.
@@ -494,17 +509,9 @@ struct EdgeDockView: View {
             maxWidth: .infinity,
             maxHeight: .infinity,
             alignment: onLeft ? .leading : .trailing)
-        // One shape for both states, sized to the panel, so the reveal is a
-        // single shape growing rather than two shapes of different sizes
-        // cross-fading through each other — which looked like the handle and
-        // the strip arguing over the same corner. The radius is clamped to the
-        // shape it is drawn in, so the same 20pt reads as the panel's corner at
-        // 74pt wide and as the handle's pill edge at 18. Flat black: glass
-        // was tried here and read as grey over light windows (GlassStyle.swift
-        // has the numbers); black is what the owner wants.
-        .background(
-            Self.dockShape(onLeft: onLeft).fill(Color.black))
-        // Always dark, like the panel, the island and the widget.
+        // Flat black: glass was tried here and read as grey over light
+        // windows (GlassStyle.swift has the numbers); black is what the
+        // owner wants. Always dark, like the panel, the island and the widget.
         .environment(\.colorScheme, .dark)
         .onHover { inside in
             coordinator.setExpanded(inside) { expanded = $0 }

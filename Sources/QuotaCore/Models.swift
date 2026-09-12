@@ -236,6 +236,8 @@ public enum ProviderID: String, CaseIterable, Codable, Sendable, Identifiable {
     case manus
     case deepseek
     case grok
+    case antigravity
+    case qwen
 
     public var id: String { rawValue }
 
@@ -253,6 +255,8 @@ public enum ProviderID: String, CaseIterable, Codable, Sendable, Identifiable {
         case .manus: "Manus"
         case .deepseek: "DeepSeek"
         case .grok: "Grok"
+        case .antigravity: "Antigravity"
+        case .qwen: "Qwen Cloud"
         }
     }
 
@@ -272,6 +276,8 @@ public enum ProviderID: String, CaseIterable, Codable, Sendable, Identifiable {
         case .manus: "hand.raised"
         case .deepseek: "magnifyingglass"
         case .grok: "bolt"
+        case .antigravity: "arrow.up.circle"
+        case .qwen: "cloud"
         }
     }
 
@@ -289,6 +295,8 @@ public enum ProviderID: String, CaseIterable, Codable, Sendable, Identifiable {
         case .manus: "B08968"
         case .deepseek: "4D9F7B"
         case .grok: "22C55E"
+        case .antigravity: "8AB4F8"
+        case .qwen: "C084FC"
         }
     }
 
@@ -306,14 +314,20 @@ public enum ProviderID: String, CaseIterable, Codable, Sendable, Identifiable {
         case .manus: URL(string: "https://manus.im")
         case .deepseek: URL(string: "https://platform.deepseek.com/usage")
         case .grok: URL(string: "https://grok.com")
+        case .antigravity: URL(string: "https://antigravity.google")
+        case .qwen: URL(string: "https://home.qwencloud.com/billing/subscription/token-plan-individual")
         }
     }
 
     /// nil = credentials are discovered locally (CLI login files / Keychain).
     public var credentialHint: String? {
         switch self {
-        case .codex, .claude, .gemini:
+        case .codex, .claude, .gemini, .antigravity:
             return nil
+        case .qwen:
+            return L10n.t(
+                "Full Cookie header from home.qwencloud.com, signed in (DevTools → Network → any request → Cookie).",
+                "home.qwencloud.com 登录后的完整 Cookie 头（开发者工具 → 网络 → 任一请求 → Cookie）。")
         case .grok:
             return L10n.t(
                 "Optional override; otherwise read from ~/.grok/auth.json (grok CLI login).",
@@ -356,6 +370,9 @@ public enum ProviderID: String, CaseIterable, Codable, Sendable, Identifiable {
         case .grok: return L10n.t(
             "Sign in with the grok CLI or paste a token in Settings.",
             "用 grok CLI 登录，或在设置中粘贴 token。")
+        case .antigravity: return L10n.t(
+            "Open Antigravity and sign in once; its token is read from ~/.gemini.",
+            "打开 Antigravity 并登录一次，令牌会从 ~/.gemini 读取。")
         default: return credentialHint ?? ""
         }
     }

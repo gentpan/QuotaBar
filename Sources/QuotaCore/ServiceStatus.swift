@@ -78,7 +78,7 @@ public enum StatusPages {
         case .kimi: .statuspage(api: URL(string: "https://status.moonshot.cn")!)
         case .deepseek: .statuspage(api: URL(string: "https://deepseek.statuspage.io")!)
         case .gemini: .googleCloud(product: "Gemini")
-        case .zai, .opencodeGo, .grok: nil
+        case .zai, .opencodeGo, .grok, .antigravity, .qwen: nil
         }
     }
 
@@ -93,7 +93,7 @@ public enum StatusPages {
         case .kimi: URL(string: "https://status.moonshot.cn")
         case .deepseek: URL(string: "https://status.deepseek.com")
         case .gemini: URL(string: "https://status.cloud.google.com")
-        case .zai, .opencodeGo, .grok: nil
+        case .zai, .opencodeGo, .grok, .antigravity, .qwen: nil
         }
     }
 

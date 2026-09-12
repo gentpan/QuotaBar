@@ -356,7 +356,7 @@ fill **or** a border, never both, and no gradients or glassmorphism.
 The accent is a neutral graphite **and inverts between appearances**
 (`QuotaTheme.accentHex` / `accentDarkHex`): a dark selection block sinks into a
 dark window, so dark mode gets a light block with dark ink. It is neutral on
-purpose — the panel already carries eleven provider brand colours and a twelfth
+purpose — the panel already carries thirteen provider brand colours and a fourteenth
 competing hue makes none of them legible. `QuotaBar --theme-preview <dir>`
 renders the panel across candidate accents if it ever needs revisiting.
 
@@ -624,7 +624,10 @@ the rest of the app is careful to stay out of the way of.
 Six ways a provider gets its credential, in order of preference:
 
 1. **CLI login file** — Codex (`~/.codex/auth.json`), Gemini, Grok, OpenCode Go
-   (`~/.local/share/opencode/auth.json`), read in the clear.
+   (`~/.local/share/opencode/auth.json`), Antigravity
+   (`~/.gemini/jetski-standalone-oauth-token`, read only: the app refreshes it
+   while it runs, and refreshing it here would need the app's own OAuth
+   client), read in the clear.
 2. **Another app's keychain item** — Claude Code.
 3. **Another app's local session store** — Cursor keeps its signed-in session
    in `state.vscdb`, a plain SQLite file (`SQLiteRead`). Not the cookie jar,

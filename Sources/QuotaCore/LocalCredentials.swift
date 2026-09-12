@@ -345,6 +345,54 @@ public enum LocalCredentials {
 
     // MARK: Grok (~/.grok/auth.json written by the grok CLI)
 
+    // MARK: Antigravity
+
+    /// Antigravity's standalone OAuth token, as the app leaves it on disk.
+    public struct AntigravityToken: Sendable {
+        public let accessToken: String
+        public let expiry: Date?
+
+        public func isExpired(now: Date = Date()) -> Bool {
+            guard let expiry else { return false }
+            return expiry <= now
+        }
+    }
+
+    /// `~/.gemini/jetski-standalone-oauth-token`: `{"token": {"access_token",
+    /// "expiry", "refresh_token", ...}, "auth_method"}`. The app refreshes it
+    /// while it runs; this only reads. Refreshing it here would need the
+    /// app's own OAuth client, which is its to keep.
+    public static func antigravityToken() -> AntigravityToken? {
+        let url = FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent(".gemini/jetski-standalone-oauth-token")
+        guard let data = try? Data(contentsOf: url),
+              let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+        else { return nil }
+        return antigravityToken(in: root)
+    }
+
+    static func antigravityToken(in root: [String: Any]) -> AntigravityToken? {
+        let token = root["token"] as? [String: Any] ?? root
+        guard let access = token["access_token"] as? String, !access.isEmpty else { return nil }
+        return AntigravityToken(accessToken: access, expiry: parseFlexibleISO(token["expiry"] as? String))
+    }
+
+    /// ISO 8601 with any number of fractional digits and a numeric offset —
+    /// Python's `isoformat()`, which is what wrote the file.
+    static func parseFlexibleISO(_ raw: String?) -> Date? {
+        guard let raw, !raw.isEmpty else { return nil }
+        if let date = Dates.parseISO(raw) { return date }
+        // Trim fractional seconds to three digits, which is what
+        // ISO8601DateFormatter accepts.
+        let trimmed = raw.replacingOccurrences(
+            of: #"(\.\d{3})\d+"#, with: "$1", options: .regularExpression)
+        if let date = Dates.parseISO(trimmed) { return date }
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.dateFormat = "yyyy-MM-dd'T'HH:mm:ss.SSSXXXXX"
+        return formatter.date(from: trimmed)
+    }
+
     public struct GrokAuth: Sendable {
         public let accessToken: String
         /// The signed-in account, from the same entry as the token.

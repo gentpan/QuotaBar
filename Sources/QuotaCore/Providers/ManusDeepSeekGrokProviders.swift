@@ -236,6 +236,8 @@ public enum ProviderRegistry {
         case .manus: ManusProvider()
         case .deepseek: DeepSeekProvider()
         case .grok: GrokProvider()
+        case .antigravity: AntigravityProvider()
+        case .qwen: QwenProvider()
         }
     }
 

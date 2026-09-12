@@ -117,7 +117,11 @@ struct ProviderCallout: View {
     /// from the local session logs where there are any. Flipped by the
     /// header button, with the card turning over on its vertical axis.
     @State private var flipped = false
-    @State private var spin = 0.0
+    /// The refresh button becomes a spinner until the store's next tick —
+    /// the sign the owner asked for that the press did something — or for
+    /// four seconds, whichever comes first.
+    @State private var refreshing = false
+    @State private var refreshTick = 0
 
     private var phase: ProviderPhase? { store.states[id] }
     private var status: ServiceStatus? { store.serviceStatus[id] }
@@ -166,11 +170,21 @@ struct ProviderCallout: View {
                         .background(Color.white.opacity(0.10), in: RoundedRectangle(cornerRadius: 4, style: .continuous))
                 }
                 Spacer(minLength: Design.space2)
-                CalloutButton(symbol: "arrow.clockwise", help: L10n.t("Refresh \(id.displayName)", "刷新 \(id.displayName)")) {
-                    withAnimation(.easeInOut(duration: 0.6)) { spin += 360 }
-                    store.refresh(id)
+                if refreshing {
+                    ProgressView()
+                        .controlSize(.small)
+                        .frame(width: 22, height: 22)
+                        .onChange(of: store.tick) { _, _ in refreshing = false }
+                        .task {
+                            try? await Task.sleep(for: .seconds(4))
+                            refreshing = false
+                        }
+                } else {
+                    CalloutButton(symbol: "arrow.clockwise", help: L10n.t("Refresh \(id.displayName)", "刷新 \(id.displayName)")) {
+                        refreshing = true
+                        store.refresh(id)
+                    }
                 }
-                .rotationEffect(.degrees(spin))
                 CalloutButton(
                     symbol: flipped ? "list.bullet" : "chart.bar.xaxis",
                     help: flipped ? L10n.t("Show quota", "显示额度") : L10n.t("Show usage", "显示用量"))
@@ -310,14 +324,11 @@ struct ProviderCallout: View {
                             .frame(maxWidth: .infinity, alignment: .leading)
                         }
                     }
-                    let recent = store.ledger.days(in: .year).suffix(14)
-                    MiniBars(
-                        values: recent.map { Double($0.bySource[source] ?? 0) },
-                        accent: Color(hex: source.accentHex))
-                    Text(L10n.t("Last 14 days · tokens incl. cache", "最近 14 天 · token 含缓存"))
-                        .font(.system(size: 10))
-                        .foregroundStyle(.white.opacity(0.4))
+                    Spacer(minLength: Design.space2)
+                    let recent = Array(store.ledger.days(in: .year).suffix(14))
+                    DailyBars(days: recent, source: source, accent: Color(hex: source.accentHex))
                 }
+                .frame(maxHeight: .infinity, alignment: .top)
             }
         } else {
             let history = store.history[id] ?? []
@@ -379,6 +390,52 @@ struct CalloutButton: View {
             .accessibilityAddTraits(.isButton)
             .animation(.easeOut(duration: 0.12), value: hovering)
             .animation(.easeOut(duration: 0.12), value: pressed)
+    }
+}
+
+/// A fortnight of days as bars, sat on the card's floor, with the day
+/// under the pointer read out where the caption is.
+struct DailyBars: View {
+    let days: [UsageDay]
+    let source: CostSource
+    let accent: Color
+    @State private var hovered: Int?
+
+    private var peak: Double {
+        max(days.map { Double($0.bySource[source] ?? 0) }.max() ?? 1, 1)
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: Design.space2) {
+            HStack(alignment: .bottom, spacing: 3) {
+                ForEach(days.indices, id: \.self) { index in
+                    let tokens = Double(days[index].bySource[source] ?? 0)
+                    RoundedRectangle(cornerRadius: 2, style: .continuous)
+                        .fill(accent.opacity(tokens > 0 ? (hovered == nil || hovered == index ? 0.92 : 0.45) : 0.15))
+                        .frame(height: max(3, 56 * CGFloat(tokens / peak)))
+                        .frame(maxWidth: .infinity, alignment: .bottom)
+                        .contentShape(Rectangle().size(width: 40, height: 60))
+                        .onHover { hovered = $0 ? index : (hovered == index ? nil : hovered) }
+                        .animation(.easeOut(duration: 0.12), value: hovered)
+                }
+            }
+            .frame(height: 56, alignment: .bottom)
+            Text(caption)
+                .font(.system(size: 10, design: .monospaced))
+                .foregroundStyle(.white.opacity(hovered == nil ? 0.4 : 0.7))
+                .lineLimit(1)
+        }
+    }
+
+    private var caption: String {
+        guard let hovered, days.indices.contains(hovered) else {
+            return L10n.t("Last 14 days · tokens incl. cache", "最近 14 天 · token 含缓存")
+        }
+        let day = days[hovered]
+        let tokens = day.bySource[source] ?? 0
+        let share = Double(tokens) / Double(max(1, day.tokens))
+        let date = DateFormatter.localizedString(from: day.day, dateStyle: .short, timeStyle: .none)
+        return "\(date) · \(QuotaFormat.compact(tokens)) · \(QuotaFormat.usd(day.usd * share))"
     }
 }
 
