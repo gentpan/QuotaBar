@@ -189,7 +189,8 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
   -webkit-user-select: none;
 }
 .menubar__apple { width: 14px; margin: 0 10px 0 8px; opacity: 0.96; flex: none; }
-.menubar__app { font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", sans-serif; font-weight: 700; letter-spacing: 0; }
+/* App 名用 QuotaBar 的字标字体，和应用、README 一致 */
+.menubar__app { font-family: "Instrument Sans", -apple-system, BlinkMacSystemFont, sans-serif; font-weight: 600; font-size: 14px; letter-spacing: -0.01em; }
 
 .mb-menu { position: relative; height: 100%; display: flex; align-items: center; }
 .mb-title {
@@ -249,14 +250,25 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
 .menubar__right svg { opacity: 0.92; flex: none; }
 .menubar__clock { font-size: 13px; white-space: nowrap; font-variant-numeric: tabular-nums; }
 
-/* 状态栏里的 QuotaBar 图标：高亮，因为面板正从它下面挂出来 */
-.menubar__quota {
-  display: flex;
-  align-items: center;
-  padding: 3px 7px;
-  border-radius: var(--r-sm);
-  background: rgba(255, 255, 255, 0.24);
+/* 状态栏里的 QuotaBar 图标：应用渲染的模板图，用作遮罩，颜色跟随菜单栏文字；
+   只有它的菜单打开时才有高亮块，和真机一样。 */
+.menubar__quota { padding-inline: 6px; }
+.mb-glyph {
+  display: block;
+  width: 22px;
+  height: 22px;
+  background: currentColor;
+  -webkit-mask: var(--glyph) center / contain no-repeat;
+  mask: var(--glyph) center / contain no-repeat;
 }
+.mb-drop--right { left: auto; right: 0; }
+.mb-drop--glyphs { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 2px; min-width: 300px; }
+.mb-drop--glyphs .mb-drop__label, .mb-drop--glyphs hr, .mb-drop--glyphs .mb-drop__note { grid-column: 1 / -1; }
+.mb-drop__label { margin: 2px 10px 4px; font-size: 12px; font-weight: 600; color: rgba(255, 255, 255, 0.5); }
+.mb-drop__note { margin: 2px 10px 4px; max-width: 34ch; font-size: 11px; line-height: 1.45; color: rgba(255, 255, 255, 0.45); white-space: normal; }
+.mb-drop a.mb-glyph-option { justify-content: flex-start; gap: 8px; height: 30px; }
+.mb-glyph-option .mb-glyph { flex: none; }
+.mb-glyph-option[aria-checked="true"] { background: rgba(255, 255, 255, 0.12); }
 
 /* 面板：吊在状态栏图标下方 */
 /* 刘海岛面板：从菜单栏正下方吊出来，居中，像真机上从刘海展开的那块 */
@@ -292,8 +304,8 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
 /* 停靠条贴右缘 */
 .desktop__strip {
   position: absolute;
-  /* 低于面板 —— 两者都贴右缘，挤在同一高度会互相压住 */
-  top: 70%;
+  /* 刘海岛面板在正中上方，停靠条贴右缘偏上一点，和真机上悬在屏幕中部的位置相近 */
+  top: 50%;
   right: 0;
   /* 高于面板（15）：悬停卡片是这个元素的子节点，而子节点的 z-index 出不了
      父级的层叠上下文 —— 停在 14 的话卡片会被面板压住。应用里这张卡片本来

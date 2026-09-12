@@ -98,6 +98,29 @@
   document.addEventListener("click", function (event) {
     if (openMenu && !openMenu.contains(event.target)) setOpen(null);
   });
+
+  /* 状态栏图标换样式：图是应用渲染的 11 种模板图，选中的记在本地 */
+  var glyph = document.getElementById("menubarGlyph");
+  var glyphOptions = document.querySelectorAll(".mb-glyph-option");
+  function useGlyph(name) {
+    if (!glyph) return;
+    glyph.style.setProperty("--glyph", "url(assets/glyphs/glyph-" + name + "@3x.png)");
+    Array.prototype.forEach.call(glyphOptions, function (o) {
+      o.setAttribute("aria-checked", o.getAttribute("data-glyph") === name ? "true" : "false");
+    });
+  }
+  try {
+    var saved = localStorage.getItem("qb-glyph");
+    if (saved && document.querySelector('.mb-glyph-option[data-glyph="' + saved + '"]')) useGlyph(saved);
+  } catch (e) { /* 存储不可用时就用默认的 */ }
+  Array.prototype.forEach.call(glyphOptions, function (option) {
+    option.addEventListener("click", function (event) {
+      event.preventDefault();
+      var name = option.getAttribute("data-glyph");
+      useGlyph(name);
+      try { localStorage.setItem("qb-glyph", name); } catch (e) { /* 忽略 */ }
+    });
+  });
   document.addEventListener("keydown", function (event) {
     if (event.key === "Escape" && openMenu) {
       var title = openMenu.querySelector(".mb-title");

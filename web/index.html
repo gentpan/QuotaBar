@@ -92,14 +92,29 @@
     </div>
 
     <div class="menubar__right">
-      <span class="menubar__quota" title="QuotaBar">
-        <svg width="20" height="13" viewBox="0 0 20 13" aria-hidden="true">
-          <rect x="0.5" y="0.9" width="19" height="4.4" rx="2.2" fill="none" stroke="#000" stroke-opacity="0.85"/>
-          <rect x="1.6" y="2" width="11" height="2.2" rx="1.1" fill="#000" fill-opacity="0.85"/>
-          <rect x="0.5" y="7.4" width="19" height="4.4" rx="2.2" fill="none" stroke="#000" stroke-opacity="0.85"/>
-          <rect x="1.6" y="8.5" width="16" height="2.2" rx="1.1" fill="#000" fill-opacity="0.85"/>
-        </svg>
-      </span>
+      <!-- 状态栏里的 QuotaBar：图标是应用真实渲染出来的（--snapshot 导出的 @3x），
+           点开可以像在应用里一样换成 11 种样式中的任意一种。 -->
+      <div class="mb-menu mb-menu--status">
+        <a class="mb-title menubar__quota" href="#features" aria-haspopup="menu" aria-expanded="false" aria-label="QuotaBar 菜单栏图标">
+          <i class="mb-glyph" id="menubarGlyph" style="--glyph:url(assets/glyphs/glyph-ring@3x.png)"></i>
+        </a>
+        <div class="mb-drop mb-drop--right mb-drop--glyphs" role="menu">
+          <p class="mb-drop__label">菜单栏图标样式</p>
+          <a role="menuitemradio" href="#" class="mb-glyph-option" data-glyph="ring" aria-checked="true"><i class="mb-glyph" style="--glyph:url(assets/glyphs/glyph-ring@3x.png)"></i><span>圆环</span></a>
+          <a role="menuitemradio" href="#" class="mb-glyph-option" data-glyph="dualBar" aria-checked="false"><i class="mb-glyph" style="--glyph:url(assets/glyphs/glyph-dualBar@3x.png)"></i><span>双层横条</span></a>
+          <a role="menuitemradio" href="#" class="mb-glyph-option" data-glyph="bar" aria-checked="false"><i class="mb-glyph" style="--glyph:url(assets/glyphs/glyph-bar@3x.png)"></i><span>横条</span></a>
+          <a role="menuitemradio" href="#" class="mb-glyph-option" data-glyph="columns" aria-checked="false"><i class="mb-glyph" style="--glyph:url(assets/glyphs/glyph-columns@3x.png)"></i><span>柱形</span></a>
+          <a role="menuitemradio" href="#" class="mb-glyph-option" data-glyph="percent" aria-checked="false"><i class="mb-glyph" style="--glyph:url(assets/glyphs/glyph-percent@3x.png)"></i><span>数字</span></a>
+          <a role="menuitemradio" href="#" class="mb-glyph-option" data-glyph="dual" aria-checked="false"><i class="mb-glyph" style="--glyph:url(assets/glyphs/glyph-dual@3x.png)"></i><span>双层分段</span></a>
+          <a role="menuitemradio" href="#" class="mb-glyph-option" data-glyph="segments" aria-checked="false"><i class="mb-glyph" style="--glyph:url(assets/glyphs/glyph-segments@3x.png)"></i><span>分段</span></a>
+          <a role="menuitemradio" href="#" class="mb-glyph-option" data-glyph="grid" aria-checked="false"><i class="mb-glyph" style="--glyph:url(assets/glyphs/glyph-grid@3x.png)"></i><span>九宫格</span></a>
+          <a role="menuitemradio" href="#" class="mb-glyph-option" data-glyph="battery" aria-checked="false"><i class="mb-glyph" style="--glyph:url(assets/glyphs/glyph-battery@3x.png)"></i><span>电量</span></a>
+          <a role="menuitemradio" href="#" class="mb-glyph-option" data-glyph="gauge" aria-checked="false"><i class="mb-glyph" style="--glyph:url(assets/glyphs/glyph-gauge@3x.png)"></i><span>仪表</span></a>
+          <a role="menuitemradio" href="#" class="mb-glyph-option" data-glyph="ticks" aria-checked="false"><i class="mb-glyph" style="--glyph:url(assets/glyphs/glyph-ticks@3x.png)"></i><span>刻度</span></a>
+          <hr>
+          <p class="mb-drop__note">和应用里「外观」的 11 种样式一样，图标由应用直接渲染。</p>
+        </div>
+      </div>
       <svg width="19" height="11" viewBox="0 0 19 11" fill="none" stroke="currentColor" stroke-width="1.1" aria-hidden="true">
         <rect x="0.6" y="0.6" width="14" height="9.8" rx="2.6"/>
         <rect x="2.2" y="2.2" width="9" height="6.6" rx="1.4" fill="currentColor" stroke="none"/>

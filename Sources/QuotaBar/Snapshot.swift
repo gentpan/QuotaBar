@@ -627,6 +627,23 @@ enum Snapshot {
                 try? png.write(to: directory
                     .appendingPathComponent("menubar-\(style.rawValue)-\(mode.rawValue).png"))
             }
+            // At 3x for the website's menu-bar replica, with the same readings
+            // its island shows (Claude: 5-hour 18%, week 58%). Drawn from the
+            // glyph's own vector closure, so it is sharp rather than upscaled.
+            let glyph = MenuBarIcon.render(reading: MeterReading(short: 18, long: 58), style: style, mode: .remaining)
+            let scale: CGFloat = 3
+            guard let rep = NSBitmapImageRep(
+                bitmapDataPlanes: nil, pixelsWide: Int(glyph.size.width * scale), pixelsHigh: Int(glyph.size.height * scale),
+                bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true, isPlanar: false,
+                colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0)
+            else { continue }
+            rep.size = glyph.size
+            NSGraphicsContext.saveGraphicsState()
+            NSGraphicsContext.current = NSGraphicsContext(bitmapImageRep: rep)
+            glyph.draw(in: NSRect(origin: .zero, size: glyph.size))
+            NSGraphicsContext.restoreGraphicsState()
+            try? rep.representation(using: .png, properties: [:])?
+                .write(to: directory.appendingPathComponent("glyph-\(style.rawValue)@3x.png"))
         }
     }
 }
