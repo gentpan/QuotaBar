@@ -349,27 +349,33 @@ struct ProviderCardView: View {
     }
 }
 
-/// The frame around anything copied as an image: black, padded, with the
-/// QuotaBar mark at the foot.
+/// The frame around anything copied as an image: black, padded, and a
+/// footer that signs it — the app icon on its green tile with the name on
+/// the left, the address on the right, each said once.
 struct ShareableCard<Content: View>: View {
     @ObservedObject var store: UsageStore
     @ViewBuilder let content: () -> Content
 
     var body: some View {
-        VStack(spacing: 12) {
+        VStack(spacing: 14) {
             content()
-            HStack(spacing: 6) {
-                if let url = ProviderGlyph.markURL(named: "quotabar-mark"), let image = NSImage(contentsOf: url) {
+            HStack(spacing: 8) {
+                if let url = ProviderGlyph.markURL(named: "quotabar-icon"), let image = NSImage(contentsOfFile: url.path) {
                     Image(nsImage: image)
-                        .renderingMode(.template)
                         .resizable()
-                        .frame(width: 13, height: 13)
-                        .foregroundStyle(.white.opacity(0.5))
+                        .interpolation(.high)
+                        .frame(width: 20, height: 20)
+                        .clipShape(RoundedRectangle(cornerRadius: 4.5, style: .continuous))
                 }
-                Text(L10n.t("QuotaBar · quota.bar", "QuotaBar · quota.bar"))
-                    .font(Design.wordmark(size: 11, weight: .medium))
-                    .foregroundStyle(.white.opacity(0.5))
+                Text("QuotaBar")
+                    .font(Design.wordmark(size: 13, weight: .semibold))
+                    .foregroundStyle(.white.opacity(0.85))
+                Spacer(minLength: 8)
+                Text("quota.bar")
+                    .font(.system(size: 11, weight: .medium, design: .monospaced))
+                    .foregroundStyle(.white.opacity(0.4))
             }
+            .padding(.horizontal, 4)
         }
         .padding(16)
         .frame(width: 380)

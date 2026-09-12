@@ -15,6 +15,14 @@ enum WidgetConceptBoard {
         let store = previewStore()
         let styles = DeskCardStyle.allCases.filter { $0 != .classic }
 
+        // The image "Copy as Image" puts on the clipboard, for each enabled provider.
+        for id in store.enabled {
+            let copied = ShareableCard(store: store) { ProviderCardView(store: store, id: id, forExport: true) }
+            if let image = CardImageExporter.image(copied, scale: 2), let png = CardImageExporter.pngData(image) {
+                try? png.write(to: url.appendingPathComponent("copied-\(id.rawValue).png"))
+            }
+        }
+
         for size in DeskCardSize.allCases {
             let board = VStack(alignment: .leading, spacing: 30) {
                 Text(L10n.t("Desktop cards · \(size.displayName)", "桌面卡片 · \(size.displayName)号"))
