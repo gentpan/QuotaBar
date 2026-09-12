@@ -112,6 +112,24 @@ public struct CodexProvider: QuotaProvider {
         }
     }
 
+    /// The plan as ChatGPT sells it. The usage endpoint names the two Pro
+    /// tiers by their internal ids — `prolite` is the 5× plan, `pro` the 20×
+    /// one — so capitalising the id showed both as "Pro". The mapping is the
+    /// one openusage uses against the same endpoint; anything else is the id
+    /// with its underscores turned into spaces.
+    public static func planName(_ raw: String?) -> String? {
+        guard let raw = raw?.trimmingCharacters(in: .whitespacesAndNewlines), !raw.isEmpty else { return nil }
+        switch raw.lowercased() {
+        case "prolite": return "Pro 5x"
+        case "pro": return "Pro 20x"
+        case "self_serve_business_prolite": return "Business Premium"
+        default:
+            return raw.split(separator: "_")
+                .map { $0.prefix(1).uppercased() + $0.dropFirst().lowercased() }
+                .joined(separator: " ")
+        }
+    }
+
     /// Pure parse step, kept separate from the network call so it can be
     /// tested against recorded responses.
     public static func parse(_ data: Data, fallbackAccount: String? = nil) throws -> UsageSnapshot {
@@ -140,7 +158,7 @@ public struct CodexProvider: QuotaProvider {
         }
 
         return UsageSnapshot(
-            planName: body.planType?.capitalized,
+            planName: planName(body.planType),
             account: body.email ?? body.accountId ?? fallbackAccount,
             windows: windows,
             resetCredits: resetCredits)

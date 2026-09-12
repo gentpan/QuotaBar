@@ -80,7 +80,20 @@ final class CodexParsingTests: XCTestCase {
     func testAccountPrefersEmailOverUUID() throws {
         let snapshot = try CodexProvider.parse(Data(proResponse.utf8))
         XCTAssertEqual(snapshot.account, "dev@example.com")
-        XCTAssertEqual(snapshot.planName, "Pro")
+        XCTAssertEqual(snapshot.planName, "Pro 20x", "plan_type pro is the 20x plan")
+    }
+
+    /// The endpoint names the Pro tiers by internal id; the chip should say
+    /// which one the account is on.
+    func testCodexPlanIdsBecomeTheirTiers() {
+        XCTAssertEqual(CodexProvider.planName("prolite"), "Pro 5x")
+        XCTAssertEqual(CodexProvider.planName("pro"), "Pro 20x")
+        XCTAssertEqual(CodexProvider.planName("PRO"), "Pro 20x")
+        XCTAssertEqual(CodexProvider.planName("self_serve_business_prolite"), "Business Premium")
+        XCTAssertEqual(CodexProvider.planName("plus"), "Plus")
+        XCTAssertEqual(CodexProvider.planName("enterprise_edu"), "Enterprise Edu")
+        XCTAssertNil(CodexProvider.planName("  "))
+        XCTAssertNil(CodexProvider.planName(nil))
     }
 
     func testZeroBalanceWithoutCreditsIsHidden() throws {
