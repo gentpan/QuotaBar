@@ -60,6 +60,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             Snapshot.iconPreview(directory: directory)
             NSApp.terminate(nil)
         }
+        if let index = arguments.firstIndex(of: "--widget-concepts") {
+            let directory = index + 1 < arguments.count ? arguments[index + 1] : "./widget-concepts"
+            WidgetConceptBoard.render(directory: directory)
+            NSApp.terminate(nil)
+        }
         if let index = arguments.firstIndex(of: "--island-preview") {
             let directory = index + 1 < arguments.count ? arguments[index + 1] : "./island"
             Snapshot.islandPreview(directory: directory)
