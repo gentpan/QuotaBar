@@ -213,7 +213,10 @@ Adding a provider, and every design decision worth knowing before changing one:
 ## Credits
 
 A clean-room Swift implementation, inspired by
-[steipete/CodexBar](https://github.com/steipete/CodexBar) (MIT).
+[steipete/CodexBar](https://github.com/steipete/CodexBar) (MIT). The notch island learned
+from [ericjypark/codex-island](https://github.com/ericjypark/codex-island) (MIT), and the
+menu panel, pace hints and share card from
+[robinebers/openusage](https://github.com/robinebers/openusage) (MIT).
 Provider brand marks via [GLINCKER/thesvg](https://github.com/GLINCKER/thesvg); SVG
 masters kept in `Assets/logos-src-*.svg`. The wordmark is set in
 [Sora](https://github.com/sora-xor/sora-font) (SIL OFL 1.1).
@@ -224,4 +227,4 @@ Trademarks belong to their respective owners.
 
 ## License
 
-MIT — see [LICENSE](LICENSE).
+MIT — see [LICENSE](LICENSE). © 2026 [GiantAccel, LLC](https://giantaccel.com).

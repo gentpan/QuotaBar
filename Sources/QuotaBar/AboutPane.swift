@@ -39,12 +39,12 @@ struct AboutPane: View {
                 .fixedSize(horizontal: false, vertical: true)
                 .frame(maxWidth: .infinity, alignment: .leading)
 
-            // Where to find the project and its author. Plain links, in a
-            // row, each opening in the browser.
-            HStack(spacing: Design.space4) {
+            // Where to find the project, its author and a person to write to.
+            HStack(spacing: Design.space2) {
                 AboutLink(title: L10n.t("Website", "网站"), detail: "quota.bar", mark: .symbol("globe"), url: "https://quota.bar")
-                AboutLink(title: "GitHub", detail: "gentpan/quotabar", mark: .brand("github"), url: "https://github.com/gentpan/quotabar")
+                AboutLink(title: "GitHub", detail: "gentpan/quotabar", mark: .brand("github"), url: Self.repository)
                 AboutLink(title: "X", detail: "@gentpan", mark: .brand("x"), url: "https://x.com/gentpan")
+                AboutLink(title: L10n.t("Email", "邮件"), detail: "hello@quota.bar", mark: .symbol("envelope"), url: "mailto:hello@quota.bar")
                 Spacer(minLength: 0)
             }
             .padding(.top, Design.space1)
@@ -52,21 +52,23 @@ struct AboutPane: View {
             Divider()
                 .padding(.top, Design.space1)
 
-            // When this copy was made, and whose it is.
-            HStack(alignment: .firstTextBaseline, spacing: Design.space2) {
-                if let updated = Self.updated {
-                    Text(L10n.t("Updated \(updated)", "更新于 \(updated)"))
+            // This copy: when it was made and what it runs on; and whose it is.
+            HStack(alignment: .top, spacing: Design.space3) {
+                VStack(alignment: .leading, spacing: 3) {
+                    HStack(spacing: Design.space1) {
+                        if let updated = Self.updated {
+                            Text(L10n.t("Updated \(updated)", "更新于 \(updated)"))
+                            Text("·")
+                        }
+                        TextLink(L10n.t("Changelog", "更新日志"), url: Self.repository + "/blob/main/CHANGELOG.md")
+                    }
+                    Text(L10n.t("Requires macOS 14 or later", "需要 macOS 14 或更高版本"))
                 }
                 Spacer(minLength: Design.space2)
-                Text(Self.copyright)
-                Button {
-                    NSWorkspace.shared.open(URL(string: "https://github.com/gentpan/quotabar/blob/main/LICENSE")!)
-                } label: {
-                    Text(L10n.t("MIT License", "MIT 开源许可"))
-                        .underline()
+                VStack(alignment: .trailing, spacing: 3) {
+                    TextLink(Self.copyright, url: "https://giantaccel.com")
+                    TextLink(L10n.t("MIT License", "MIT 开源许可"), url: Self.repository + "/blob/main/LICENSE")
                 }
-                .buttonStyle(.plain)
-                .help(L10n.t("Read the licence", "查看许可协议"))
             }
             .font(.system(size: 11))
             .monospacedDigit()
@@ -80,8 +82,42 @@ struct AboutPane: View {
             SettingFootnote(L10n.t(
                 "Spend figures are estimates computed locally from the CLIs' session logs at published list prices. They are not a bill.",
                 "费用为本地会话日志按官方标价估算的结果，仅供参考，不等于实际账单。"))
+            VStack(alignment: .leading, spacing: 4) {
+                SettingFootnote(L10n.t("QuotaBar connects only to:", "QuotaBar 只会连接这些地方："))
+                ForEach(Self.connections, id: \.self) { line in
+                    HStack(alignment: .firstTextBaseline, spacing: 6) {
+                        Text("·")
+                        SettingFootnote(line)
+                    }
+                    .font(.system(size: 11))
+                    .foregroundStyle(.secondary)
+                }
+                SettingFootnote(L10n.t(
+                    "With a proxy set, all of it goes through the proxy. Usage is never sent to QuotaBar's own server.",
+                    "设置了代理时，以上请求都经过代理。你的用量不会发送到 QuotaBar 自己的服务器。"))
+                    .padding(.top, 2)
+            }
         }
+
+        SettingsCard(L10n.t("Acknowledgements", "开源致谢")) {
+            SettingFootnote(L10n.t(
+                "QuotaBar learned from these open-source projects and is set in this typeface. Thank you.",
+                "QuotaBar 参考了以下开源项目，并使用了这款字体，在此致谢。"))
+            VStack(spacing: Design.space1) {
+                ForEach(Self.credits, id: \.name) { credit in
+                    CreditRow(credit: credit)
+                }
+            }
+        }
+
+        // The providers' names and marks appear all over the app; say whose they are.
+        SettingFootnote(L10n.t(
+            "QuotaBar is an independent app. It is not affiliated with, endorsed or sponsored by Anthropic, OpenAI, Cursor, Google, xAI, GitHub, X or any other company it mentions. Their names and logos belong to their respective owners.",
+            "QuotaBar 是独立的第三方应用，与 Anthropic、OpenAI、Cursor、Google、xAI、GitHub、X 以及文中提及的其他公司均无隶属、认可或赞助关系。相关名称和标志归各自所有者所有。"))
+            .padding(.horizontal, Design.space1)
     }
+
+    private static let repository = "https://github.com/gentpan/quotabar"
 
     /// What the app is, for someone who landed here without knowing.
     private static var summary: String {
@@ -89,6 +125,49 @@ struct AboutPane: View {
         return L10n.t(
             "QuotaBar is a menu-bar app for macOS. It gathers the limits, reset times and estimated spend of \(count) AI coding services — Claude Code, Codex, Cursor and more — into the menu bar, the notch island, an edge dock and desktop cards, and tells you before one runs out. Usage is read and worked out on this Mac.",
             "QuotaBar 是一款 macOS 菜单栏应用。它把 Claude Code、Codex、Cursor 等 \(count) 个 AI 编码服务的额度、重置时间和花费估算，集中显示在菜单栏、刘海岛、屏幕边缘停靠条和桌面卡片上，快用完时提前提醒。用量在本机读取和计算。")
+    }
+
+    /// Every host the app reaches, and when.
+    private static var connections: [String] {
+        [
+            L10n.t("the usage endpoints of the providers you turn on, with your own session or key;",
+                   "你开启的服务商的用量接口，使用你自己的登录会话或密钥；"),
+            L10n.t("their public status pages, such as status.claude.com;",
+                   "各服务的公开状态页，例如 status.claude.com；"),
+            L10n.t("open.er-api.com, once a day, for exchange rates;",
+                   "open.er-api.com，每天一次，获取汇率；"),
+            L10n.t("GitHub, to check for and download updates;",
+                   "GitHub，检查和下载更新；"),
+            L10n.t("quota.bar, only when you send feedback.",
+                   "quota.bar，仅在你提交反馈时。"),
+        ]
+    }
+
+    fileprivate struct Credit {
+        let name: String
+        let author: String
+        let license: String
+        let use: String
+        let url: String
+    }
+
+    /// The projects QuotaBar borrowed from, with the licences that ask for the
+    /// notice, and the wordmark's typeface.
+    private static var credits: [Credit] {
+        [
+            Credit(name: "codex-island", author: "Eric Park", license: "MIT",
+                   use: L10n.t("The notch island's look", "刘海岛的样式与动效"),
+                   url: "https://github.com/ericjypark/codex-island"),
+            Credit(name: "OpenUsage", author: "Robin Ebers", license: "MIT",
+                   use: L10n.t("The menu panel, pace hints and the share card", "下拉面板、用量节奏提示与分享卡片"),
+                   url: "https://github.com/robinebers/openusage"),
+            Credit(name: "CodexBar", author: "Peter Steinberger", license: "MIT",
+                   use: L10n.t("How providers report their usage", "各服务商用量的读取方式"),
+                   url: "https://github.com/steipete/CodexBar"),
+            Credit(name: "Sora", author: "The Sora Project Authors", license: "SIL OFL 1.1",
+                   use: L10n.t("The typeface of the QuotaBar wordmark", "QuotaBar 字标所用的字体"),
+                   url: "https://github.com/sora-xor/sora-font"),
+        ]
     }
 
     /// The day this copy was assembled: the packaging stamp, or in the dev
@@ -117,7 +196,67 @@ struct AboutPane: View {
         let first = 2026
         let now = Calendar.current.component(.year, from: Date())
         let years = now > first ? "\(first)–\(now)" : "\(first)"
-        return L10n.t("© \(years) QuotaBar contributors", "© \(years) QuotaBar 贡献者")
+        return "© \(years) GiantAccel, LLC"
+    }
+}
+
+/// Underlined words that open a page.
+private struct TextLink: View {
+    let title: String
+    let url: String
+
+    init(_ title: String, url: String) {
+        self.title = title
+        self.url = url
+    }
+
+    var body: some View {
+        Button {
+            if let url = URL(string: url) { NSWorkspace.shared.open(url) }
+        } label: {
+            Text(title).underline()
+        }
+        .buttonStyle(.plain)
+        .help(url)
+    }
+}
+
+/// One acknowledged project: what it is, whose, under which licence, and
+/// what QuotaBar took from it.
+private struct CreditRow: View {
+    let credit: AboutPane.Credit
+
+    var body: some View {
+        Button {
+            if let url = URL(string: credit.url) { NSWorkspace.shared.open(url) }
+        } label: {
+            HStack(spacing: Design.space2) {
+                VStack(alignment: .leading, spacing: 2) {
+                    HStack(alignment: .firstTextBaseline, spacing: Design.space2) {
+                        Text(credit.name)
+                            .font(.system(size: 12, weight: .medium))
+                        Text("\(credit.author) · \(credit.license)")
+                            .font(.system(size: 11))
+                            .foregroundStyle(.secondary)
+                    }
+                    Text(credit.use)
+                        .font(.system(size: 11))
+                        .foregroundStyle(.secondary)
+                }
+                Spacer(minLength: 0)
+                Image(systemName: "arrow.up.right")
+                    .font(.system(size: 9, weight: .semibold))
+                    .foregroundStyle(.tertiary)
+            }
+            .padding(.horizontal, Design.space3)
+            .padding(.vertical, Design.space2)
+            .background(
+                RoundedRectangle(cornerRadius: Design.radiusTile, style: .continuous)
+                    .fill(Design.surfaceStrong))
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .help(credit.url)
     }
 }
 
