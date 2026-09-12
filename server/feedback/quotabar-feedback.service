@@ -1,0 +1,22 @@
+[Unit]
+Description=quota.bar feedback receiver
+After=network.target
+
+[Service]
+Type=simple
+EnvironmentFile=-/etc/quotabar-feedback.env
+ExecStart=/usr/bin/python3 /opt/quotabar-feedback/feedback_server.py
+Restart=on-failure
+RestartSec=3
+User=www-data
+Group=www-data
+StateDirectory=quotabar
+Environment=FEEDBACK_DIR=/var/lib/quotabar
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/quotabar
+
+[Install]
+WantedBy=multi-user.target
