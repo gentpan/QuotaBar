@@ -37,6 +37,46 @@ public enum ServiceStatusLevel: String, Sendable, Codable, Equatable {
     public var isHealthy: Bool { self == .operational }
 }
 
+/// One of the parts a status page reports on — "claude.ai", "Claude Code",
+/// "API Service" — with its own band.
+public struct ServiceComponent: Sendable, Equatable, Identifiable {
+    public let id: String
+    public let name: String
+    public let level: ServiceStatusLevel
+
+    public init(id: String, name: String, level: ServiceStatusLevel) {
+        self.id = id
+        self.name = name
+        self.level = level
+    }
+}
+
+/// One day of a component's 90-day history, as the page draws it.
+public struct UptimeDay: Sendable, Equatable {
+    public let date: Date
+    public let level: ServiceStatusLevel
+    /// Incident names that touched the day, for the tooltip.
+    public let events: [String]
+    /// Seconds the page counted as partial or major outage that day; what
+    /// its uptime percentage is made of.
+    public let downtimeSeconds: Double
+
+    public init(date: Date, level: ServiceStatusLevel, events: [String], downtimeSeconds: Double = 0) {
+        self.date = date
+        self.level = level
+        self.events = events
+        self.downtimeSeconds = downtimeSeconds
+    }
+
+    /// Time-weighted, the way the page's own figure is: a two-hour blip on
+    /// one day is 0.1% of a quarter, not a whole red day.
+    public static func uptimePercent(_ days: [UptimeDay]) -> Double {
+        guard !days.isEmpty else { return 100 }
+        let down = days.reduce(0) { $0 + $1.downtimeSeconds }
+        return max(0, 100 - down / (Double(days.count) * 86_400) * 100)
+    }
+}
+
 /// One reading of a provider's public status page.
 public struct ServiceStatus: Sendable, Equatable {
     public let level: ServiceStatusLevel
@@ -45,12 +85,22 @@ public struct ServiceStatus: Sendable, Equatable {
     public let description: String
     public let pageURL: URL
     public let checkedAt: Date
+    /// The page's showcased components, in its order. Empty for feeds that
+    /// have none (Google Cloud's).
+    public let components: [ServiceComponent]
 
-    public init(level: ServiceStatusLevel, description: String, pageURL: URL, checkedAt: Date) {
+    public init(
+        level: ServiceStatusLevel,
+        description: String,
+        pageURL: URL,
+        checkedAt: Date,
+        components: [ServiceComponent] = [])
+    {
         self.level = level
         self.description = description
         self.pageURL = pageURL
         self.checkedAt = checkedAt
+        self.components = components
     }
 }
 
@@ -130,8 +180,40 @@ public enum StatusPages {
             let name: String?
             let status: String?
         }
+        struct Component: Decodable {
+            let id: String?
+            let name: String?
+            let status: String?
+            let group: Bool?
+            let showcase: Bool?
+        }
         let status: Status?
         let incidents: [Incident]?
+        let components: [Component]?
+    }
+
+    /// Statuspage's component bands → ours.
+    static func componentLevel(_ status: String?) -> ServiceStatusLevel {
+        switch status?.lowercased() {
+        case "operational": .operational
+        case "degraded_performance": .minor
+        case "partial_outage": .major
+        case "major_outage": .critical
+        case "under_maintenance": .maintenance
+        default: .operational
+        }
+    }
+
+    /// The page's showcased components; every non-group one when the page
+    /// showcases none (OpenAI's marks none and shows all).
+    static func components(of summary: Summary) -> [ServiceComponent] {
+        let leaves = (summary.components ?? []).filter { $0.group != true }
+        let picked = leaves.contains { $0.showcase == true } ? leaves.filter { $0.showcase == true } : leaves
+        return picked.compactMap { component in
+            guard let id = component.id, let name = component.name?.trimmingCharacters(in: .whitespacesAndNewlines),
+                  !name.isEmpty else { return nil }
+            return ServiceComponent(id: id, name: name, level: componentLevel(component.status))
+        }
     }
 
     /// Exposed for the tests, which pin it to recorded responses.
@@ -152,7 +234,208 @@ public enum StatusPages {
         let incident = summary.incidents?.first?.name?.trimmingCharacters(in: .whitespacesAndNewlines)
         let headline = summary.status?.description?.trimmingCharacters(in: .whitespacesAndNewlines)
         let description = [incident, headline].compactMap { $0 }.first { !$0.isEmpty } ?? level.displayName
-        return ServiceStatus(level: level, description: description, pageURL: page, checkedAt: now)
+        return ServiceStatus(
+            level: level,
+            description: description,
+            pageURL: page,
+            checkedAt: now,
+            components: components(of: summary))
+    }
+
+    // MARK: 90-day history
+
+    /// The page's own uptime widget data: `<page>/uptime/<component>?page=1`
+    /// answers JSON when asked for it — three months of days, each with the
+    /// colour the page paints it and the incidents that touched it. Not
+    /// part of the documented API, and OpenAI's page (a different renderer)
+    /// does not answer it; nil then.
+    public static func uptime(for id: ProviderID, component: String, now: Date = Date()) async -> [UptimeDay]? {
+        guard case let .statuspage(api)? = feed(for: id) else { return nil }
+        let browser = "Mozilla/5.0 (Macintosh; Intel Mac OS X 14_0) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15"
+        let url = api.appendingPathComponent("uptime/\(component)").appending(queryItems: [URLQueryItem(name: "page", value: "1")])
+        if let response = try? await HTTP.get(url, headers: ["Accept": "application/json", "User-Agent": browser]),
+           response.status == 200, let days = try? parseUptime(response.data)
+        {
+            return days
+        }
+        // incident.io-hosted pages (OpenAI's) have no such widget, but their
+        // own incident list carries every component impact with its start
+        // and end, which is enough to draw the days from.
+        guard let proxy = incidentIOProxy(for: id) else { return nil }
+        let data: Data
+        if let cached = incidentIOMemo.data(for: proxy, now: now) {
+            data = cached
+        } else {
+            let url = proxy.appendingPathComponent("incidents")
+            guard let response = try? await HTTP.get(url, headers: ["Accept": "application/json", "User-Agent": browser]),
+                  response.status == 200 else { return nil }
+            data = response.data
+            incidentIOMemo.store(data, for: proxy, now: now)
+        }
+        return try? uptimeFromIncidentIO(data, componentID: component, now: now)
+    }
+
+    /// incident.io's public proxy for a page, where its component impacts
+    /// live. Only OpenAI's page is hosted there among ours.
+    static func incidentIOProxy(for id: ProviderID) -> URL? {
+        switch id {
+        case .codex: URL(string: "https://status.openai.com/proxy/status.openai.com")
+        default: nil
+        }
+    }
+
+    /// The incident list is half a megabyte and every component of the page
+    /// wants it; one fetch serves an opened row.
+    private static let incidentIOMemo = IncidentIOMemo()
+
+    final class IncidentIOMemo: @unchecked Sendable {
+        private let lock = NSLock()
+        private var entries: [URL: (data: Data, at: Date)] = [:]
+
+        func data(for url: URL, now: Date) -> Data? {
+            lock.lock(); defer { lock.unlock() }
+            guard let entry = entries[url], now.timeIntervalSince(entry.at) < 300 else { return nil }
+            return entry.data
+        }
+
+        func store(_ data: Data, for url: URL, now: Date) {
+            lock.lock(); defer { lock.unlock() }
+            entries[url] = (data, now)
+        }
+    }
+
+    struct IncidentIOIncidents: Decodable {
+        struct Incident: Decodable {
+            struct Impact: Decodable {
+                let component_id: String?
+                let status: String?
+                let start_at: String?
+                let end_at: String?
+            }
+            let name: String?
+            let component_impacts: [Impact]?
+        }
+        let incidents: [Incident]?
+    }
+
+    /// The last `days` local days of one component, from the impacts the
+    /// page's incidents recorded against it: the worst band that touched
+    /// the day, the incidents' names, and the seconds they overlapped it.
+    public static func uptimeFromIncidentIO(
+        _ data: Data,
+        componentID: String,
+        days count: Int = 30,
+        now: Date = Date(),
+        calendar: Calendar = .current) throws -> [UptimeDay]
+    {
+        let list: IncidentIOIncidents
+        do { list = try JSONDecoder().decode(IncidentIOIncidents.self, from: data) } catch { throw ProviderError.badResponse }
+        struct Span { let start: Date; let end: Date; let level: ServiceStatusLevel; let name: String }
+        var spans: [Span] = []
+        for incident in list.incidents ?? [] {
+            for impact in incident.component_impacts ?? [] where impact.component_id == componentID {
+                guard let start = Dates.parseISO(impact.start_at) else { continue }
+                let end = Dates.parseISO(impact.end_at) ?? now
+                let level: ServiceStatusLevel
+                switch impact.status?.lowercased() {
+                case "full_outage", "major_outage": level = .critical
+                case "partial_outage": level = .major
+                case "under_maintenance": level = .maintenance
+                default: level = .minor
+                }
+                spans.append(Span(start: start, end: max(end, start), level: level, name: incident.name ?? ""))
+            }
+        }
+        let today = calendar.startOfDay(for: now)
+        return (0..<count).reversed().compactMap { offset -> UptimeDay? in
+            guard let dayStart = calendar.date(byAdding: .day, value: -offset, to: today),
+                  let dayEnd = calendar.date(byAdding: .day, value: 1, to: dayStart) else { return nil }
+            var level = ServiceStatusLevel.operational
+            var seconds = 0.0
+            var names: [String] = []
+            for span in spans where span.start < dayEnd && span.end > dayStart {
+                seconds += min(span.end, dayEnd).timeIntervalSince(max(span.start, dayStart))
+                if rank(span.level) > rank(level) { level = span.level }
+                if !span.name.isEmpty, !names.contains(span.name) { names.append(span.name) }
+            }
+            return UptimeDay(date: dayStart, level: level, events: names, downtimeSeconds: seconds)
+        }
+    }
+
+    private static func rank(_ level: ServiceStatusLevel) -> Int {
+        switch level {
+        case .operational: 0
+        case .maintenance: 1
+        case .minor: 2
+        case .major: 3
+        case .critical: 4
+        }
+    }
+
+    struct Uptime: Decodable {
+        struct Month: Decodable {
+            let days: [Day]?
+        }
+        struct Day: Decodable {
+            struct Event: Decodable { let name: String? }
+            let color: String?
+            let date: String?
+            let events: [Event]?
+            /// Minutes of partial and of major outage.
+            let p: Double?
+            let m: Double?
+        }
+        let months: [Month]?
+    }
+
+    public static func parseUptime(_ data: Data) throws -> [UptimeDay] {
+        let uptime: Uptime
+        do { uptime = try JSONDecoder().decode(Uptime.self, from: data) } catch { throw ProviderError.badResponse }
+        let days = (uptime.months ?? []).flatMap { $0.days ?? [] }.compactMap { day -> UptimeDay? in
+            guard let date = Dates.parseISO(day.date), let level = dayLevel(color: day.color) else { return nil }
+            return UptimeDay(
+                date: date,
+                level: level,
+                events: (day.events ?? []).compactMap { $0.name }.filter { !$0.isEmpty },
+                downtimeSeconds: (day.p ?? 0) + (day.m ?? 0))
+        }
+        guard !days.isEmpty else { throw ProviderError.badResponse }
+        return days.sorted { $0.date < $1.date }
+    }
+
+    /// The page paints each day on a ramp from green through yellow and
+    /// orange to red by how bad it was, and grey for days it has nothing
+    /// for (the rest of the current month). Read the hue rather than match
+    /// the exact shades, of which there are dozens; nil for grey.
+    static func dayLevel(color: String?) -> ServiceStatusLevel? {
+        guard let color, let (r, g, b) = rgb(color) else { return .operational }
+        let maxC = max(r, g, b), minC = min(r, g, b)
+        let delta = maxC - minC
+        // No hue at all: the page's placeholder grey.
+        guard maxC > 0, delta / maxC > 0.15 else { return nil }
+        var hue: Double
+        if maxC == r { hue = 60 * ((g - b) / delta) }
+        else if maxC == g { hue = 60 * (2 + (b - r) / delta) }
+        else { hue = 60 * (4 + (r - g) / delta) }
+        if hue < 0 { hue += 360 }
+        // #e04343 sits at 0°, #e75f36 at 14°, #f08030 at 25°, #d2a92a at 45°.
+        switch hue {
+        case ..<12: return .critical
+        case ..<34: return .major
+        case ..<70: return .minor
+        case ..<170: return .operational
+        case ..<260: return .maintenance
+        default: return .critical
+        }
+    }
+
+    private static func rgb(_ hex: String) -> (Double, Double, Double)? {
+        let cleaned = hex.trimmingCharacters(in: CharacterSet(charactersIn: "# ")).lowercased()
+        guard cleaned.count == 6, let value = UInt64(cleaned, radix: 16) else { return nil }
+        return (
+            Double((value >> 16) & 0xFF) / 255,
+            Double((value >> 8) & 0xFF) / 255,
+            Double(value & 0xFF) / 255)
     }
 
     // MARK: Google Cloud

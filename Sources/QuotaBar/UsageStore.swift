@@ -91,6 +91,9 @@ final class UsageStore: ObservableObject {
     /// keeps the previous reading rather than blanking the chip.
     @Published var serviceStatus: [ProviderID: ServiceStatus] = [:]
     private var statusTask: Task<Void, Never>?
+    /// 90-day histories by component id, fetched when a 服务状态 row opens.
+    @Published var uptime: [String: [UptimeDay]] = [:]
+    private var uptimeLoading: Set<String> = []
 
     private var lastAlertLevel: AlertLevel = .none
     private var notificationsReady = false
@@ -286,6 +289,19 @@ final class UsageStore: ObservableObject {
             return out
         }
         for (id, status) in fresh { serviceStatus[id] = status }
+    }
+
+    /// Fetches the 90-day history of every component the page lists, once.
+    func loadUptime(for id: ProviderID) {
+        guard let status = serviceStatus[id] else { return }
+        for component in status.components where uptime[component.id] == nil && !uptimeLoading.contains(component.id) {
+            uptimeLoading.insert(component.id)
+            Task {
+                let days = await StatusPages.uptime(for: id, component: component.id)
+                if let days { self.uptime[component.id] = days }
+                self.uptimeLoading.remove(component.id)
+            }
+        }
     }
 
     private func markLoading(_ id: ProviderID) {

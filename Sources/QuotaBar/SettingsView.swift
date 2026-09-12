@@ -396,15 +396,21 @@ struct StatusPane: View {
             .onTapGesture {
                 guard status != nil else { return }
                 withAnimation(.snappy(duration: 0.2)) { expanded = isOpen ? nil : id }
+                if !isOpen { store.loadUptime(for: id) }
             }
 
             if isOpen, let status {
-                VStack(alignment: .leading, spacing: Design.space2) {
+                VStack(alignment: .leading, spacing: Design.space2 + 2) {
                     Text(status.description)
                         .font(.system(size: 12))
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                         .textSelection(.enabled)
+                    // Every part the page reports on, each with its band and
+                    // — where the page answers for it — its last 90 days.
+                    ForEach(status.components) { component in
+                        ComponentRow(component: component, days: store.uptime[component.id])
+                    }
                     Button {
                         NSWorkspace.shared.open(status.pageURL)
                     } label: {
@@ -420,6 +426,70 @@ struct StatusPane: View {
             }
         }
         .padding(.vertical, Design.space2 + 2)
+    }
+}
+
+/// One component: name, band, and its 90 days as a strip of ticks with
+/// the uptime figure the days add up to.
+private struct ComponentRow: View {
+    let component: ServiceComponent
+    let days: [UptimeDay]?
+
+    var body: some View {
+        HStack(spacing: Design.space3) {
+            Text(component.name)
+                .font(.system(size: 12))
+                .lineLimit(1)
+                .truncationMode(.tail)
+                .frame(width: 190, alignment: .leading)
+            ServiceStatusBadge(status: ServiceStatus(
+                level: component.level, description: component.level.displayName,
+                pageURL: URL(string: "https://example.invalid")!, checkedAt: .distantPast), size: 11)
+                .frame(width: 80, alignment: .leading)
+            // The page keeps 90 days; the owner found that a wall of ticks.
+            // The last 30 are shown and the figure covers the same 30.
+            if let days, !days.isEmpty {
+                let recent = Array(days.suffix(30))
+                UptimeStrip(days: recent)
+                Text(uptimeFigure(recent))
+                    .font(.system(size: 11, design: .monospaced))
+                    .foregroundStyle(.secondary)
+                    .frame(width: 52, alignment: .trailing)
+            } else {
+                Spacer(minLength: 0)
+            }
+        }
+    }
+
+    private func uptimeFigure(_ days: [UptimeDay]) -> String {
+        String(format: "%.2f%%", UptimeDay.uptimePercent(days))
+    }
+}
+
+/// 90 ticks, one per day, oldest on the left, in the day's band colour.
+private struct UptimeStrip: View {
+    let days: [UptimeDay]
+    private let gap: CGFloat = 1.5
+
+    var body: some View {
+        GeometryReader { proxy in
+            let width = max(1, (proxy.size.width - gap * CGFloat(days.count - 1)) / CGFloat(days.count))
+            HStack(spacing: gap) {
+                ForEach(days.indices, id: \.self) { index in
+                    RoundedRectangle(cornerRadius: 1, style: .continuous)
+                        .fill(Color(hex: days[index].level.colorHex).opacity(days[index].level == .operational ? 0.55 : 1))
+                        .frame(width: width)
+                        .help(help(days[index]))
+                }
+            }
+        }
+        .frame(height: 14)
+    }
+
+    private func help(_ day: UptimeDay) -> String {
+        let date = DateFormatter.localizedString(from: day.date, dateStyle: .medium, timeStyle: .none)
+        let events = day.events.isEmpty ? day.level.displayName : day.events.joined(separator: "；")
+        return "\(date)：\(events)"
     }
 }
 
