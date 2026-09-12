@@ -180,7 +180,7 @@ extension UsageStore {
     func deskPill(_ id: ProviderID) -> (text: String, color: Color)? {
         // A window that just reset says so in place of the status for a while.
         if let windows = states[id]?.snapshot?.windows, windows.contains(where: { justReset(id, window: $0.id) }) {
-            return (L10n.t("Just reset", "刚刚重置"), Palette.live)
+            return (L10n.t("Just reset", "刚刚重置"), id.accent)
         }
         guard let status = serviceStatus[id] else { return nil }
         return (status.level.displayName, Color(hex: status.level.colorHex))

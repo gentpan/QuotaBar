@@ -175,7 +175,11 @@ final class Coordinators {
         store.onResets = { [weak self, weak store] events, before in
             guard let self, let store else { return }
             self.status.playReset(from: before)
-            if store.presentation == .island { self.island.playReset(events, store: store) }
+            switch store.presentation {
+            case .island: self.island.playReset(events, store: store)
+            case .edgeDock: self.dock.playReset(events, store: store)
+            case .menuBar: break
+            }
         }
         sync(store: store)
         // A display plugged in or pulled: whatever screen each surface now

@@ -208,12 +208,16 @@ final class IslandCoordinator {
             panel.setFrame(frame, display: true)
             return
         }
+        let growing = expanded || bannerShown
         NSAnimationContext.runAnimationGroup { context in
-            context.duration = expanded ? 0.34 : 0.26
-            // A touch of overshoot on the way open, like the dock's callout.
-            context.timingFunction = expanded
-                ? CAMediaTimingFunction(controlPoints: 0.2, 0.9, 0.3, 1.04)
-                : CAMediaTimingFunction(name: .easeInEaseOut)
+            // The banner opens like the Dynamic Island, with a clear rebound;
+            // the panel keeps its touch of overshoot.
+            context.duration = bannerShown && !expanded ? 0.52 : (growing ? 0.34 : 0.3)
+            context.timingFunction = bannerShown && !expanded
+                ? CAMediaTimingFunction(controlPoints: 0.34, 1.36, 0.64, 1)
+                : growing
+                    ? CAMediaTimingFunction(controlPoints: 0.2, 0.9, 0.3, 1.04)
+                    : CAMediaTimingFunction(controlPoints: 0.5, 0, 0.2, 1)
             panel.animator().setFrame(frame, display: true)
         }
     }
@@ -384,7 +388,7 @@ struct IslandView: View {
 
     /// Cobalt at rest; amber or red when a tracked window is past its line.
     private var glowColor: Color {
-        if bridge.banner != nil { return Palette.live }
+        if let banner = bridge.banner { return banner.provider.accent }
         switch severity {
         case .none: return Palette.cobalt
         case .warning: return Palette.amber
@@ -445,101 +449,55 @@ struct IslandView: View {
 
 // MARK: - Reset banner
 
-/// What the banner says: the first window that reset, how many others did,
-/// and what is left now against what was left before.
-struct ResetBanner: Equatable {
-    let id = UUID()
-    let provider: ProviderID
-    let name: String
-    let others: Int
-    let leftBefore: Double
-    let leftNow: Double
-
-    init(events: [ResetEvent]) {
-        // The window that had been fullest leads.
-        let lead = events.max { $0.previousUsed < $1.previousUsed } ?? events[0]
-        provider = lead.provider
-        name = lead.name
-        others = events.count - 1
-        leftBefore = max(0, 100 - lead.previousUsed)
-        leftNow = max(0, 100 - lead.usedNow)
-    }
-
-    init(provider: ProviderID, name: String, others: Int, leftBefore: Double, leftNow: Double) {
-        self.provider = provider
-        self.name = name
-        self.others = others
-        self.leftBefore = leftBefore
-        self.leftNow = leftNow
-    }
-}
-
-/// The row under the notch: the provider's mark with a green reset badge,
-/// "Limit reset" and which window, and the figure counting up to what is
-/// left now.
+/// The row under the notch when a window resets: a small ring filling in the
+/// provider's colour round its mark, "Limit reset" and which window, and
+/// what is left counting up to the new figure.
 struct ResetBannerRow: View {
-    static let height: CGFloat = 54
+    static let height: CGFloat = 60
     let banner: ResetBanner
-    @State private var shown: Double
-    @State private var arrived = false
+    var settled = false
+    @State private var arrived: Bool
 
-    /// `settled` starts at the end of the arrival, for off-screen renders.
     init(banner: ResetBanner, settled: Bool = false) {
         self.banner = banner
-        _shown = State(initialValue: settled ? banner.leftNow : banner.leftBefore)
+        self.settled = settled
         _arrived = State(initialValue: settled)
     }
 
     var body: some View {
         HStack(spacing: Design.space3) {
-            ZStack(alignment: .bottomTrailing) {
-                Circle()
-                    .fill(Color.white.opacity(0.08))
-                    .frame(width: 32, height: 32)
-                    .overlay(ProviderGlyph(id: banner.provider, size: 17, tint: .white))
-                Circle()
-                    .fill(Palette.live)
-                    .frame(width: 14, height: 14)
-                    .overlay(
-                        Image(systemName: "arrow.counterclockwise")
-                            .font(.system(size: 7, weight: .black))
-                            .foregroundStyle(.black)
-                            .rotationEffect(.degrees(arrived ? -360 : 0)))
-                    .offset(x: 3, y: 3)
+            ZStack {
+                RefillRing(color: banner.provider.accent, from: banner.leftBefore / 100, to: banner.leftNow / 100, lineWidth: 3, delay: 0.5, settled: settled)
+                ProviderGlyph(id: banner.provider, size: 17, tint: .white)
             }
+            .frame(width: 36, height: 36)
             VStack(alignment: .leading, spacing: 1) {
                 Text(L10n.t("Limit reset", "额度已重置"))
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundStyle(.white)
-                Text(detail)
+                Text(banner.detail)
                     .font(.system(size: 11))
-                    .foregroundStyle(.white.opacity(0.6))
+                    .foregroundStyle(.white.opacity(0.58))
                     .lineLimit(1)
             }
             Spacer(minLength: Design.space2)
-            HStack(alignment: .firstTextBaseline, spacing: 2) {
-                Text("\(Int(shown.rounded()))")
-                    .font(.system(size: 22, weight: .semibold, design: .monospaced))
-                    .foregroundStyle(Palette.live)
-                    .contentTransition(.numericText(value: shown))
+            HStack(alignment: .firstTextBaseline, spacing: 3) {
+                CountUpNumber(from: banner.leftBefore, to: banner.leftNow, delay: 0.55, settled: settled)
+                    .font(.system(size: 24, weight: .semibold, design: .monospaced))
+                    .foregroundStyle(banner.provider.accent)
                 Text(L10n.t("% left", "% 可用"))
                     .font(.system(size: 11, weight: .medium))
-                    .foregroundStyle(.white.opacity(0.6))
+                    .foregroundStyle(.white.opacity(0.58))
             }
         }
-        .padding(.horizontal, Design.space4)
+        .padding(.horizontal, Design.space4 + 4)
         .frame(height: Self.height)
         .opacity(arrived ? 1 : 0)
-        .offset(y: arrived ? 0 : -6)
+        .offset(y: arrived ? 0 : -8)
         .onAppear {
-            withAnimation(Motion.animation(.easeOut(duration: 0.25).delay(0.12))) { arrived = true }
-            withAnimation(Motion.animation(.easeOut(duration: 0.9).delay(0.3))) { shown = banner.leftNow }
+            guard !settled else { return }
+            withAnimation(Motion.animation(.easeOut(duration: 0.3).delay(0.22))) { arrived = true }
         }
-    }
-
-    private var detail: String {
-        let base = "\(banner.provider.displayName) · \(banner.name)"
-        return banner.others > 0 ? base + L10n.t(" and \(banner.others) more", "，另有 \(banner.others) 个") : base
     }
 }
 

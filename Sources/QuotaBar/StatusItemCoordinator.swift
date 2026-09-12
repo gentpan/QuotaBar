@@ -108,32 +108,99 @@ final class StatusItemCoordinator: NSObject {
         }
     }
 
-    /// A window reset: the glyph refills from the reading before it to the
-    /// one now, drawn in green, holds a moment, then goes back to the
-    /// template ink. Only the meter styles have something to refill.
+    /// A window reset. The glyph stays in the menu bar's own ink — macOS
+    /// draws status items in one colour, and a green one read as an error —
+    /// and refills smoothly from the reading before the reset to the one
+    /// now; the button lights up behind it for a beat, and a highlight runs
+    /// across the glyph's own pixels. Only the meter styles have anything
+    /// to refill.
     func playReset(from before: MeterReading) {
         guard !celebrating, let store, let button = item?.button, item?.isVisible == true,
               store.menuBarIconMode == .meter, !store.isPrivacyMasked
         else { return }
         let target = store.meterReading
         let style = store.menuBarStyle
+        let level = store.alertLevel
         let mode = store.meterMode
-        let green = NSColor(srgbRed: 0.13, green: 0.64, blue: 0.30, alpha: 1)
         celebrating = true
         Task { @MainActor [weak self] in
-            let frames = Motion.reduced ? 1 : 24
-            for frame in 1...frames {
-                let t = Double(frame) / Double(frames)
-                let eased = 1 - pow(1 - t, 3)
-                button.image = MenuBarIcon.render(
-                    reading: Self.blend(before, target, eased), style: style, level: .none, mode: mode, tint: green)
-                try? await Task.sleep(for: .milliseconds(30))
+            if !Motion.reduced {
+                // 60 frames a second for 0.9s: each is a 22pt drawing, cheap
+                // enough that the refill reads as motion, not steps.
+                let frames = 54
+                let start = ProcessInfo.processInfo.systemUptime
+                for frame in 1...frames {
+                    let t = Double(frame) / Double(frames)
+                    let eased = 1 - pow(1 - t, 3)
+                    button.image = MenuBarIcon.render(
+                        reading: Self.blend(before, target, eased), style: style, level: level, mode: mode)
+                    let due = start + 0.9 * t
+                    let wait = due - ProcessInfo.processInfo.systemUptime
+                    if wait > 0 { try? await Task.sleep(for: .seconds(wait)) }
+                }
+                Self.shine(on: button)
+                try? await Task.sleep(for: .milliseconds(760))
             }
-            try? await Task.sleep(for: .milliseconds(Motion.reduced ? 1500 : 1100))
             guard let self else { return }
             self.celebrating = false
             self.lastImageKey = ""
             self.render()
+        }
+    }
+
+    /// The beat after the refill: the button's background brightens and
+    /// fades, and a band of light crosses the glyph, masked to its pixels so
+    /// only the ink shines.
+    private static func shine(on button: NSStatusBarButton) {
+        guard let image = button.image,
+              let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil)
+        else { return }
+        button.wantsLayer = true
+        guard let host = button.layer else { return }
+        let bounds = host.bounds
+        let dark = button.effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
+        let ink = dark ? NSColor.white : NSColor.black
+
+        let glow = CALayer()
+        glow.frame = bounds.insetBy(dx: 1, dy: 2)
+        glow.cornerRadius = 5
+        glow.backgroundColor = ink.withAlphaComponent(0.16).cgColor
+        glow.opacity = 0
+        host.addSublayer(glow)
+        let pulse = CAKeyframeAnimation(keyPath: "opacity")
+        pulse.values = [0, 1, 0]
+        pulse.keyTimes = [0, 0.3, 1]
+        pulse.duration = 0.6
+        glow.add(pulse, forKey: "pulse")
+
+        let size = image.size
+        let imageFrame = CGRect(
+            x: (bounds.width - size.width) / 2, y: (bounds.height - size.height) / 2,
+            width: size.width, height: size.height)
+        let band = CAGradientLayer()
+        band.frame = imageFrame
+        band.startPoint = CGPoint(x: 0, y: 0.5)
+        band.endPoint = CGPoint(x: 1, y: 0.5)
+        let light = (dark ? NSColor.white : NSColor(white: 0.55, alpha: 1)).cgColor
+        band.colors = [NSColor.clear.cgColor, light, NSColor.clear.cgColor]
+        band.locations = [-0.6, -0.3, 0]
+        let mask = CALayer()
+        mask.frame = band.bounds
+        mask.contents = cgImage
+        mask.contentsGravity = .resizeAspect
+        band.mask = mask
+        host.addSublayer(band)
+        let run = CABasicAnimation(keyPath: "locations")
+        run.fromValue = [-0.6, -0.3, 0]
+        run.toValue = [1, 1.3, 1.6]
+        run.duration = 0.62
+        run.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+        band.locations = [1, 1.3, 1.6]
+        band.add(run, forKey: "run")
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.7) {
+            glow.removeFromSuperlayer()
+            band.removeFromSuperlayer()
         }
     }
 

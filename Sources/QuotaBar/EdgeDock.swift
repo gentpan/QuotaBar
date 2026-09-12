@@ -27,6 +27,22 @@ final class EdgeDockCoordinator {
     private var applyExpanded: ((Bool) -> Void)?
 
     static let calloutWidth: CGFloat = 260
+
+    /// A reset for the view to play; the coordinator decides which.
+    final class ResetBridge: ObservableObject {
+        @Published var current: ResetBanner?
+    }
+    let resets = ResetBridge()
+
+    /// Windows that just reset: the strip comes out on its own, the ring of
+    /// the provider whose window had been fullest fills in its colour, and a
+    /// card beside it says so, then all of it goes back.
+    func playReset(_ events: [ResetEvent], store: UsageStore) {
+        guard panel != nil else { return }
+        let shown = events.filter { store.dockProviders.contains($0.provider) }
+        guard !shown.isEmpty else { return }
+        resets.current = ResetBanner(events: shown)
+    }
     /// One ring, the dot row under it, and the stack spacing. No figure: the
     /// owner had the percentages removed — the callout carries them.
     static let cellHeight: CGFloat = ProviderRing.cellHeight(selectionDot: true) + Design.space3
@@ -273,7 +289,7 @@ final class EdgeDockCoordinator {
         // its own fade on top of ours.
         panel.animationBehavior = .none
         panel.contentView = FirstMouseHostingView(
-            rootView: EdgeDockView(store: store, coordinator: self))
+            rootView: EdgeDockView(store: store, coordinator: self, resets: resets))
         self.panel = panel
         layout(expanded: false)
         panel.orderFrontRegardless()
@@ -475,6 +491,12 @@ final class EdgeDockCoordinator {
 struct EdgeDockView: View {
     @ObservedObject var store: UsageStore
     var coordinator: EdgeDockCoordinator
+    @ObservedObject var resets: EdgeDockCoordinator.ResetBridge
+    /// The reset being played, and the figure its ring shows meanwhile — the
+    /// reading from before, then animated to the one now.
+    @State private var playing: ResetBanner?
+    @State private var ringOverride: [ProviderID: Double] = [:]
+    @State private var resetTask: Task<Void, Never>?
     @State private var expanded = false
     @State private var hovered: ProviderID?
     /// The ring that was clicked: its card is the full one, with the pin
@@ -565,6 +587,9 @@ struct EdgeDockView: View {
         .onChange(of: hovered) { _, id in
             presentCallout(for: id)
         }
+        .onChange(of: resets.current) { _, banner in
+            if let banner { play(banner) }
+        }
         .onChange(of: expanded) { _, isOpen in
             if !isOpen {
                 coordinator.hideCallout()
@@ -623,6 +648,43 @@ struct EdgeDockView: View {
         }
     }
 
+    private func play(_ banner: ResetBanner) {
+        resetTask?.cancel()
+        let id = banner.provider
+        ringOverride[id] = banner.usedBefore
+        coordinator.setExpanded(true) { expanded = $0 }
+        resetTask = Task { @MainActor in
+            // Out first; the fill starts once the strip has arrived.
+            try? await Task.sleep(for: .milliseconds(300))
+            guard !Task.isCancelled else { return }
+            playing = banner
+            withAnimation(Motion.animation(.timingCurve(0.22, 0.9, 0.24, 1, duration: 1.0).delay(0.15))) {
+                ringOverride[id] = banner.usedNow
+            }
+            if hovered == nil, let index = store.dockProviders.firstIndex(of: id) {
+                coordinator.showCallout(
+                    at: index,
+                    total: store.dockProviders.count,
+                    width: EdgeDockCoordinator.calloutWidth,
+                    sizeKey: "reset|\(banner.id)")
+                {
+                    ResetCallout(store: store, banner: banner)
+                        .onHover { coordinator.setCalloutHovered($0) }
+                }
+            }
+            try? await Task.sleep(for: .milliseconds(3000))
+            guard !Task.isCancelled else { return }
+            playing = nil
+            ringOverride[id] = nil
+            resets.current = nil
+            // Whoever arrived meanwhile keeps the strip; otherwise it folds.
+            if hovered == nil, !coordinator.calloutHovered {
+                coordinator.hideCallout()
+                coordinator.setExpanded(false) { expanded = $0 }
+            }
+        }
+    }
+
     private func scheduleHoverClear() {
         hoverClearTask?.cancel()
         hoverClearTask = Task {
@@ -637,12 +699,20 @@ struct EdgeDockView: View {
             ForEach(store.dockProviders) { id in
                 ProviderRing(
                     id: id,
-                    percent: store.headlinePercent(for: id),
+                    percent: ringOverride[id] ?? store.headlinePercent(for: id),
                     alerts: store.alertSettings,
                     showsLabel: false,
                     selected: store.selected == id,
                     hovered: hovered == id,
                     selectionDot: true)
+                    .overlay(alignment: .top) {
+                        if playing?.provider == id {
+                            ResetSweep(color: id.accent, diameter: ProviderRing.defaultDiameter)
+                                .id(playing?.id)
+                        }
+                    }
+                    .scaleEffect(playing?.provider == id && !Motion.reduced ? 1.06 : 1, anchor: .top)
+                    .animation(Motion.animation(.spring(response: 0.4, dampingFraction: 0.5)), value: playing?.id)
                     .onHover { inside in
                         if inside {
                             hoverClearTask?.cancel()

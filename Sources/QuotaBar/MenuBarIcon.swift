@@ -67,17 +67,16 @@ enum MenuBarIcon {
         reading: MeterReading,
         style: MenuBarStyle,
         level: AlertLevel = .none,
-        mode: MeterMode = .remaining,
-        tint: NSColor? = nil) -> NSImage
+        mode: MeterMode = .remaining) -> NSImage
     {
-        let ink: NSColor = tint ?? level.hex.map(nsColor) ?? .black
+        let ink: NSColor = level.hex.map(nsColor) ?? .black
         let trackInk = ink.withAlphaComponent(0.35)
 
         if style.showsBothHorizons {
             let image = style == .dualBar
                 ? renderDualBar(reading, ink: ink, track: trackInk, mode: mode)
                 : renderDual(reading, ink: ink, track: trackInk, mode: mode)
-            image.isTemplate = tint == nil && level == .none
+            image.isTemplate = level == .none
             return image
         }
 
@@ -99,7 +98,7 @@ enum MenuBarIcon {
         case .gauge: image = renderGauge(shown, ink: ink, track: trackInk)
         case .ticks: image = renderTicks(shown, ink: ink, track: trackInk)
         }
-        image.isTemplate = tint == nil && level == .none
+        image.isTemplate = level == .none
         return image
     }
 

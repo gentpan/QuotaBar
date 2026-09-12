@@ -175,10 +175,10 @@ enum Snapshot {
         }
         // The reset moment: the strip with its banner, a row saying it just
         // reset, and the glyph in its refill green.
-        let banner = ResetBanner(provider: .claude, name: L10n.t("5-hour", "5 小时"), others: 1, leftBefore: 4, leftNow: 100)
+        let banner = ResetBanner(provider: .claude, name: L10n.t("5-hour", "5 小时"), others: 1, usedBefore: 96, usedNow: 0)
         let bannerWidth = max(notch.totalWidth(slots: 2), 400)
         let resetStrip = ZStack(alignment: .top) {
-            IslandGlow(shape: shape, color: Palette.live, ambient: true, sweeping: false, expanded: false)
+            IslandGlow(shape: shape, color: banner.provider.accent, ambient: true, sweeping: false, expanded: false)
             shape.fill(Color.black)
             VStack(spacing: 0) {
                 NotchStrip(store: store, metrics: notch, slots: 2)
@@ -200,15 +200,17 @@ enum Snapshot {
             render(row, to: url, name: "row-just-reset", backing: .black)
             store.recentResets = [:]
         }
-        let green = NSColor(srgbRed: 0.13, green: 0.64, blue: 0.30, alpha: 1)
-        for style in [MenuBarStyle.bar, .segments, .dualBar] {
-            let glyph = MenuBarIcon.render(reading: MeterReading(short: 2, long: 30), style: style, level: .none, mode: .remaining, tint: green)
-            if let tiff = glyph.tiffRepresentation, let bitmap = NSBitmapImageRep(data: tiff),
-               let png = bitmap.representation(using: .png, properties: [:])
-            {
-                try? png.write(to: url.appendingPathComponent("menubar-reset-\(style.rawValue).png"))
-            }
+        let callout = ResetCallout(store: store, banner: banner, settled: true)
+            .padding(20)
+            .background(Color(hex: "1A1D24"))
+        render(callout, to: url, name: "dock-reset-callout", backing: Color(hex: "1A1D24"))
+        let sweep = ZStack {
+            ProviderRing(id: .claude, percent: 0, alerts: store.alertSettings, showsLabel: false)
+            ResetSweep(color: ProviderID.claude.accent, diameter: ProviderRing.defaultDiameter)
         }
+        .frame(width: 74, height: 74)
+        .background(Color.black)
+        render(sweep, to: url, name: "dock-reset-ring", backing: .black)
 
         let bridge = IslandCoordinator.Bridge()
         for page in IslandPanel.Page.allCases {
