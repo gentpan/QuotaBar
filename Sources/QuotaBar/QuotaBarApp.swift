@@ -95,6 +95,7 @@ final class Coordinators {
     private var presentation: Presentation?
     private var widgetRevision = -1
     private var dockRevision = -1
+    private var islandRevision = -1
 
     func start(store: UsageStore) {
         status.onStoreChange = { [weak self, weak store] in
@@ -121,6 +122,10 @@ final class Coordinators {
         if store.dockRevision != dockRevision {
             dockRevision = store.dockRevision
             dock.relayout()
+        }
+        if store.islandRevision != islandRevision {
+            islandRevision = store.islandRevision
+            island.relayout()
         }
     }
 }

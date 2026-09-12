@@ -3,13 +3,16 @@ import SwiftUI
 import QuotaCore
 
 /// Notch-island presentation: a borderless floating panel pinned to the top
-/// center of the screen (over the notch on notched Macs). Compact pill at
-/// rest, hover expands to the full panel. The menu-bar item stays as the
-/// settings entry point.
+/// centre of the screen, over the notch on notched Macs. At rest it is a
+/// strip of figures either side of the notch (a pill on other displays);
+/// hover and it grows downward into the full panel, after codex-island.
+/// The menu-bar item stays as the settings entry point.
 @MainActor
 final class IslandCoordinator {
     private var panel: NSPanel?
     private var collapseTask: Task<Void, Never>?
+    private weak var store: UsageStore?
+    private(set) var expanded = false
 
     func sync(store: UsageStore) {
         if store.presentation == .island {
@@ -24,12 +27,14 @@ final class IslandCoordinator {
         collapseTask = nil
         panel?.orderOut(nil)
         panel = nil
+        expanded = false
     }
 
     private func show(store: UsageStore) {
         guard panel == nil else { return }
+        self.store = store
         let panel = NSPanel(
-            contentRect: NSRect(origin: .zero, size: Self.size(expanded: false)),
+            contentRect: NSRect(origin: .zero, size: Self.size(expanded: false, store: store)),
             styleMask: [.borderless, .nonactivatingPanel],
             backing: .buffered,
             defer: false)
@@ -42,39 +47,65 @@ final class IslandCoordinator {
         panel.hidesOnDeactivate = false
         panel.acceptsMouseMovedEvents = true
         panel.isMovable = false
-        panel.contentView = NSHostingView(rootView: IslandView(store: store, coordinator: self))
+        panel.animationBehavior = .none
+        let host = FirstMouseHostingView(rootView: IslandView(store: store, coordinator: self))
+        // The frame is ours; the content fills whatever it is given.
+        host.sizingOptions = []
+        panel.contentView = host
         self.panel = panel
-        layout(expanded: false)
+        layout(expanded: false, animated: false)
         panel.orderFrontRegardless()
     }
 
-    /// Collapsing is delayed so a quick pointer sweep across the pill does not
-    /// make the panel flicker open and shut.
-    func requestExpanded(_ expanded: Bool, apply: @escaping (Bool) -> Void) {
+    /// Re-places the panel after a setting changed the strip's width.
+    func relayout() {
+        guard panel != nil else { return }
+        layout(expanded: expanded, animated: false)
+    }
+
+    /// Collapsing is delayed so a quick pointer sweep across the strip does
+    /// not make the panel flicker open and shut.
+    func requestExpanded(_ value: Bool, apply: @escaping (Bool) -> Void) {
         collapseTask?.cancel()
         collapseTask = nil
-        if expanded {
+        if value {
+            expanded = true
             apply(true)
-            layout(expanded: true)
+            layout(expanded: true, animated: true)
             return
         }
         collapseTask = Task { [weak self] in
             try? await Task.sleep(for: .milliseconds(250))
             guard !Task.isCancelled else { return }
+            self?.expanded = false
             apply(false)
-            self?.layout(expanded: false)
+            self?.layout(expanded: false, animated: true)
         }
     }
 
-    func layout(expanded: Bool) {
-        guard let panel, let screen = Self.hostScreen else { return }
-        let size = Self.size(expanded: expanded)
-        // Anchor to the visible frame's top so the pill sits under the notch
-        // rather than behind the menu bar on non-notched displays.
-        let origin = NSPoint(
+    /// Anchored at the top centre, so the panel grows downward out of the
+    /// notch. `animator()`, never `setFrame(animate:)`, which blocks the main
+    /// thread for the whole animation.
+    func layout(expanded: Bool, animated: Bool) {
+        guard let panel, let screen = Self.hostScreen, let store else { return }
+        let size = Self.size(expanded: expanded, store: store)
+        let frame = NSRect(
             x: screen.frame.midX - size.width / 2,
-            y: screen.frame.maxY - size.height)
-        panel.setFrame(NSRect(origin: origin, size: size), display: true, animate: true)
+            y: screen.frame.maxY - size.height,
+            width: size.width,
+            height: size.height)
+        guard animated else {
+            panel.setFrame(frame, display: true)
+            return
+        }
+        NSAnimationContext.runAnimationGroup { context in
+            context.duration = expanded ? 0.34 : 0.26
+            // A touch of overshoot on the way open, like the dock's callout.
+            context.timingFunction = expanded
+                ? CAMediaTimingFunction(controlPoints: 0.2, 0.9, 0.3, 1.04)
+                : CAMediaTimingFunction(name: .easeInEaseOut)
+            panel.animator().setFrame(frame, display: true)
+        }
     }
 
     /// Prefer the built-in display that actually has a notch; fall back to the
@@ -86,10 +117,18 @@ final class IslandCoordinator {
             ?? NSScreen.main
     }
 
-    static func size(expanded: Bool) -> NSSize {
-        if expanded { return NSSize(width: 388, height: 760) }
-        if let notch = notchMetrics() {
-            return NSSize(width: notch.totalWidth, height: notch.height)
+    static func size(expanded: Bool, store: UsageStore) -> NSSize {
+        let slots = store.islandSlots
+        let notch = notchMetrics()
+        if expanded {
+            // Rows per column: the left column is the fuller one.
+            let rows = min(slots, max(1, store.enabled.count))
+            return NSSize(
+                width: IslandPanelLayout.width(notchWidth: notch?.notchWidth),
+                height: IslandPanelLayout.height(rows: rows, notch: notch?.height ?? 0))
+        }
+        if let notch {
+            return NSSize(width: notch.totalWidth(slots: slots), height: notch.height)
         }
         return NSSize(width: 220, height: 40)
     }
@@ -99,11 +138,22 @@ final class IslandCoordinator {
         let notchWidth: CGFloat
         let height: CGFloat
 
-        /// Wide enough for "5d 17h · 70%" and a mark, narrow enough to stay in
-        /// the dead zone — past this the strip starts covering the app's own
-        /// menus on the left and the status items on the right.
-        var sideWidth: CGFloat { 132 }
-        var totalWidth: CGFloat { notchWidth + sideWidth * 2 }
+        /// One slot is "5d 17h · 70%" and a mark; two are a mark and a
+        /// figure each; three need a little more. Kept narrow enough to stay
+        /// in the dead zone — past this the strip starts covering the app's
+        /// own menus on the left and the status items on the right.
+        func sideWidth(slots: Int) -> CGFloat {
+            switch slots {
+            case ...1: 132
+            case 2: 132
+            default: 176
+            }
+        }
+
+        func totalWidth(slots: Int) -> CGFloat { notchWidth + sideWidth(slots: slots) * 2 }
+
+        var sideWidth: CGFloat { sideWidth(slots: 1) }
+        var totalWidth: CGFloat { totalWidth(slots: 1) }
     }
 
     /// nil on a screen with no notch, which is most external displays. The
@@ -122,28 +172,43 @@ final class IslandCoordinator {
     }
 }
 
+// MARK: - View
+
 struct IslandView: View {
     @ObservedObject var store: UsageStore
     var coordinator: IslandCoordinator
     @State private var expanded = false
+    /// The panel's content fades in a beat after the silhouette starts to
+    /// grow, and is gone before it starts to shrink — the shape is the
+    /// animation, the content arrives in it.
+    @State private var contentVisible = false
 
     var body: some View {
-        Group {
+        ZStack(alignment: .top) {
+            silhouette.fill(Color.black)
             if expanded {
-                expandedContent
-                    .background(panelShape.fill(Color.black))
-                    .clipShape(panelShape)
+                IslandPanel(store: store, notch: notchMetrics)
+                    .opacity(contentVisible ? 1 : 0)
+                    .offset(y: contentVisible ? 0 : -8)
+                    .allowsHitTesting(contentVisible)
             } else if let notch = notchMetrics {
-                NotchStrip(store: store, metrics: notch)
+                NotchStrip(store: store, metrics: notch, slots: store.islandSlots)
             } else {
                 compactPill
-                    .background(pillShape.fill(Color.black))
-                    .clipShape(pillShape)
             }
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .onHover { hovering in
-            coordinator.requestExpanded(hovering) { expanded = $0 }
+            coordinator.requestExpanded(hovering) { value in
+                expanded = value
+                if value {
+                    withAnimation(.easeOut(duration: 0.22).delay(0.1)) { contentVisible = true }
+                } else {
+                    withAnimation(.easeOut(duration: 0.12)) { contentVisible = false }
+                }
+            }
         }
+        .environment(\.colorScheme, .dark)
     }
 
     /// Read per render rather than captured at construction: the app survives
@@ -153,15 +218,18 @@ struct IslandView: View {
         IslandCoordinator.notchMetrics()
     }
 
-    private var panelShape: RoundedRectangle {
-        RoundedRectangle(cornerRadius: Design.radiusPanel + 10, style: .continuous)
+    /// Flat against the screen's top edge, 14pt at the bottom corners — the
+    /// notch's own curve, and codex-island's.
+    private var silhouette: UnevenRoundedRectangle {
+        UnevenRoundedRectangle(
+            topLeadingRadius: 0,
+            bottomLeadingRadius: 14,
+            bottomTrailingRadius: 14,
+            topTrailingRadius: 0,
+            style: .continuous)
     }
 
-    private var pillShape: RoundedRectangle {
-        RoundedRectangle(cornerRadius: 20, style: .continuous)
-    }
-
-    // MARK: Compact pill
+    // MARK: Compact pill (no notch)
 
     private var compactPill: some View {
         HStack(spacing: Design.space2 + 2) {
@@ -192,39 +260,6 @@ struct IslandView: View {
         .padding(.horizontal, Design.space3)
         .frame(height: 40)
     }
-
-    // MARK: Expanded
-
-    private var expandedContent: some View {
-        VStack(spacing: 0) {
-            HStack {
-                Text("QuotaBar")
-                    .font(Design.wordmark(size: 12, weight: .bold))
-                    .foregroundStyle(.white.opacity(0.7))
-                Spacer()
-                SettingsLink {
-                    Image(systemName: "gearshape")
-                        .foregroundStyle(.white.opacity(0.7))
-                }
-                .buttonStyle(.plain)
-                .simultaneousGesture(TapGesture().onEnded { SettingsWindow.focus() })
-            }
-            .padding(.horizontal, Design.space4)
-            .padding(.top, Design.space3)
-            .padding(.bottom, Design.space1)
-
-            // The island lives in a fixed-size floating panel, so this is the
-            // one place that still needs to scroll when a lot of providers are
-            // enabled.
-            ScrollView {
-                MenuContentBody(store: store, scrollable: false)
-                    .padding(.horizontal, Design.space3)
-                    .padding(.bottom, Design.space3)
-            }
-            .frame(height: IslandCoordinator.size(expanded: true).height - 60)
-        }
-        .environment(\.colorScheme, .dark)
-    }
 }
 
 /// Alert indicator dot for the compact pill.
@@ -245,7 +280,6 @@ struct LiveDot: View {
     }
 }
 
-
 // MARK: - Notch strip
 
 /// The collapsed island on a notched Mac: the figures sit in the dead space
@@ -253,36 +287,69 @@ struct LiveDot: View {
 ///
 /// The two sides are mirrored — the figure is always on the outer edge and the
 /// mark always against the notch — so the pair reads outward from the middle
-/// rather than left-to-right across a gap you cannot draw in.
-///
-/// Only two providers fit. That is the notch's constraint, not a choice: the
-/// strip has to stay clear of the app's own menus on one side and the status
-/// items on the other. It shows the first two enabled, so the order is the
-/// user's.
+/// rather than left-to-right across a gap you cannot draw in. With one slot a
+/// side, the slot also carries the reset countdown; with two or three, each
+/// is a mark and a figure, nearest the notch first, in the order enabled.
 struct NotchStrip: View {
     @ObservedObject var store: UsageStore
     let metrics: IslandCoordinator.NotchMetrics
+    var slots: Int = 1
+
+    private var left: [ProviderID] { Array(store.enabled.prefix(slots)) }
+    private var right: [ProviderID] { Array(store.enabled.dropFirst(slots).prefix(slots)) }
 
     var body: some View {
-        let slots = Array(store.enabled.prefix(2))
         HStack(spacing: 0) {
-            NotchSlot(store: store, id: slots.first, mirrored: true)
-                .frame(width: metrics.sideWidth)
+            side(left, mirrored: true)
+                .frame(width: metrics.sideWidth(slots: slots))
             // The notch itself. Painted black like the rest so the strip reads
             // as one shape continuous with the hardware, not two tabs.
             Color.black.frame(width: metrics.notchWidth)
-            NotchSlot(store: store, id: slots.count > 1 ? slots[1] : nil, mirrored: false)
-                .frame(width: metrics.sideWidth)
+            side(right, mirrored: false)
+                .frame(width: metrics.sideWidth(slots: slots))
         }
         .frame(height: metrics.height)
-        .background(Color.black)
-        .clipShape(
-            UnevenRoundedRectangle(
-                topLeadingRadius: 0,
-                bottomLeadingRadius: 12,
-                bottomTrailingRadius: 12,
-                topTrailingRadius: 0,
-                style: .continuous))
+    }
+
+    @ViewBuilder
+    private func side(_ ids: [ProviderID], mirrored: Bool) -> some View {
+        if slots <= 1 {
+            NotchSlot(store: store, id: ids.first, mirrored: mirrored)
+        } else {
+            HStack(spacing: Design.space2 + 2) {
+                // Nearest the notch first: the left side is laid out in
+                // reverse so its first provider sits against the middle.
+                ForEach(mirrored ? ids.reversed() : ids) { id in
+                    NotchMiniSlot(store: store, id: id)
+                }
+            }
+            .padding(.horizontal, Design.space2 + 2)
+            .frame(maxWidth: .infinity, alignment: mirrored ? .trailing : .leading)
+        }
+    }
+}
+
+/// Mark and figure, and nothing else: what fits when a side holds two or
+/// three providers.
+struct NotchMiniSlot: View {
+    @ObservedObject var store: UsageStore
+    let id: ProviderID
+
+    var body: some View {
+        HStack(spacing: 4) {
+            ProviderGlyph(id: id, size: 13, tint: Color(hex: id.accentHex))
+            if let used = store.states[id]?.snapshot?.headlinePercent {
+                let shown = store.meterMode.shownPercent(fromUsed: used)
+                Text("\(Int(shown.rounded()))%")
+                    .font(.system(size: 11, weight: .semibold))
+                    .monospacedDigit()
+                    .foregroundStyle(Color(hex: id.accentHex))
+            } else {
+                Text("—")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(.white.opacity(0.4))
+            }
+        }
     }
 }
 
@@ -314,9 +381,11 @@ struct NotchSlot: View {
     @ViewBuilder
     private var glyph: some View {
         if let id {
-            // `tint` only reaches the monochrome marks, so Claude stays orange
-            // and Gemini stays four-colour while Codex is lifted off the black.
-            ProviderGlyph(id: id, size: 14, tint: .white)
+            // The mark in the brand colour, the same one the figure wears, so
+            // each side of the notch reads as one thing in one colour. `tint`
+            // only reaches the monochrome marks: Claude stays terracotta and
+            // Gemini four-colour either way; Codex turns from white to blue.
+            ProviderGlyph(id: id, size: 14, tint: Color(hex: id.accentHex))
         }
     }
 

@@ -95,6 +95,23 @@ public enum MeterMode: String, Codable, CaseIterable, Identifiable, Sendable {
     }
 }
 
+/// What happens when a newer build is found.
+public enum UpdatePolicy: String, Codable, CaseIterable, Identifiable, Sendable {
+    /// Download, verify, replace the bundle and relaunch, unprompted.
+    case automatic
+    /// Say so, and wait for a click.
+    case manual
+
+    public var id: String { rawValue }
+
+    public var displayName: String {
+        switch self {
+        case .automatic: L10n.t("Automatic", "自动安装")
+        case .manual: L10n.t("Manual", "手动安装")
+        }
+    }
+}
+
 /// How a quota bar is drawn: one filled capsule, or a row of segments that
 /// light up in turn — codex-island's "阶梯", which the owner prefers.
 public enum MeterStyle: String, Codable, CaseIterable, Identifiable, Sendable {

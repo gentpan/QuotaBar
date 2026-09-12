@@ -56,8 +56,8 @@ enum SettingsSection: String, CaseIterable, Identifiable {
             L10n.t("Language, refresh cadence and stored history.",
                    "语言、刷新频率和已记录的历史。")
         case .updates:
-            L10n.t("Where new versions come from, and how they are verified.",
-                   "新版本从哪里来，以及如何验证。")
+            L10n.t("The installed version, and how new ones arrive.",
+                   "当前版本，以及新版本如何到来。")
         case .about:
             L10n.t("Version, and what this app does with your data.",
                    "版本信息，以及这个应用如何处理你的数据。")
@@ -790,6 +790,19 @@ struct PresentationPane: View {
                 .frame(maxWidth: 320)
             }
 
+            if store.presentation == .island {
+                SettingRow(L10n.t("Per side", "每侧显示")) {
+                    GlassSegmented(
+                        options: [1, 2, 3].map { (value: $0, label: L10n.t("\($0)", "\($0) 个")) },
+                        selection: store.islandSlots,
+                        onSelect: { store.setIslandSlots($0) })
+                    .frame(maxWidth: 200)
+                }
+                SettingFootnote(L10n.t(
+                    "How many providers sit either side of the notch, in the order they are enabled. Hover to open the full panel.",
+                    "刘海两侧各显示几个服务商，按启用顺序排列。悬停即从顶部展开完整面板。"))
+            }
+
             if store.presentation == .edgeDock {
                 SettingRow(L10n.t("Docked edge", "停靠边缘")) {
                     GlassSegmented(
@@ -980,66 +993,107 @@ struct LaunchAtLoginToggle: View {
 struct UpdatesPane: View {
     @ObservedObject var store: UsageStore
 
-    @State private var feed: String
-    @State private var invalid = false
-
-    init(store: UsageStore) {
-        self.store = store
-        _feed = State(initialValue: store.updateFeedValue)
-    }
-
     var body: some View {
-        SettingsCard(L10n.t("Source", "更新源")) {
-            SettingToggle(
-                L10n.t("Check for updates automatically", "自动检查更新"),
-                isOn: Binding(
-                    get: { store.checksForUpdates },
-                    set: { store.setChecksForUpdates($0) }))
-
-            SettingRow(L10n.t("Feed", "地址")) {
-                VStack(alignment: .leading, spacing: Design.space2) {
-                    GlassTextField(
-                        placeholder: "owner/repo",
-                        text: $feed,
-                        monospaced: true,
-                        onSubmit: save)
-                        .disabled(!store.checksForUpdates)
-                        .opacity(store.checksForUpdates ? 1 : 0.45)
-
-                    if invalid {
-                        Text(L10n.t("Not a valid source — reverted.", "不是有效的更新源，已还原。"))
+        SettingsCard(L10n.t("Version", "版本")) {
+            SettingRow(L10n.t("Installed", "当前版本")) {
+                HStack(spacing: Design.space2) {
+                    Text(SettingsView.version)
+                        .font(.system(size: 13, design: .monospaced))
+                    if let built = SettingsView.buildDate {
+                        Text(L10n.t("built \(built)", "构建于 \(built)"))
                             .font(.system(size: 11))
-                            .foregroundStyle(.orange)
+                            .foregroundStyle(.secondary)
                     }
+                }
+                .padding(.top, 4)
+            }
 
-                    HStack(spacing: Design.space2) {
-                        Button(L10n.t("Check now", "立即检查")) { store.checkForUpdate() }
-                            .glassAction(prominent: true)
-                            .disabled(!store.checksForUpdates)
-                        if store.updateIsManagedByHomebrew {
-                            Text(L10n.t("Installed via Homebrew", "通过 Homebrew 安装"))
-                                .font(.system(size: 11))
-                                .foregroundStyle(.secondary)
-                        }
-                    }
+            SettingRow(
+                L10n.t("Updates", "更新方式"),
+                caption: L10n.t(
+                    "Automatic installs a new build and relaunches as soon as it is found.",
+                    "自动：发现新版本就安装并重启；手动：只提醒，点击后安装。"))
+            {
+                GlassSegmented(
+                    options: UpdatePolicy.allCases.map { (value: $0, label: $0.displayName) },
+                    selection: store.updatePolicy,
+                    onSelect: { store.setUpdatePolicy($0) })
+                .frame(maxWidth: 260)
+                .disabled(store.updateIsManagedByHomebrew)
+                .opacity(store.updateIsManagedByHomebrew ? 0.45 : 1)
+            }
+
+            SettingRow(L10n.t("Check", "检查")) {
+                HStack(spacing: Design.space3) {
+                    Button(L10n.t("Check now", "立即检查")) { store.checkForUpdate() }
+                        .glassAction(prominent: true)
+                        .disabled(checking)
+                    stage
+                    Spacer(minLength: 0)
                 }
             }
 
+            if store.updateIsManagedByHomebrew {
+                SettingFootnote(L10n.t(
+                    "This copy was installed by Homebrew, which owns its updates: run `brew upgrade quotabar`.",
+                    "这个副本由 Homebrew 安装，更新由它负责：运行 `brew upgrade quotabar`。"))
+            }
             SettingFootnote(L10n.t(
-                "A GitHub repository as owner/repo, or the URL of a JSON endpoint you host: {\"version\":\"0.3.0\",\"url\":\"…/QuotaBar-0.3.0.zip\"}",
-                "填 GitHub 仓库（owner/repo），或你自建的 JSON 接口地址：{\"version\":\"0.3.0\",\"url\":\"…/QuotaBar-0.3.0.zip\"}"))
-            SettingFootnote(L10n.t(
-                "Downloads are installed only if signed by this app's developer and notarized by Apple.",
-                "只有经本应用开发者签名并通过 Apple 公证的下载才会被安装。"))
+                "A new build replaces this one in place. It is installed only if signed by this app's developer and notarized by Apple.",
+                "新版本会原地替换当前的应用；只有经本应用开发者签名并通过 Apple 公证的下载才会被安装。"))
         }
     }
 
-    private func save() {
-        if store.setUpdateFeed(feed) {
-            invalid = false
-        } else {
-            invalid = true
-            feed = store.updateFeedValue
+    private var checking: Bool {
+        switch store.updateStage {
+        case .checking, .downloading: true
+        default: false
+        }
+    }
+
+    /// Where the last check got to, in one line beside the button.
+    @ViewBuilder
+    private var stage: some View {
+        switch store.updateStage {
+        case .idle:
+            if let checked = store.lastUpdateCheck {
+                Text(L10n.t(
+                    "Up to date · checked \(QuotaFormat.age(of: checked))",
+                    "已是最新 · \(QuotaFormat.age(of: checked))检查"))
+                    .font(.system(size: 11))
+                    .foregroundStyle(.secondary)
+            }
+        case .checking:
+            Text(L10n.t("Checking…", "正在检查…"))
+                .font(.system(size: 11))
+                .foregroundStyle(.secondary)
+        case let .available(release):
+            if store.updatePolicy == .manual || store.updateIsManagedByHomebrew {
+                Text(L10n.t("\(release.version) is available", "有新版本 \(release.version)"))
+                    .font(.system(size: 11, weight: .medium))
+                if !store.updateIsManagedByHomebrew {
+                    Button(L10n.t("Install and relaunch", "安装并重启")) { store.installNow() }
+                        .glassAction()
+                }
+            } else {
+                Text(L10n.t("Found \(release.version), downloading…", "发现 \(release.version)，正在下载…"))
+                    .font(.system(size: 11))
+                    .foregroundStyle(.secondary)
+            }
+        case let .downloading(release):
+            Text(L10n.t("Downloading \(release.version)…", "正在下载 \(release.version)…"))
+                .font(.system(size: 11))
+                .foregroundStyle(.secondary)
+        case let .readyToInstall(release):
+            Text(L10n.t("\(release.version) verified", "\(release.version) 已通过验证"))
+                .font(.system(size: 11, weight: .medium))
+            Button(L10n.t("Install and relaunch", "安装并重启")) { store.installNow() }
+                .glassAction()
+        case let .failed(message):
+            Text(message)
+                .font(.system(size: 11))
+                .foregroundStyle(Color(hex: "E5484D"))
+                .lineLimit(2)
         }
     }
 }

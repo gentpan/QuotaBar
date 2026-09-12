@@ -16,11 +16,14 @@ public struct QuotaConfig: Codable, Sendable, Equatable {
     /// JSON endpoint you host.
     public var updateFeed: String
     public var checksForUpdates: Bool
+    public var updatePolicy: UpdatePolicy
     public var dockEdge: DockEdge
     /// Vertical placement of the dock as a fraction of the screen, 0 at the
     /// top. Remembered so the strip stays out of whatever the user keeps at
     /// the middle of that edge.
     public var dockPosition: Double
+    /// Providers either side of the notch in the island's collapsed strip, 1–3.
+    public var islandSlots: Int
     /// When false the strip hides itself until the pointer reaches the edge.
     public var dockAlwaysVisible: Bool
     /// The desktop widget is independent of `presentation`: it sits alongside
@@ -56,8 +59,10 @@ public struct QuotaConfig: Codable, Sendable, Equatable {
         selected: ProviderID? = nil,
         updateFeed: String = UpdateFeed.default.configValue,
         checksForUpdates: Bool = true,
+        updatePolicy: UpdatePolicy = .automatic,
         dockEdge: DockEdge = .right,
         dockPosition: Double = 0.5,
+        islandSlots: Int = 1,
         dockAlwaysVisible: Bool = false,
         widgetEnabled: Bool = false,
         widgetDensity: WidgetDensity = .standard,
@@ -77,8 +82,10 @@ public struct QuotaConfig: Codable, Sendable, Equatable {
         self.selected = selected
         self.updateFeed = updateFeed
         self.checksForUpdates = checksForUpdates
+        self.updatePolicy = updatePolicy
         self.dockEdge = dockEdge
         self.dockPosition = dockPosition
+        self.islandSlots = min(max(islandSlots, 1), 3)
         self.dockAlwaysVisible = dockAlwaysVisible
         self.widgetEnabled = widgetEnabled
         self.widgetDensity = widgetDensity
@@ -90,8 +97,8 @@ public struct QuotaConfig: Codable, Sendable, Equatable {
 
     private enum CodingKeys: String, CodingKey {
         case enabled, refreshMinutes, menuBarStyle, meterMode, meterStyle, presentation, alerts, language
-        case selected, updateFeed, checksForUpdates
-        case dockEdge, dockPosition, dockAlwaysVisible
+        case selected, updateFeed, checksForUpdates, updatePolicy
+        case dockEdge, dockPosition, dockAlwaysVisible, islandSlots
         case widgetEnabled, widgetDensity, widgetX, widgetY, widgetAlwaysOnTop
         case legacyCredentials = "credentials"
     }
@@ -123,11 +130,14 @@ public struct QuotaConfig: Codable, Sendable, Equatable {
             ?? defaults.updateFeed
         checksForUpdates = (try? container.decodeIfPresent(Bool.self, forKey: .checksForUpdates))
             ?? defaults.checksForUpdates
+        updatePolicy = QuotaConfig.decodeEnum(from: container, forKey: .updatePolicy) ?? defaults.updatePolicy
         dockEdge = QuotaConfig.decodeEnum(from: container, forKey: .dockEdge) ?? defaults.dockEdge
         // Clamped: a stored value outside 0...1 would park the strip off-screen.
         dockPosition = min(max(
             (try? container.decodeIfPresent(Double.self, forKey: .dockPosition))
                 ?? defaults.dockPosition, 0), 1)
+        islandSlots = min(max(
+            (try? container.decodeIfPresent(Int.self, forKey: .islandSlots)) ?? defaults.islandSlots, 1), 3)
         dockAlwaysVisible = (try? container.decodeIfPresent(Bool.self, forKey: .dockAlwaysVisible))
             ?? defaults.dockAlwaysVisible
         widgetEnabled = (try? container.decodeIfPresent(Bool.self, forKey: .widgetEnabled))
@@ -203,8 +213,10 @@ public struct QuotaConfig: Codable, Sendable, Equatable {
         try container.encodeIfPresent(selected, forKey: .selected)
         try container.encode(updateFeed, forKey: .updateFeed)
         try container.encode(checksForUpdates, forKey: .checksForUpdates)
+        try container.encode(updatePolicy, forKey: .updatePolicy)
         try container.encode(dockEdge, forKey: .dockEdge)
         try container.encode(dockPosition, forKey: .dockPosition)
+        try container.encode(islandSlots, forKey: .islandSlots)
         try container.encode(dockAlwaysVisible, forKey: .dockAlwaysVisible)
         try container.encode(widgetEnabled, forKey: .widgetEnabled)
         try container.encode(widgetDensity, forKey: .widgetDensity)
@@ -421,6 +433,14 @@ public final class ConfigStore: @unchecked Sendable {
         set { mutate { $0.checksForUpdates = newValue } }
     }
 
+    public var updatePolicy: UpdatePolicy {
+        get {
+            lock.lock(); defer { lock.unlock() }
+            return config.updatePolicy
+        }
+        set { mutate { $0.updatePolicy = newValue } }
+    }
+
     public var dockEdge: DockEdge {
         get {
             lock.lock(); defer { lock.unlock() }
@@ -435,6 +455,14 @@ public final class ConfigStore: @unchecked Sendable {
             return config.dockPosition
         }
         set { mutate { $0.dockPosition = min(max(newValue, 0), 1) } }
+    }
+
+    public var islandSlots: Int {
+        get {
+            lock.lock(); defer { lock.unlock() }
+            return config.islandSlots
+        }
+        set { mutate { $0.islandSlots = min(max(newValue, 1), 3) } }
     }
 
     public var dockAlwaysVisible: Bool {

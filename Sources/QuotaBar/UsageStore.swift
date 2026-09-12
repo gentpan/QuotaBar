@@ -68,6 +68,10 @@ final class UsageStore: ObservableObject {
     /// a tool people leave running, and it avoids hammering an unauthenticated
     /// API that rate-limits by IP.
     @Published var updateStage: Updater.Stage = .idle
+    /// When the feed was last asked, so the pane can say "checked 3m ago"
+    /// instead of leaving an idle stage to mean anything.
+    @Published var lastUpdateCheck: Date?
+    private var updatePollTask: Task<Void, Never>?
     /// Staged bundle, verified and waiting for the user to restart.
     private var stagedUpdate: URL?
     /// Recorded headline readings per provider, mirrored here so the detail
@@ -148,6 +152,7 @@ final class UsageStore: ObservableObject {
         prepareNotifications()
         refreshConfigured()
         checkForUpdate()
+        startUpdatePolling()
         startAutoRefresh()
         startClock()
         startSystemObservers()
@@ -159,6 +164,7 @@ final class UsageStore: ObservableObject {
         autoRefreshTask?.cancel()
         clockTask?.cancel()
         statusTask?.cancel()
+        updatePollTask?.cancel()
         netMonitor?.cancel()
     }
 
@@ -261,8 +267,10 @@ final class UsageStore: ObservableObject {
         }
     }
 
+    /// Every provider with a feed, enabled or not: the settings list shows
+    /// them all, and eight small requests every five minutes is nothing.
     func refreshServiceStatus(_ only: [ProviderID]? = nil) async {
-        let ids = (only ?? enabled).filter { StatusPages.page(for: $0) != nil }
+        let ids = (only ?? StatusPages.supported).filter { StatusPages.page(for: $0) != nil }
         guard !ids.isEmpty else { return }
         let fresh = await withTaskGroup(of: (ProviderID, ServiceStatus?).self) { group in
             for id in ids {
@@ -345,18 +353,45 @@ final class UsageStore: ObservableObject {
 
     func checkForUpdate() {
         guard config.checksForUpdates, let current = currentVersion else { return }
+        // A download or a staged bundle is further along than a check.
+        switch updateStage {
+        case .downloading, .readyToInstall: return
+        default: break
+        }
         let feed = config.updateFeed
         updateStage = .checking
         Task {
-            if let release = await Updater.check(feed: feed, currentVersion: current) {
+            let release = await Updater.check(feed: feed, currentVersion: current)
+            self.lastUpdateCheck = Date()
+            if let release {
                 self.updateStage = .available(release)
+                // Automatic: straight on to the download, and from there to
+                // the install. Not for a Homebrew-owned copy, which brew
+                // upgrades and would otherwise fight over.
+                if self.updatePolicy == .automatic, !self.updateIsManagedByHomebrew {
+                    self.downloadUpdate()
+                }
             } else {
                 self.updateStage = .idle
             }
         }
     }
 
-    /// Downloads and verifies, leaving the bundle staged for a restart.
+    /// Every six hours after launch: the app is left running for weeks, and
+    /// a check only at launch would find a release a month late.
+    private func startUpdatePolling() {
+        updatePollTask?.cancel()
+        updatePollTask = Task { [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(6 * 3600))
+                guard !Task.isCancelled else { return }
+                self?.checkForUpdate()
+            }
+        }
+    }
+
+    /// Downloads and verifies, leaving the bundle staged for a restart —
+    /// or, under the automatic policy, installing and relaunching at once.
     func downloadUpdate() {
         guard case let .available(release) = updateStage else { return }
         updateStage = .downloading(release)
@@ -365,9 +400,21 @@ final class UsageStore: ObservableObject {
                 let staged = try await Updater.stage(release)
                 self.stagedUpdate = staged
                 self.updateStage = .readyToInstall(release)
+                if self.updatePolicy == .automatic, !self.updateIsManagedByHomebrew {
+                    self.installUpdate()
+                }
             } catch {
                 self.updateStage = .failed(error.localizedDescription)
             }
+        }
+    }
+
+    /// One click from "available" to relaunched, for the manual policy.
+    func installNow() {
+        switch updateStage {
+        case .available: downloadUpdate()
+        case .readyToInstall: installUpdate()
+        default: break
         }
     }
 
@@ -388,6 +435,15 @@ final class UsageStore: ObservableObject {
     var updateIsManagedByHomebrew: Bool { Updater.isManagedByHomebrew() }
 
     var checksForUpdates: Bool { config.checksForUpdates }
+    var updatePolicy: UpdatePolicy { config.updatePolicy }
+
+    func setUpdatePolicy(_ policy: UpdatePolicy) {
+        config.updatePolicy = policy
+        objectWillChange.send()
+        // Switching to automatic with a release already found: finish it.
+        if policy == .automatic { installNow() }
+    }
+
     var dockEdge: DockEdge { config.dockEdge }
     var widgetEnabled: Bool { config.widgetEnabled }
     var widgetDensity: WidgetDensity { config.widgetDensity }
@@ -412,6 +468,18 @@ final class UsageStore: ObservableObject {
         widgetRevision &+= 1
     }
     var dockAlwaysVisible: Bool { config.dockAlwaysVisible }
+
+    var islandSlots: Int { config.islandSlots }
+
+    /// Bumped when the island's strip changes width, so the coordinator
+    /// re-places the panel.
+    @Published var islandRevision = 0
+
+    func setIslandSlots(_ slots: Int) {
+        config.islandSlots = slots
+        objectWillChange.send()
+        islandRevision &+= 1
+    }
 
     /// Bumped when a setting moves the dock, so the coordinator re-places
     /// the window. Re-assigning `presentation` to itself did nothing: SwiftUI's
