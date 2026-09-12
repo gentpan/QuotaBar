@@ -42,6 +42,12 @@ public enum L10n {
     }
 
     /// Picks the English or Chinese literal for the current language.
+    /// The locale dates are formatted in: the interface language, not the
+    /// system's, so a Chinese interface on an English Mac reads "9月13日".
+    public static var locale: Locale {
+        isChinese ? Locale(identifier: "zh_Hans_CN") : Locale(identifier: "en_US")
+    }
+
     public static func t(_ en: String, _ zh: String) -> String {
         isChinese ? zh : en
     }

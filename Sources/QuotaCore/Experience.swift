@@ -191,6 +191,8 @@ public struct ExperiencePrefs: Codable, Equatable, Sendable {
     // Menu panel
     public var panelDensity: PanelDensity = .regular
     public var showSpendCard: Bool = true
+    /// openusage's Increase Transparency: the panel lets the desktop through.
+    public var panelTranslucent: Bool = false
     public var spendMetric: SpendMetric = .cost
     /// Provider cards whose "more" section is open, by provider id.
     public var expandedCards: [String] = []
@@ -229,7 +231,7 @@ public struct ExperiencePrefs: Codable, Equatable, Sendable {
 
     private enum CodingKeys: String, CodingKey {
         case resetTimeFormat, clockStyle, alwaysShowPace, urgencyStyle, tokenCounting, currency
-        case panelDensity, showSpendCard, spendMetric, expandedCards, welcomeDismissed, providersDetected
+        case panelDensity, showSpendCard, panelTranslucent, spendMetric, expandedCards, welcomeDismissed, providersDetected
         case reduceMotion, islandGlow, lowPowerGlow, islandAutoPeek, islandChart, widgetSortsByUrgency
         case hideWhenSharing, hotkey, paceAlerts, localAPI, proxy, betaUpdates
         case shareSignature, shareShowsSignature, shareCardShownForVersion
@@ -255,6 +257,7 @@ public struct ExperiencePrefs: Codable, Equatable, Sendable {
         currency = code.count == 3 && code.allSatisfy(\.isLetter) ? code : d.currency
         panelDensity = choice(.panelDensity, d.panelDensity)
         showSpendCard = value(.showSpendCard, d.showSpendCard)
+        panelTranslucent = value(.panelTranslucent, d.panelTranslucent)
         spendMetric = choice(.spendMetric, d.spendMetric)
         expandedCards = value(.expandedCards, d.expandedCards)
         welcomeDismissed = value(.welcomeDismissed, d.welcomeDismissed)

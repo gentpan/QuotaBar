@@ -77,7 +77,8 @@ final class StatusItemCoordinator: NSObject {
     /// waiting to happen.
     private func render() {
         guard let store, let item, let button = item.button else { return }
-        let key = "\(store.menuBarIconMode.rawValue)|\(store.meterReading)|\(store.menuBarStyle.rawValue)|\(store.alertLevel)|\(store.meterMode.rawValue)|\(store.isPrivacyMasked)"
+        let stripItems = Self.stripItems(store)
+        let key = "\(store.menuBarIconMode.rawValue)|\(stripItems.map { "\($0.id.rawValue)\($0.percent ?? -1)" })|\(store.meterReading)|\(store.menuBarStyle.rawValue)|\(store.alertLevel)|\(store.meterMode.rawValue)|\(store.isPrivacyMasked)"
         guard key != lastImageKey else { return }
         lastImageKey = key
         switch store.menuBarIconMode {
@@ -88,7 +89,10 @@ final class StatusItemCoordinator: NSObject {
         case .logo:
             item.isVisible = true
             button.image = MenuBarIcon.appMark()
-        case .meter where store.isPrivacyMasked:
+        case .text where !store.isPrivacyMasked:
+            item.isVisible = true
+            button.image = MenuBarIcon.strip(stripItems) ?? MenuBarIcon.appMark()
+        case .meter where store.isPrivacyMasked, .text:
             // Someone is watching the screen: the mark, not the numbers.
             item.isVisible = true
             button.image = MenuBarIcon.appMark()
@@ -100,6 +104,14 @@ final class StatusItemCoordinator: NSObject {
                 level: store.alertLevel,
                 mode: store.meterMode)
         }
+    }
+
+    /// The focused provider, or the first three enabled, with figures in
+    /// the used-or-left mode.
+    private static func stripItems(_ store: UsageStore) -> [(id: ProviderID, percent: Double?)] {
+        guard store.menuBarIconMode == .text else { return [] }
+        let ids = store.selected.map { [$0] } ?? Array(store.enabled.prefix(3))
+        return ids.map { id in (id: id, percent: store.headlinePercent(for: id).map { store.meterMode.shownPercent(fromUsed: $0) }) }
     }
 
     @objc private func clicked() {

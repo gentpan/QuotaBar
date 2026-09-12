@@ -329,6 +329,12 @@ struct ProviderCardView: View {
             }
         }
         Divider()
+        if store.enabled.first != id {
+            Button(L10n.t("Move Up", "上移")) { withAnimation(Motion.animation(Motion.spring)) { store.moveProvider(id, by: -1) } }
+        }
+        if store.enabled.last != id {
+            Button(L10n.t("Move Down", "下移")) { withAnimation(Motion.animation(Motion.spring)) { store.moveProvider(id, by: 1) } }
+        }
         Button(L10n.t("Turn off \(id.displayName)", "停用 \(id.displayName)")) { store.setEnabled(id, false) }
         Button(L10n.t("Settings…", "设置…")) { SettingsWindow.open() }
     }

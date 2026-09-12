@@ -145,6 +145,56 @@ enum Snapshot {
         return store
     }
 
+    /// The island, off-screen: the collapsed strip with its glow at rest and
+    /// alerting, then the open panel on each page and in each chart style.
+    /// Uses the sample providers and the real preferences otherwise.
+    static func islandPreview(directory: String) {
+        let url = URL(fileURLWithPath: directory, isDirectory: true)
+        try? FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
+        let store = makeStore(selected: nil)
+        store.experience.islandGlow = true
+        let notch = IslandCoordinator.NotchMetrics(notchWidth: 200, height: 38)
+        let shape = UnevenRoundedRectangle(topLeadingRadius: 0, bottomLeadingRadius: 14, bottomTrailingRadius: 14, topTrailingRadius: 0, style: .continuous)
+        for (name, colour) in [("rest", Palette.cobalt), ("alert", Palette.red)] {
+            let strip = ZStack(alignment: .top) {
+                IslandGlow(shape: shape, color: colour, ambient: true, sweeping: false, expanded: false)
+                shape.fill(Color.black)
+                NotchStrip(store: store, metrics: notch, slots: 2)
+            }
+            .frame(width: notch.totalWidth(slots: 2), height: notch.height)
+            .padding(.horizontal, 22)
+            .padding(.bottom, 22)
+            .environment(\.colorScheme, .dark)
+            render(strip, to: url, name: "island-strip-\(name)", backing: Color(hex: "D8D8D8"))
+        }
+        if let strip = MenuBarIcon.strip([(id: .claude, percent: 63), (id: .codex, percent: 100), (id: .cursor, percent: 7)]),
+           let tiff = strip.tiffRepresentation, let bitmap = NSBitmapImageRep(data: tiff),
+           let png = bitmap.representation(using: .png, properties: [:])
+        {
+            try? png.write(to: url.appendingPathComponent("menubar-strip.png"))
+        }
+        let bridge = IslandCoordinator.Bridge()
+        for page in IslandPanel.Page.allCases {
+            for chart in page == .quota ? IslandChartStyle.allCases : [IslandChartStyle.stepped] {
+                store.experience.islandChart = chart
+                bridge.page = page
+                let size = NSSize(
+                    width: IslandPanelLayout.width(notchWidth: notch.notchWidth),
+                    height: IslandPanelLayout.height(rows: 2, notch: notch.height))
+                let panel = ZStack(alignment: .top) {
+                    IslandGlow(shape: shape, color: Palette.cobalt, ambient: true, sweeping: false, expanded: true)
+                    shape.fill(Color.black)
+                    IslandPanel(store: store, notch: notch, bridge: bridge)
+                }
+                .frame(width: size.width, height: size.height)
+                .padding(.horizontal, 22)
+                .padding(.bottom, 22)
+                .environment(\.colorScheme, .dark)
+                render(panel, to: url, name: "island-\(page)-\(chart.rawValue)", backing: Color(hex: "D8D8D8"))
+            }
+        }
+    }
+
     /// Renders the overview panel once per candidate accent, for picking a
     /// theme against real content rather than against a colour swatch.
     static func themePreview(directory: String) {

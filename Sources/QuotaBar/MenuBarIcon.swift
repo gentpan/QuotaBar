@@ -12,6 +12,32 @@ enum MenuBarIcon {
     /// The app's own mark — the three bars off the icon, without the green
     /// tile — as a template, so the bar draws it in its own ink, white on
     /// dark and black on light, the way every system item is drawn.
+    /// openusage's text strip: each provider's mark and its figure, drawn
+    /// as a template so the menu bar inks it for light and dark.
+    @MainActor
+    static func strip(_ items: [(id: ProviderID, percent: Double?)]) -> NSImage? {
+        guard !items.isEmpty else { return nil }
+        let view = HStack(spacing: 7) {
+            ForEach(items, id: \.id) { item in
+                HStack(spacing: 3) {
+                    ProviderGlyph(id: item.id, size: 13, tint: .black)
+                    Text(item.percent.map { "\(Int($0.rounded()))%" } ?? "—")
+                        .font(.system(size: 12, weight: .semibold))
+                        .monospacedDigit()
+                        .foregroundStyle(.black)
+                }
+            }
+        }
+        .padding(.horizontal, 1)
+        .frame(height: 18)
+        let renderer = ImageRenderer(content: view)
+        renderer.scale = 2
+        guard let cgImage = renderer.cgImage else { return nil }
+        let image = NSImage(cgImage: cgImage, size: NSSize(width: CGFloat(cgImage.width) / 2, height: CGFloat(cgImage.height) / 2))
+        image.isTemplate = true
+        return image
+    }
+
     static func appMark() -> NSImage {
         if let url = ProviderGlyph.markURL(named: "quotabar-mark"), let image = NSImage(contentsOf: url) {
             image.isTemplate = true

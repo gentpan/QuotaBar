@@ -28,6 +28,17 @@ extension UsageStore {
         experienceRevision &+= 1
     }
 
+    // MARK: Order
+
+    /// Moves a provider up or down the order every surface lists them in.
+    func moveProvider(_ id: ProviderID, by offset: Int) {
+        config.moveEnabled(id, by: offset)
+        enabled = config.enabledProviders
+        dockRevision &+= 1
+        islandRevision &+= 1
+        widgetRevision &+= 1
+    }
+
     // MARK: Card expansion
 
     func isCardExpanded(_ id: ProviderID) -> Bool {

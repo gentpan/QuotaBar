@@ -60,6 +60,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             Snapshot.iconPreview(directory: directory)
             NSApp.terminate(nil)
         }
+        if let index = arguments.firstIndex(of: "--island-preview") {
+            let directory = index + 1 < arguments.count ? arguments[index + 1] : "./island"
+            Snapshot.islandPreview(directory: directory)
+            NSApp.terminate(nil)
+        }
         if let index = arguments.firstIndex(of: "--theme-preview") {
             let directory = index + 1 < arguments.count ? arguments[index + 1] : "./themes"
             Snapshot.themePreview(directory: directory)

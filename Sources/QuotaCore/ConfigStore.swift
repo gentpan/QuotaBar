@@ -387,6 +387,17 @@ public final class ConfigStore: @unchecked Sendable {
         return config.enabled.contains(id)
     }
 
+    /// Moves an enabled provider within the order every surface lists them in.
+    public func moveEnabled(_ id: ProviderID, by offset: Int) {
+        mutate { config in
+            guard let index = config.enabled.firstIndex(of: id) else { return }
+            let target = min(max(index + offset, 0), config.enabled.count - 1)
+            guard target != index else { return }
+            config.enabled.remove(at: index)
+            config.enabled.insert(id, at: target)
+        }
+    }
+
     public func setEnabled(_ id: ProviderID, _ on: Bool) {
         lock.lock()
         if on, !config.enabled.contains(id) {

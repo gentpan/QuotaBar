@@ -213,6 +213,7 @@ struct UsageShareCard: View {
 
     private var dateRange: String {
         let formatter = DateFormatter()
+        formatter.locale = L10n.locale
         formatter.setLocalizedDateFormatFromTemplate("MMMd")
         return "\(formatter.string(from: summary.start))–\(formatter.string(from: summary.end))"
     }

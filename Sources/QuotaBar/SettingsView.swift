@@ -1006,7 +1006,7 @@ struct AppearancePane: View {
                     options: MenuBarIconMode.allCases.map { (value: $0, label: $0.displayName) },
                     selection: store.menuBarIconMode,
                     onSelect: { store.setMenuBarIconMode($0) })
-                .frame(maxWidth: 320)
+                .frame(maxWidth: 420)
             }
 
             switch store.menuBarIconMode {
@@ -1015,10 +1015,14 @@ struct AppearancePane: View {
                     selection: store.menuBarStyle,
                     mode: store.meterMode,
                     onSelect: { store.setMenuBarStyle($0) })
+            case .text:
+                SettingFootnote(L10n.t(
+                    "Each provider's mark and its figure — the focused provider alone, or the first three enabled.",
+                    "每个服务商的 logo 加数字：选中了服务商时只显示它，否则显示前三个已启用的服务商。"))
             case .logo:
                 SettingFootnote(L10n.t(
-                    "The app's mark, drawn in the menu bar's own ink. Click it for Settings.",
-                    "只显示应用标记，按菜单栏自身的颜色绘制。点击打开设置。"))
+                    "The app's mark, drawn in the menu bar's own ink. Click it for the menu panel.",
+                    "只显示应用标记，按菜单栏自身的颜色绘制。点击打开下拉面板。"))
             case .hidden:
                 SettingFootnote(L10n.t(
                     "No menu-bar item. Reach Settings from the dock's or island's right-click menu, or by opening QuotaBar again.",
@@ -1050,7 +1054,7 @@ struct AppearancePane: View {
         }
 
         SettingsCard(L10n.t("Figures and bars", "数字与进度条")) {
-            SettingRow(L10n.t("Bar colour", "变色方式"), caption: L10n.t("By usage: the whole bar. Figure only: the bar keeps the brand colour. By pace: a verdict on the burn rate.", "按用量：整条进度条变色。只让数字变色：进度条保持品牌色。按节奏：按消耗速度判断。")) {
+            SettingRow(L10n.t("Bar colour", "变色方式"), caption: L10n.t("How a bar shows it is close.", "进度条如何提示快用完。")) {
                 GlassSegmented(
                     options: UrgencyStyle.allCases.map { (value: $0, label: $0.displayName) },
                     selection: store.experience.urgencyStyle,
@@ -1091,6 +1095,12 @@ struct AppearancePane: View {
                     onSelect: { value in store.updateExperience { $0.panelDensity = value } })
                 .frame(maxWidth: 220)
             }
+            SettingToggle(
+                L10n.t("Translucent", "面板半透明"),
+                caption: L10n.t("Lets the desktop show through the panel.", "让桌面透过面板显示出来。"),
+                isOn: Binding(
+                    get: { store.experience.panelTranslucent },
+                    set: { value in store.updateExperience { $0.panelTranslucent = value } }))
             SettingToggle(
                 L10n.t("Show total spend", "显示花费卡片"),
                 isOn: Binding(

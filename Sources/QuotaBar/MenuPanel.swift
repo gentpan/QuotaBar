@@ -219,9 +219,14 @@ struct MenuPanelView: View {
                 })
         }
         .frame(width: MenuPanelController.width)
-        .background(
-            RoundedRectangle(cornerRadius: Design.radiusPanel, style: .continuous)
-                .fill(Color.black))
+        .background {
+            let shape = RoundedRectangle(cornerRadius: Design.radiusPanel, style: .continuous)
+            if store.experience.panelTranslucent {
+                shape.fill(.ultraThinMaterial).overlay(shape.fill(Color.black.opacity(0.55)))
+            } else {
+                shape.fill(Color.black)
+            }
+        }
         .overlay(
             RoundedRectangle(cornerRadius: Design.radiusPanel, style: .continuous)
                 .strokeBorder(Color.white.opacity(0.1), lineWidth: 0.5))

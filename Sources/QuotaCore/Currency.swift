@@ -181,6 +181,7 @@ extension QuotaFormat {
             return L10n.t("tomorrow at \(clockText)", "明天 \(clockText)")
         }
         let day = DateFormatter()
+        day.locale = L10n.locale
         day.setLocalizedDateFormatFromTemplate("MMMd")
         return "\(day.string(from: date)) \(clockText)"
     }

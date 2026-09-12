@@ -11,7 +11,7 @@ public enum Presentation: String, Codable, CaseIterable, Identifiable, Sendable 
 
     public var displayName: String {
         switch self {
-        case .menuBar: L10n.t("Menu bar", "菜单栏")
+        case .menuBar: L10n.t("Menu bar only", "仅菜单栏")
         case .island: L10n.t("Notch island", "刘海岛")
         case .edgeDock: L10n.t("Edge dock", "边缘停靠")
         }
@@ -113,6 +113,8 @@ public enum WidgetScope: String, Codable, CaseIterable, Identifiable, Sendable {
 /// What the menu-bar item shows: a reading, the app's own mark, or nothing.
 public enum MenuBarIconMode: String, Codable, CaseIterable, Identifiable, Sendable {
     case meter
+    /// openusage's text strip: each provider's mark and its figure.
+    case text
     case logo
     case hidden
 
@@ -121,6 +123,7 @@ public enum MenuBarIconMode: String, Codable, CaseIterable, Identifiable, Sendab
     public var displayName: String {
         switch self {
         case .meter: L10n.t("Reading", "用量图标")
+        case .text: L10n.t("Marks and figures", "logo 加数字")
         case .logo: L10n.t("Logo", "应用 Logo")
         case .hidden: L10n.t("Hidden", "隐藏")
         }
