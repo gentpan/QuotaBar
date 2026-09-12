@@ -30,6 +30,8 @@
         : now.toTimeString().slice(0, 5);
       // 某些引擎会在 24 小时制里把 0 点写成 24:xx
       text = text.replace(/24:(\d\d)/, "00:$1");
+      // 中文排版把星期和时间连着写（周六07:04）；菜单栏里两者之间有一个空格
+      text = text.replace(/([^\s\d])(\d{1,2}:\d\d)/, "$1 $2");
       clock.textContent = text;
       clock.setAttribute("datetime", now.toISOString());
       // 下一次正好在整分钟
