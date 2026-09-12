@@ -83,6 +83,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             Diagnostics.printLedger()
             NSApp.terminate(nil)
         }
+        if arguments.contains("--status") {
+            Diagnostics.printStatus()
+            NSApp.terminate(nil)
+        }
         if arguments.contains("--credentials") {
             Diagnostics.printCredentials()
             NSApp.terminate(nil)

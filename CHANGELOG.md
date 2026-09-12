@@ -11,7 +11,9 @@
 
 - 悬浮卡片里双击某个额度窗口（5 小时、周窗口，或 Fable 这类按模型的额度），圆环、刘海岛、桌面卡片和菜单栏读数都改按这个窗口显示。再双击一次恢复为用得最满的那个。正在跟随的窗口名旁有圆点，手动选中时为品牌色实心点。
 - 展示方式新增「屏幕」选项：接了多块显示器时，可以选择停靠条、刘海岛和桌面卡片显示在哪块屏幕，默认自动。所选屏幕拔掉后自动回到默认，插拔显示器时各窗口会重新定位。
-- 服务状态页的每一行在折叠时就显示主服务最近 30 天的在线率和状态条。Claude 取 claude.ai，Codex 取 CLI，Cursor 取 IDE，Kimi 取 Open API，DeepSeek 取 API 服务。
+- 服务状态页的每一行在折叠时就显示主服务最近 30 天的在线率和状态条。Claude 取 Claude Code，Codex 取 CLI，Cursor 取 IDE，Kimi 取 Open API，DeepSeek 取 API 服务。
+- 服务状态标记改为只看写代码相关的服务：Claude 看 Claude Code 和 Claude API，Codex 看 CLI、VS Code 插件、Codex API、Codex Web 和桌面端，Cursor 看 IDE、CLI 和云端 Agent。状态页其他组件的事件（如 Claude Cowork）不再让标记变黄，展开服务状态行时单独列在「其他组件」下。
+- 新增诊断命令 `QuotaBar --status`，列出各服务商状态标记依据的组件和其他组件的事件。
 - 新增诊断命令 `QuotaBar --credentials`，显示各本机凭据能否读到以及读取方式，不输出密钥。
 
 #### 样式
@@ -20,6 +22,7 @@
 
 #### 修复
 
+- Codex 的状态读不到 CLI 组件：OpenAI 状态页的汇总接口不含 CLI，现在缺少时会补读完整组件列表。
 - 重装或更新后，打开应用又弹出「Claude Code-credentials」钥匙串授权对话框。现在改为通过系统自带的 security 工具读取，与 Claude Code 自己的读取方式相同，不再因应用签名变化而重复询问。
 
 ## 0.4.0 · 2026-09-12

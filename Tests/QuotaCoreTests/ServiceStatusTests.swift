@@ -60,7 +60,7 @@ final class ServiceStatusTests: XCTestCase {
         func c(_ name: String) -> ServiceComponent { ServiceComponent(id: name, name: name, level: .operational) }
         XCTAssertEqual(
             StatusPages.primaryComponent(for: .claude, in: [c("Claude for Government"), c("claude.ai"), c("Claude Code")])?.name,
-            "claude.ai")
+            "Claude Code")
         XCTAssertEqual(
             StatusPages.primaryComponent(for: .deepseek, in: [c("网页对话服务 (Web Chat Service)"), c("API 服务 (API Service)")])?.name,
             "API 服务 (API Service)")
@@ -70,6 +70,96 @@ final class ServiceStatusTests: XCTestCase {
         // A page that renamed everything still answers with something.
         XCTAssertEqual(StatusPages.primaryComponent(for: .cursor, in: [c("Everything")])?.name, "Everything")
         XCTAssertNil(StatusPages.primaryComponent(for: .gemini, in: []))
+    }
+
+    // MARK: Focus on the coding services
+
+    /// What the owner saw: Claude's page at "minor" for days over a Cowork
+    /// incident while Claude Code was fine. The badge follows Claude Code
+    /// and the API; the Cowork incident waits in the opened row.
+    private let claudePage = """
+    {"status":{"indicator":"minor","description":"Minor Service Outage"},
+     "incidents":[{"name":"Degraded functionality for Claude Cowork on Windows","status":"identified",
+                   "components":[{"id":"cw","name":"Claude Cowork"}]}],
+     "components":[
+       {"id":"ai","name":"claude.ai","status":"operational","group":false,"showcase":true},
+       {"id":"api","name":"Claude API (api.anthropic.com)","status":"operational","group":false,"showcase":true},
+       {"id":"cc","name":"Claude Code","status":"operational","group":false,"showcase":true},
+       {"id":"cw","name":"Claude Cowork","status":"partial_outage","group":false,"showcase":true}]}
+    """
+
+    func testAnIncidentElsewhereLeavesTheCodingBadgeGreen() throws {
+        let status = try StatusPages.parse(
+            Data(claudePage.utf8), page: page,
+            focus: StatusPages.focusComponentNames(for: .claude), keywords: StatusPages.focusKeywords(for: .claude))
+        XCTAssertEqual(status.level, .operational)
+        XCTAssertEqual(status.focus, ["Claude Code", "Claude API (api.anthropic.com)"])
+        XCTAssertEqual(status.elsewhere, ["Degraded functionality for Claude Cowork on Windows"])
+        XCTAssertEqual(status.components.count, 4, "every component is still listed")
+    }
+
+    func testWithoutAFocusTheBadgeIsThePagesOwn() throws {
+        let status = try StatusPages.parse(Data(claudePage.utf8), page: page)
+        XCTAssertEqual(status.level, .minor)
+        XCTAssertTrue(status.focus.isEmpty)
+        XCTAssertEqual(status.description, "Degraded functionality for Claude Cowork on Windows")
+    }
+
+    func testAFocusComponentsOwnBandIsTheBadge() throws {
+        let json = claudePage.replacingOccurrences(
+            of: #""name":"Claude Code","status":"operational""#,
+            with: #""name":"Claude Code","status":"degraded_performance""#)
+        let status = try StatusPages.parse(Data(json.utf8), page: page, focus: ["Claude Code", "Claude API"])
+        XCTAssertEqual(status.level, .minor)
+    }
+
+    /// An incident touching the focus counts even before the page moves the
+    /// component's band, and its name is the sentence.
+    func testAnIncidentOnTheFocusIsAtLeastMinor() throws {
+        let json = claudePage.replacingOccurrences(
+            of: #""components":[{"id":"cw","name":"Claude Cowork"}]"#,
+            with: #""components":[{"id":"cc","name":"Claude Code"}]"#)
+        let status = try StatusPages.parse(Data(json.utf8), page: page, focus: ["Claude Code", "Claude API"])
+        XCTAssertEqual(status.level, .minor)
+        XCTAssertEqual(status.description, "Degraded functionality for Claude Cowork on Windows")
+        XCTAssertTrue(status.elsewhere.isEmpty)
+    }
+
+    /// OpenAI's feed lists no components on its incidents: the name decides.
+    func testAnIncidentWithoutComponentsIsJudgedByItsName() throws {
+        let json = """
+        {"status":{"indicator":"minor","description":"x"},
+         "incidents":[{"name":"Elevated errors for Codex CLI","status":"investigating","components":[]},
+                      {"name":"ChatGPT Work turns are failing","status":"investigating"}],
+         "components":[{"id":"cli","name":"CLI","status":"operational"},
+                       {"id":"w","name":"ChatGPT Work","status":"degraded_performance"}]}
+        """
+        let status = try StatusPages.parse(
+            Data(json.utf8), page: page,
+            focus: StatusPages.focusComponentNames(for: .codex), keywords: StatusPages.focusKeywords(for: .codex))
+        XCTAssertEqual(status.level, .minor)
+        XCTAssertEqual(status.description, "Elevated errors for Codex CLI")
+        XCTAssertEqual(status.elsewhere, ["ChatGPT Work turns are failing"])
+    }
+
+    /// OpenAI's summary omits the CLI; the full component list supplies it,
+    /// and only the focus components are added from there.
+    func testFocusComponentsMissingFromTheSummaryComeFromTheFullList() throws {
+        let summary = """
+        {"status":{"indicator":"none","description":"x"},"incidents":[],
+         "components":[{"id":"web","name":"Codex Web","status":"operational"}]}
+        """
+        let all = """
+        {"components":[{"id":"web","name":"Codex Web","status":"operational"},
+                       {"id":"cli","name":"CLI","status":"degraded_performance"},
+                       {"id":"sora","name":"Sora","status":"major_outage"}]}
+        """
+        let status = try StatusPages.parse(
+            Data(summary.utf8), page: page, focus: StatusPages.focusComponentNames(for: .codex),
+            allComponents: Data(all.utf8))
+        XCTAssertEqual(status.components.map(\.name), ["Codex Web", "CLI"])
+        XCTAssertEqual(status.focus, ["CLI", "Codex Web"])
+        XCTAssertEqual(status.level, .minor)
     }
 
     func testUptimeDaysAreSortedBandedAndGreyDropped() throws {

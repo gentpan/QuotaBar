@@ -88,19 +88,30 @@ public struct ServiceStatus: Sendable, Equatable {
     /// The page's showcased components, in its order. Empty for feeds that
     /// have none (Google Cloud's).
     public let components: [ServiceComponent]
+    /// The components `level` and `description` follow — the coding services,
+    /// Claude Code rather than Claude Cowork. Empty when the reading is the
+    /// whole page's.
+    public let focus: [String]
+    /// Open incidents on the page that touch none of `focus`: shown where
+    /// the page is opened up, kept out of the badge.
+    public let elsewhere: [String]
 
     public init(
         level: ServiceStatusLevel,
         description: String,
         pageURL: URL,
         checkedAt: Date,
-        components: [ServiceComponent] = [])
+        components: [ServiceComponent] = [],
+        focus: [String] = [],
+        elsewhere: [String] = [])
     {
         self.level = level
         self.description = description
         self.pageURL = pageURL
         self.checkedAt = checkedAt
         self.components = components
+        self.focus = focus
+        self.elsewhere = elsewhere
     }
 }
 
@@ -116,34 +127,52 @@ public enum StatusPages {
         case googleCloud(product: String)
     }
 
-    /// The one component that stands for the provider on a single line: the
-    /// service the app's readings come from — claude.ai, the Codex CLI, the
-    /// Cursor IDE — not whatever the page happens to list first (Claude's
-    /// page puts "Claude for Government" beside claude.ai). Matched by name,
-    /// exact before loose, in order of preference; a page that has renamed
-    /// everything still answers with its first entry.
-    static func primaryComponentNames(for id: ProviderID) -> [String] {
+    /// The components the badge follows: what writing code with this
+    /// provider depends on. Claude's page also reports Cowork, Government
+    /// and the consumer app, and an incident there says nothing about
+    /// whether Claude Code works; Claude Code runs on the API, so that is
+    /// followed too. In order — the first is the one a closed status row
+    /// draws. Matched by name, exact before loose. Empty = the whole page.
+    static func focusComponentNames(for id: ProviderID) -> [String] {
         switch id {
-        case .claude: ["claude.ai", "Claude Code"]
-        case .codex: ["CLI", "Codex API", "Codex Web"]
-        case .cursor: ["IDE", "cursor.com"]
-        case .kimi: ["Open API", "API Service", "K2 Model"]
+        case .claude: ["Claude Code", "Claude API"]
+        case .codex: ["CLI", "VS Code extension", "Codex API", "Codex Web", "Codex in ChatGPT Desktop"]
+        case .cursor: ["IDE", "CLI", "Cloud Agents"]
+        case .kimi: ["Open API", "API Service"]
         case .minimax: ["Large Language Models"]
-        case .manus: ["manus.im"]
         case .deepseek: ["API Service"]
         default: []
         }
     }
 
+    /// Words that tie an incident to the focus when the page does not list
+    /// the components it touched — OpenAI's feed never does.
+    static func focusKeywords(for id: ProviderID) -> [String] {
+        switch id {
+        case .claude: ["Claude Code"]
+        case .codex: ["Codex"]
+        default: []
+        }
+    }
+
+    /// The components of `components` named by `names`, in the names' order.
+    static func matching(_ names: [String], in components: [ServiceComponent]) -> [ServiceComponent] {
+        var out: [ServiceComponent] = []
+        for name in names {
+            let exact = components.filter { $0.name.caseInsensitiveCompare(name) == .orderedSame }
+            let hits = exact.isEmpty ? components.filter { $0.name.localizedCaseInsensitiveContains(name) } : exact
+            for hit in hits where !out.contains(where: { $0.id == hit.id }) { out.append(hit) }
+        }
+        return out
+    }
+
+    /// The one component that stands for the provider on a single line: the
+    /// first coding service the page reports, not whatever it happens to list
+    /// first. A page that has renamed everything still answers with its
+    /// first entry.
     public static func primaryComponent(for id: ProviderID, in components: [ServiceComponent]) -> ServiceComponent? {
-        let names = primaryComponentNames(for: id)
-        for name in names {
-            if let hit = components.first(where: { $0.name.caseInsensitiveCompare(name) == .orderedSame }) { return hit }
-        }
-        for name in names {
-            if let hit = components.first(where: { $0.name.localizedCaseInsensitiveContains(name) }) { return hit }
-        }
-        return components.first
+        let fallback: [String] = id == .manus ? ["manus.im"] : []
+        return matching(focusComponentNames(for: id) + fallback, in: components).first ?? components.first
     }
 
     /// The providers with a status feed readable without signing in. xAI's
@@ -191,7 +220,21 @@ public enum StatusPages {
             guard let response = try? await HTTP.get(url, headers: ["Accept": "application/json"]),
                   response.status == 200
             else { return nil }
-            return try? parse(response.data, page: page, now: now)
+            let focus = focusComponentNames(for: id)
+            // OpenAI's summary carries 25 of its 34 components, and the CLI is
+            // one it leaves out; the full list is asked for only then.
+            var extra: Data?
+            if !focus.isEmpty, let summary = try? JSONDecoder().decode(Summary.self, from: response.data),
+               matching(focus, in: components(of: summary)).count < focus.count
+            {
+                let all = api.appendingPathComponent("api/v2/components.json")
+                if let more = try? await HTTP.get(all, headers: ["Accept": "application/json"]), more.status == 200 {
+                    extra = more.data
+                }
+            }
+            return try? parse(
+                response.data, page: page, focus: focus, keywords: focusKeywords(for: id),
+                allComponents: extra, now: now)
         case let .googleCloud(product):
             let url = URL(string: "https://status.cloud.google.com/incidents.json")!
             guard let response = try? await HTTP.get(url, headers: ["Accept": "application/json"]),
@@ -207,8 +250,13 @@ public enum StatusPages {
             let description: String?
         }
         struct Incident: Decodable {
+            struct Touched: Decodable {
+                let id: String?
+                let name: String?
+            }
             let name: String?
             let status: String?
+            let components: [Touched]?
         }
         struct Component: Decodable {
             let id: String?
@@ -246,8 +294,17 @@ public enum StatusPages {
         }
     }
 
-    /// Exposed for the tests, which pin it to recorded responses.
-    public static func parse(_ data: Data, page: URL, now: Date = Date()) throws -> ServiceStatus {
+    /// Exposed for the tests, which pin it to recorded responses. With
+    /// `focus`, the level and sentence are those of the named components
+    /// and the incidents that touch them; without, the page's own.
+    public static func parse(
+        _ data: Data,
+        page: URL,
+        focus focusNames: [String] = [],
+        keywords: [String] = [],
+        allComponents: Data? = nil,
+        now: Date = Date()) throws -> ServiceStatus
+    {
         let summary: Summary
         do { summary = try JSONDecoder().decode(Summary.self, from: data) } catch { throw ProviderError.badResponse }
         let level: ServiceStatusLevel
@@ -264,12 +321,71 @@ public enum StatusPages {
         let incident = summary.incidents?.first?.name?.trimmingCharacters(in: .whitespacesAndNewlines)
         let headline = summary.status?.description?.trimmingCharacters(in: .whitespacesAndNewlines)
         let description = [incident, headline].compactMap { $0 }.first { !$0.isEmpty } ?? level.displayName
+        var listed = components(of: summary)
+        // Focus components the summary left out, from the page's full list.
+        if let allComponents, let full = try? JSONDecoder().decode(Summary.self, from: allComponents) {
+            let known = Set(listed.map(\.id))
+            let everything = (full.components ?? []).filter { $0.group != true }.compactMap { part -> ServiceComponent? in
+                guard let id = part.id, let name = part.name?.trimmingCharacters(in: .whitespacesAndNewlines), !name.isEmpty
+                else { return nil }
+                return ServiceComponent(id: id, name: name, level: componentLevel(part.status))
+            }
+            listed += matching(focusNames, in: everything).filter { !known.contains($0.id) }
+        }
+        let focus = matching(focusNames, in: listed)
+        guard !focus.isEmpty else {
+            return ServiceStatus(level: level, description: description, pageURL: page, checkedAt: now, components: listed)
+        }
+        return focused(summary: summary, listed: listed, focus: focus, keywords: keywords, page: page, now: now)
+    }
+
+    /// The badge for the focus alone. Worst of the focus components' own
+    /// bands; an open incident that touches one of them while they all still
+    /// read operational is at least minor — the page is saying something is
+    /// wrong before it has moved a band. Incidents elsewhere on the page are
+    /// kept for the opened row.
+    private static func focused(
+        summary: Summary, listed: [ServiceComponent], focus: [ServiceComponent],
+        keywords: [String], page: URL, now: Date) -> ServiceStatus
+    {
+        let focusIDs = Set(focus.map(\.id))
+        let focusNames = focus.map(\.name)
+        var touching: [String] = []
+        var elsewhere: [String] = []
+        for incident in summary.incidents ?? [] {
+            guard let name = incident.name?.trimmingCharacters(in: .whitespacesAndNewlines), !name.isEmpty else { continue }
+            let touched = incident.components ?? []
+            let hits: Bool
+            if touched.isEmpty {
+                // No component list: judge by the incident's own words.
+                hits = (focusNames + keywords).contains { name.localizedCaseInsensitiveContains($0) }
+            } else {
+                hits = touched.contains { part in
+                    part.id.map(focusIDs.contains) ?? false
+                        || focusNames.contains { $0.caseInsensitiveCompare(part.name ?? "") == .orderedSame }
+                }
+            }
+            if hits { touching.append(name) } else { elsewhere.append(name) }
+        }
+        var level = focus.map(\.level).max { rank($0) < rank($1) } ?? .operational
+        if !touching.isEmpty, rank(level) < rank(.minor) { level = .minor }
+        let label = focus.map(\.name).joined(separator: L10n.t(", ", "、"))
+        let description: String
+        if let first = touching.first {
+            description = first
+        } else if level.isHealthy {
+            description = L10n.t("\(label): operational", "\(label) 运行正常")
+        } else {
+            description = L10n.t("\(label): \(level.displayName)", "\(label)：\(level.displayName)")
+        }
         return ServiceStatus(
             level: level,
             description: description,
             pageURL: page,
             checkedAt: now,
-            components: components(of: summary))
+            components: listed,
+            focus: focus.map(\.name),
+            elsewhere: elsewhere)
     }
 
     // MARK: 90-day history

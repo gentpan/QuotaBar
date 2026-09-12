@@ -140,6 +140,32 @@ enum Diagnostics {
         FileHandle.standardOutput.write(Data(out.utf8))
     }
 
+    /// Every status page as the badges read it: the band, what it follows,
+    /// and what the rest of the page is reporting.
+    static func printStatus() {
+        let semaphore = DispatchSemaphore(value: 0)
+        let box = StatusBox()
+        Task.detached {
+            for id in StatusPages.supported {
+                box.lines.append((id, await StatusPages.fetch(id)))
+            }
+            semaphore.signal()
+        }
+        _ = semaphore.wait(timeout: .now() + 60)
+        var out = ""
+        for (id, status) in box.lines {
+            guard let status else { out += "\(id.displayName.padding(toLength: 10, withPad: " ", startingAt: 0)) unreadable\n"; continue }
+            out += "\(id.displayName.padding(toLength: 10, withPad: " ", startingAt: 0)) \(status.level.rawValue.padding(toLength: 12, withPad: " ", startingAt: 0)) \(status.description)\n"
+            if !status.focus.isEmpty { out += "           follows: \(status.focus.joined(separator: ", "))\n" }
+            for incident in status.elsewhere { out += "           elsewhere: \(incident)\n" }
+        }
+        FileHandle.standardOutput.write(Data(out.utf8))
+    }
+
+    private final class StatusBox: @unchecked Sendable {
+        var lines: [(ProviderID, ServiceStatus?)] = []
+    }
+
     static func printCost() {
         // The panel refreshes this on its own cycle; the CLI has to ask.
         let semaphore = DispatchSemaphore(value: 0)

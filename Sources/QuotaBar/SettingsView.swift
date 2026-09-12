@@ -425,11 +425,31 @@ struct StatusPane: View {
 
             if isOpen, let status {
                 VStack(alignment: .leading, spacing: Design.space2 + 2) {
-                    Text(status.description)
-                        .font(.system(size: 12))
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .textSelection(.enabled)
+                    // "Claude Code 运行正常" would only repeat the line under
+                    // it; the sentence is worth a line when something is wrong.
+                    if status.focus.isEmpty || !status.level.isHealthy {
+                        Text(status.description)
+                            .font(.system(size: 12))
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .textSelection(.enabled)
+                    }
+                    if !status.focus.isEmpty {
+                        // The badge above follows the coding services; say
+                        // which, and what the rest of the page is reporting.
+                        Text(L10n.t(
+                            "Status follows \(status.focus.joined(separator: ", "))",
+                            "状态按 \(status.focus.joined(separator: "、")) 判断"))
+                            .font(.system(size: 11))
+                            .foregroundStyle(.tertiary)
+                        ForEach(status.elsewhere, id: \.self) { incident in
+                            Text(L10n.t("Elsewhere on the page: \(incident)", "其他组件：\(incident)"))
+                                .font(.system(size: 11))
+                                .foregroundStyle(.tertiary)
+                                .fixedSize(horizontal: false, vertical: true)
+                                .textSelection(.enabled)
+                        }
+                    }
                     // Every part the page reports on, each with its band and
                     // — where the page answers for it — its last 90 days.
                     ForEach(status.components) { component in
