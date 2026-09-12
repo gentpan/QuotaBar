@@ -850,12 +850,20 @@ final class UsageStore: ObservableObject {
     }
 
     func setLanguage(_ language: L10n.Language) {
+        let wasChinese = L10n.isChinese
         self.language = language
         config.language = language
-        // Every visible string is resolved through L10n at render time, so a
-        // redraw is all that is needed.
+        // Interface strings are resolved through L10n at render time, so a
+        // redraw covers them.
         objectWillChange.send()
         tick &+= 1
+        // What a provider hands back is not: window names, plan details and
+        // error messages are worded when the reading is taken, and the last
+        // reading is kept on disk. Take them again in the new language.
+        if L10n.isChinese != wasChinese {
+            refreshAll()
+            Task { await refreshServiceStatus() }
+        }
     }
 
     func setCredential(_ value: String, for id: ProviderID) {

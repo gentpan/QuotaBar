@@ -80,6 +80,24 @@ final class SnapshotCacheTests: XCTestCase {
         XCTAssertEqual(loaded.resetCredits, ResetCredits(available: 2, applicable: 1))
         XCTAssertNil(SnapshotCache(fileURL: url).snapshot(for: .codex))
     }
+
+    /// Readings are worded in the language they were taken in; the other
+    /// language starts without them, and the first write replaces the lot.
+    func testReadingsStayInTheirLanguage() throws {
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("snap-\(UUID()).json")
+        defer { try? FileManager.default.removeItem(at: url); L10n.override = .system }
+        let snapshot = UsageSnapshot(planName: nil, account: nil, windows: [UsageWindow(title: "每周", usedPercent: 10)], fetchedAt: Date())
+        L10n.override = .zhHans
+        SnapshotCache(fileURL: url).store(snapshot, for: .claude)
+        XCTAssertNotNil(SnapshotCache(fileURL: url).snapshot(for: .claude))
+
+        L10n.override = .en
+        let english = SnapshotCache(fileURL: url)
+        XCTAssertNil(english.snapshot(for: .claude))
+        english.store(UsageSnapshot(planName: nil, account: nil, windows: [UsageWindow(title: "Weekly", usedPercent: 10)], fetchedAt: Date()), for: .codex)
+        XCTAssertNil(SnapshotCache(fileURL: url).snapshot(for: .claude))
+        XCTAssertEqual(SnapshotCache(fileURL: url).snapshot(for: .codex)?.windows.first?.title, "Weekly")
+    }
 }
 
 final class UsageArchiveTests: XCTestCase {

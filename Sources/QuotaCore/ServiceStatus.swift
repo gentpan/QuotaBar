@@ -328,7 +328,9 @@ public enum StatusPages {
         // An open incident's name says what is actually wrong; the headline
         // only says how badly.
         let incident = summary.incidents?.first?.name?.trimmingCharacters(in: .whitespacesAndNewlines)
-        let headline = summary.status?.description?.trimmingCharacters(in: .whitespacesAndNewlines)
+        // The page words its headline in English only; a Chinese interface
+        // says the same thing with the level's own name.
+        let headline = L10n.isChinese ? nil : summary.status?.description?.trimmingCharacters(in: .whitespacesAndNewlines)
         let description = [incident, headline].compactMap { $0 }.first { !$0.isEmpty } ?? level.displayName
         var listed = components(of: summary)
         // Focus components the summary left out, from the page's full list.

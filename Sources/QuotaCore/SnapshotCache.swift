@@ -95,44 +95,68 @@ extension UsageSnapshot: Codable {
 /// The last good reading per provider. openusage's stale-while-revalidate:
 /// the panel opens on these at launch and the first refresh replaces them,
 /// so a cold start never shows a column of spinners.
+///
+/// A reading is worded when it is taken — window names, plan details — so the
+/// file remembers the language it was written in, and a launch in the other
+/// language starts without it rather than showing the old wording.
 public final class SnapshotCache: @unchecked Sendable {
     public static let shared = SnapshotCache()
+
+    private struct File: Codable {
+        var language: String
+        var snapshots: [String: UsageSnapshot]
+    }
 
     private let lock = NSLock()
     private let fileURL: URL
     private var snapshots: [String: UsageSnapshot]
+    private var language: String
 
     public init(fileURL: URL? = nil) {
         let url = fileURL ?? AppSupport.directory.appendingPathComponent("snapshots.json")
         self.fileURL = url
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .secondsSince1970
-        self.snapshots = (try? Data(contentsOf: url))
-            .flatMap { try? decoder.decode([String: UsageSnapshot].self, from: $0) } ?? [:]
+        if let data = try? Data(contentsOf: url), let file = try? decoder.decode(File.self, from: data) {
+            self.snapshots = file.snapshots
+            self.language = file.language
+        } else {
+            // Nothing, or the earlier bare map with no language recorded:
+            // which language that was is a guess, so it is not shown.
+            self.snapshots = [:]
+            self.language = Self.currentLanguage
+        }
     }
+
+    private static var currentLanguage: String { L10n.isChinese ? "zh" : "en" }
 
     public func snapshot(for id: ProviderID) -> UsageSnapshot? {
         lock.lock(); defer { lock.unlock() }
+        guard language == Self.currentLanguage else { return nil }
         return snapshots[id.rawValue]
     }
 
     public func store(_ snapshot: UsageSnapshot, for id: ProviderID) {
-        lock.lock()
-        snapshots[id.rawValue] = snapshot
-        let copy = snapshots
-        lock.unlock()
-        let encoder = JSONEncoder()
-        encoder.dateEncodingStrategy = .secondsSince1970
-        if let data = try? encoder.encode(copy) { AppSupport.write(data, to: fileURL) }
+        write { snapshots in snapshots[id.rawValue] = snapshot }
     }
 
     public func remove(_ id: ProviderID) {
+        write { snapshots in snapshots[id.rawValue] = nil }
+    }
+
+    private func write(_ change: (inout [String: UsageSnapshot]) -> Void) {
         lock.lock()
-        snapshots[id.rawValue] = nil
-        let copy = snapshots
+        let current = Self.currentLanguage
+        // Readings in the other language are no use to this one.
+        if language != current {
+            snapshots = [:]
+            language = current
+        }
+        change(&snapshots)
+        let file = File(language: language, snapshots: snapshots)
         lock.unlock()
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .secondsSince1970
-        if let data = try? encoder.encode(copy) { AppSupport.write(data, to: fileURL) }
+        if let data = try? encoder.encode(file) { AppSupport.write(data, to: fileURL) }
     }
 }

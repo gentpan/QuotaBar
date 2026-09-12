@@ -4,6 +4,9 @@ import XCTest
 final class ServiceStatusTests: XCTestCase {
     private let page = URL(string: "https://status.example.com")!
 
+    override func setUp() { L10n.override = .en }
+    override func tearDown() { L10n.override = .system }
+
     func testOperational() throws {
         let data = Data("""
         {"page":{"url":"https://status.example.com"},
@@ -15,6 +18,15 @@ final class ServiceStatusTests: XCTestCase {
         XCTAssertEqual(status.description, "All Systems Operational")
         XCTAssertEqual(status.pageURL, page)
         XCTAssertTrue(status.level.isHealthy)
+    }
+
+    /// The headline is the page's English; Chinese says it with the level.
+    func testHeadlineInChinese() throws {
+        L10n.override = .zhHans
+        let data = Data("""
+        {"status":{"indicator":"minor","description":"Minor Service Outage"},"incidents":[]}
+        """.utf8)
+        XCTAssertEqual(try StatusPages.parse(data, page: page).description, "轻微故障")
     }
 
     func testIncidentNameWins() throws {

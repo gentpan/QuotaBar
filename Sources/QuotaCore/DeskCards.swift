@@ -52,6 +52,15 @@ public enum DeskCardSize: String, Codable, CaseIterable, Identifiable, Sendable 
         }
     }
 
+    /// For the three-way switch in Settings, where "Medium" does not fit.
+    public var shortName: String {
+        switch self {
+        case .small: L10n.t("S", "小")
+        case .medium: L10n.t("M", "中")
+        case .large: L10n.t("L", "大")
+        }
+    }
+
     /// The system widget families' proportions.
     public var width: Double { self == .small ? 170 : 344 }
     public var height: Double {

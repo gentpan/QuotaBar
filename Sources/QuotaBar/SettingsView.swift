@@ -1195,8 +1195,8 @@ struct PresentationPane: View {
                 SettingRow(
                     L10n.t("Screen", "屏幕"),
                     caption: L10n.t(
-                        "Automatic follows the menu bar; the island, the notch. The widget goes along.",
-                        "自动跟随菜单栏所在的屏幕，刘海岛跟随带刘海的屏幕。桌面小工具同屏。"))
+                        "Automatic follows the menu bar's screen; the island, the screen with the notch. Desktop cards go along.",
+                        "自动跟随菜单栏所在的屏幕，刘海岛跟随带刘海的屏幕。桌面卡片同屏。"))
                 {
                     GlassSegmented(
                         options: ScreenChoice.options,
@@ -1336,7 +1336,7 @@ private struct DeskCardSettingsRow: View {
                 .frame(width: 118)
 
                 GlassSegmented(
-                    options: DeskCardSize.allCases.map { (value: $0, label: $0.displayName) },
+                    options: DeskCardSize.allCases.map { (value: $0, label: $0.shortName) },
                     selection: card.size,
                     onSelect: { size in store.updateDeskCard(card.id) { $0.size = size } })
                 .frame(width: 120)

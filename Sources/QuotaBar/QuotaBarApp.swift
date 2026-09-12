@@ -45,6 +45,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         NSApp.setActivationPolicy(.accessory)
 
         let arguments = CommandLine.arguments
+        // Loading the config applies the saved language. Load it before
+        // anything renders, or a preview that sets its own language would
+        // have it switched back by the first read of a setting.
+        _ = ConfigStore.shared
+        // `--lang en|zh` renders the previews below in one language without
+        // touching the saved setting.
+        if let index = arguments.firstIndex(of: "--lang"), index + 1 < arguments.count {
+            L10n.override = arguments[index + 1].hasPrefix("zh") ? .zhHans : .en
+        }
         if let index = arguments.firstIndex(of: "--snapshot") {
             let directory = index + 1 < arguments.count ? arguments[index + 1] : "./snapshots"
             Snapshot.run(directory: directory)
