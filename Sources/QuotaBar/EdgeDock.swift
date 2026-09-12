@@ -5,10 +5,12 @@ import QuotaCore
 /// A strip docked to the right edge of the screen that hides itself until the
 /// pointer reaches the edge.
 ///
-/// The panel is always present and always at the edge; hiding is done by
-/// sliding it off-screen and leaving a sliver behind. That keeps the reveal
-/// entirely inside the panel's own tracking area — no global mouse monitor,
-/// which would be a heavier thing to ask of the system for a hover affordance.
+/// The panel is always the strip's full size, flush against the edge. At rest
+/// only the handle is drawn in it and everywhere else lets the mouse through;
+/// on hover the black shape grows inside the fixed window — wider first, then
+/// taller — so the window never resizes under the animation. Resizing it was
+/// what left a gap: for a frame the old, narrow content sat at the new
+/// window's inboard side, away from the edge.
 @MainActor
 final class EdgeDockCoordinator {
     private var panel: NSPanel?
@@ -61,15 +63,11 @@ final class EdgeDockCoordinator {
     static let handleHeight: CGFloat = 92
     static let width: CGFloat = 74
 
-    /// One clock for the panel's frame and for the content inside it. They used
-    /// to be independent — the content swapped instantly and the frame animated
-    /// afterwards — which is what the hitch was.
-    /// `QUOTABAR_DOCK_SLIDE=2` stretches the reveal so a frame of it can
-    /// actually be caught — at 0.24s a screen capture lands either side of it.
+    /// The reveal's time scale: 0.24 is normal. `QUOTABAR_DOCK_SLIDE=2`
+    /// stretches the grow so a frame of it can actually be caught.
     static let slideDuration: TimeInterval =
         ProcessInfo.processInfo.environment["QUOTABAR_DOCK_SLIDE"]
             .flatMap(Double.init) ?? 0.24
-    static var slide: Animation { .easeOut(duration: slideDuration) }
 
     /// `QUOTABAR_DOCK_TRACE=1` logs every frame request and what was decided.
     /// The reveal's failure mode is that it completes either way, so the only
@@ -93,13 +91,51 @@ final class EdgeDockCoordinator {
     func hide() {
         collapseTask?.cancel()
         collapseTask = nil
+        for monitor in mouseMonitors { NSEvent.removeMonitor(monitor) }
+        mouseMonitors = []
         panel?.orderOut(nil)
         panel = nil
-        targetFrame = nil
-        sliding = false
         hideCallout()
         expanded = false
     }
+
+    /// Where the handle sits inside the fixed window, for the view.
+    final class Geometry: ObservableObject {
+        /// The handle's centre below the window's centre, in points; zero
+        /// unless the strip is held on screen at the top or bottom.
+        @Published var handleOffset: CGFloat = 0
+    }
+    let geometry = Geometry()
+    /// The handle in screen coordinates: the only part of the window that
+    /// takes the mouse while the strip is folded.
+    private var handleFrame: NSRect = .zero
+    private var mouseMonitors: [Any] = []
+
+    /// Click-through outside what is drawn: the folded window is mostly empty,
+    /// and that emptiness must not swallow clicks meant for the window under it.
+    private func installMouseTracking() {
+        let update: () -> Void = { [weak self] in
+            guard let self, let panel = self.panel else { return }
+            let point = NSEvent.mouseLocation
+            let live = self.expanded || self.alwaysVisible ? panel.frame : self.handleFrame
+            let inside = live.contains(point)
+            if panel.ignoresMouseEvents == inside { panel.ignoresMouseEvents = !inside }
+        }
+        update()
+        if let global = NSEvent.addGlobalMonitorForEvents(matching: [.mouseMoved, .leftMouseDragged], handler: { _ in
+            MainActor.assumeIsolated { update() }
+        }) {
+            mouseMonitors.append(global)
+        }
+        if let local = NSEvent.addLocalMonitorForEvents(matching: [.mouseMoved, .leftMouseDragged], handler: { event in
+            MainActor.assumeIsolated { update() }
+            return event
+        }) {
+            mouseMonitors.append(local)
+        }
+        refreshMouseThrough = update
+    }
+    private var refreshMouseThrough: (() -> Void)?
 
     // MARK: Callout
 
@@ -158,12 +194,10 @@ final class EdgeDockCoordinator {
         }
 
         // Line the bubble up with the ring it belongs to. The strip lays its
-        // rings out from the top, and AppKit measures from the bottom. Against
-        // where the strip is *going*, not where it is: the first hover lands
-        // on the handle, the strip is still sliding open when the ring reports
-        // it, and a card placed against the in-between frame sat well below
-        // the ring's centre.
-        let stripFrame = targetFrame ?? strip.frame
+        // rings out from the top, and AppKit measures from the bottom. The
+        // window is always the strip's frame, so it is where the rings will be
+        // even while the shape is still growing.
+        let stripFrame = strip.frame
         // The disc's centre, not the cell's: the cell has the dot row under
         // the disc, so its middle sits 5pt low.
         let centreFromTop = Self.stripInsetTop + CGFloat(index) * Self.cellHeight + ProviderRing.defaultDiameter / 2
@@ -289,10 +323,11 @@ final class EdgeDockCoordinator {
         // its own fade on top of ours.
         panel.animationBehavior = .none
         panel.contentView = FirstMouseHostingView(
-            rootView: EdgeDockView(store: store, coordinator: self, resets: resets))
+            rootView: EdgeDockView(store: store, coordinator: self, resets: resets, geometry: geometry))
         self.panel = panel
         layout(expanded: false)
         panel.orderFrontRegardless()
+        installMouseTracking()
     }
 
     /// Whether the strip should sit fully on screen regardless of the pointer.
@@ -305,9 +340,9 @@ final class EdgeDockCoordinator {
     /// which read as the setting having done half its job.
     func relayout() {
         guard panel != nil else { return }
-        targetFrame = nil
         hideCallout()
         layout(expanded: expanded)
+        refreshMouseThrough?()
     }
 
     /// Collapsing is delayed so a pointer crossing the strip on its way
@@ -319,8 +354,9 @@ final class EdgeDockCoordinator {
         Self.trace("setExpanded(\(value))")
         if value {
             expanded = true
-            withAnimation(Self.slide) { apply(true) }
-            layout(expanded: true, animated: true)
+            // The view stages the grow itself: wider, then taller.
+            apply(true)
+            refreshMouseThrough?()
             return
         }
         collapseTask = Task { [weak self] in
@@ -328,16 +364,16 @@ final class EdgeDockCoordinator {
             // The pointer went to the card, not away: stay open.
             guard !Task.isCancelled, self?.calloutHovered != true else { return }
             self?.expanded = false
-            withAnimation(Self.slide) { apply(false) }
+            apply(false)
             self?.hideCallout()
-            self?.layout(expanded: false, animated: true)
+            self?.refreshMouseThrough?()
         }
     }
 
     /// The strip is as tall as its contents, so the panel resizes as providers
     /// are enabled or disabled.
     func setContentHeight(_ height: CGFloat) {
-        Self.trace("setContentHeight(\(Int(height))) expanded=\(expanded) sliding=\(sliding)")
+        Self.trace("setContentHeight(\(Int(height))) expanded=\(expanded)")
         // On its way out the strip is being squeezed into the handle's frame
         // and reports *that*. Recording it would make the next reveal aim at
         // the handle's height and then correct itself.
@@ -346,12 +382,6 @@ final class EdgeDockCoordinator {
         let measured = max(80, height)
         guard measuredHeights[count] != measured else { return }
         measuredHeights[count] = measured
-        // Never re-aim mid-slide. Four milliseconds into the animation is a
-        // second animation, not a correction, and the panel changes course
-        // where the user can see it. The measurement above is already recorded,
-        // so the next reveal lands on it — the cost is that a provider toggled
-        // during the 240ms reveal leaves the strip its old height until then.
-        guard !sliding else { return }
         // Not animated: this fires when a provider is enabled or a refresh
         // changes the row count, and a panel that eases into every such change
         // reads as drift rather than as a response to anything.
@@ -377,81 +407,35 @@ final class EdgeDockCoordinator {
     private func stripHeight(providers count: Int) -> CGFloat {
         measuredHeights[count] ?? Self.computedStripHeight(providers: count)
     }
-    /// Where the panel is *going*, which is not `panel.frame` while a slide is
-    /// in flight — that reports the in-between value.
-    private var targetFrame: NSRect?
-    private var sliding = false
-
+    /// Places the window: always the full strip, flush against the edge and
+    /// centred on the handle, held on screen at the extremes. Folding and
+    /// unfolding never touch it; only a change of edge, position, screen or
+    /// provider count does.
     private func layout(expanded: Bool, animated: Bool = false) {
         guard let panel, let screen = Self.hostScreen else { return }
         let config = ConfigStore.shared
         let visible = screen.visibleFrame
-        // Always-visible means the full strip, whatever the pointer is doing.
-        let out = expanded || config.dockAlwaysVisible
-
-        // Both states sit flush against the edge and are fully on screen; what
-        // changes is how wide and tall the panel is.
-        let panelWidth = out ? Self.width : Self.handleWidth
-        let panelHeight = out
-            ? stripHeight(providers: config.providers(pinnedTo: config.dockPin).count)
-            : Self.handleHeight
-        let x = config.dockEdge == .right
-            ? visible.maxX - panelWidth
-            : visible.minX
+        let panelWidth = Self.width
+        let panelHeight = stripHeight(providers: config.providers(pinnedTo: config.dockPin).count)
+        let x = config.dockEdge == .right ? visible.maxX - panelWidth : visible.minX
 
         // dockPosition is a fraction of the handle's travel from the top;
-        // AppKit measures from the bottom. The strip is centred on the
-        // handle it grows out of — placing it by its own travel put its
-        // centre somewhere else at every position but the middle, so the
-        // reveal jumped up or down — and is kept on screen at the extremes.
+        // AppKit measures from the bottom. The strip is centred on the handle
+        // it grows out of, and kept on screen at the extremes — where the
+        // handle then sits off the window's centre, which the view is told.
         let handleTravel = max(0, visible.height - Self.handleHeight)
         let handleY = visible.maxY - Self.handleHeight - handleTravel * CGFloat(config.dockPosition)
         let centred = handleY + Self.handleHeight / 2 - panelHeight / 2
-        let y = out
-            ? min(max(centred, visible.minY), visible.maxY - panelHeight)
-            : handleY
+        let y = min(max(centred, visible.minY), visible.maxY - panelHeight)
         let frame = NSRect(x: x, y: y, width: panelWidth, height: panelHeight)
-        let decision = DockSlide.decide(
-            target: frame, pending: targetFrame, animated: animated)
-        Self.trace(
-            "layout animated=\(animated) sliding=\(sliding) "
-                + "target=\(Int(frame.width))x\(Int(frame.height))@\(Int(frame.origin.y)) "
-                + "pending=\(targetFrame.map { "\(Int($0.width))x\(Int($0.height))@\(Int($0.origin.y))" } ?? "-") "
-                + "-> \(decision)")
-        switch decision {
-        case .skip:
-            return
-        case let .snap(target):
-            targetFrame = target
-            panel.setFrame(target, display: true)
-            return
-        case .animate:
-            targetFrame = frame
-        }
-        // The window is never animated. Animating its frame — even through
-        // the animator — repaints a transparent window a step behind its
-        // new bounds, and the owner saw that as a blank sliver down the
-        // strip's inboard side on every reveal. Instead the window snaps to
-        // the larger of the two frames and the black silhouette grows or
-        // shrinks *inside* it, on SwiftUI's spring, out of the edge: on the
-        // way open the window goes first, on the way shut it goes last.
-        // Both frames share a midpoint, so nothing visibly moves at the
-        // snap. (`setFrame(_:display:animate:)` was worse still: it blocks
-        // the main thread for the whole resize, measured at 341ms.)
-        if frame.width >= panel.frame.width {
-            sliding = false
-            panel.setFrame(frame, display: true)
-            Self.trace("snapped open")
-        } else {
-            sliding = true
-            Task { [weak self] in
-                try? await Task.sleep(for: .seconds(Self.slideDuration))
-                guard let self, self.targetFrame == frame else { return }
-                self.sliding = false
-                panel.setFrame(frame, display: true)
-                Self.trace("snapped shut")
-            }
-        }
+
+        handleFrame = NSRect(
+            x: config.dockEdge == .right ? frame.maxX - Self.handleWidth : frame.minX,
+            y: handleY, width: Self.handleWidth, height: Self.handleHeight)
+        let offset = frame.midY - (handleY + Self.handleHeight / 2)
+        if geometry.handleOffset != offset { geometry.handleOffset = offset }
+        Self.trace("layout \(Int(frame.width))x\(Int(frame.height))@\(Int(frame.origin.y)) handleOffset=\(Int(offset))")
+        if panel.frame != frame { panel.setFrame(frame, display: true) }
     }
 
     /// Records where the user dragged the strip to, as a fraction of the
@@ -474,9 +458,9 @@ final class EdgeDockCoordinator {
         frame.origin.y = min(
             max(frame.origin.y - delta, visible.minY),
             visible.maxY - frame.height)
-        // Dragging writes the frame directly, so the slide's idea of where the
-        // panel is headed has to be brought along or the next reveal no-ops.
-        targetFrame = frame
+        // Dragged open, the handle travels at the strip's centre.
+        handleFrame.origin.y = frame.midY - Self.handleHeight / 2
+        geometry.handleOffset = 0
         panel.setFrame(frame, display: true)
     }
 
@@ -492,6 +476,11 @@ struct EdgeDockView: View {
     @ObservedObject var store: UsageStore
     var coordinator: EdgeDockCoordinator
     @ObservedObject var resets: EdgeDockCoordinator.ResetBridge
+    @ObservedObject var geometry: EdgeDockCoordinator.Geometry
+    /// The grow in two steps: the capsule widens out of the edge, then the
+    /// strip stretches to its full height and the rings arrive.
+    @State private var wide = false
+    @State private var tall = false
     /// The reset being played, and the figure its ring shows meanwhile — the
     /// reading from before, then animated to the one now.
     @State private var playing: ResetBanner?
@@ -517,37 +506,50 @@ struct EdgeDockView: View {
     /// of a typical border.
     static let edgeBias: CGFloat = 5
 
-    private var showsStrip: Bool { expanded || coordinator.alwaysVisible }
+    private var isWide: Bool { wide || coordinator.alwaysVisible }
+    private var isTall: Bool { tall || coordinator.alwaysVisible }
 
     var body: some View {
-        ZStack(alignment: onLeft ? .leading : .trailing) {
-            // The silhouette, sized by state rather than by the window: it
-            // grows from the handle's 18x92 to the strip's full size on the
-            // same spring the content uses, so the reveal is one shape
-            // swelling out of the edge. The window has already snapped to
-            // the larger frame by then, and shrinks only after this has.
-            Self.dockShape(onLeft: onLeft)
-                .fill(Color.black)
-                .frame(width: showsStrip ? EdgeDockCoordinator.width : EdgeDockCoordinator.handleWidth)
-                .frame(maxHeight: showsStrip ? .infinity : EdgeDockCoordinator.handleHeight)
-            Group {
-                if showsStrip {
-                    // Slides in from the docked edge as the silhouette grows,
-                    // so the rings come out of the screen's side. A plain
-                    // fade put them at their final position at 0% opacity
-                    // and brightened them there, which read as the strip
-                    // materialising next to the edge rather than emerging
-                    // from it.
-                    strip.transition(.move(edge: onLeft ? .leading : .trailing).combined(with: .opacity))
-                } else {
-                    handle.transition(.opacity)
+        GeometryReader { proxy in
+            ZStack(alignment: onLeft ? .leading : .trailing) {
+                // One black shape for both states, grown inside the fixed
+                // window: from the handle's 18x92 it widens out of the edge,
+                // then stretches to the strip's height. It stays against the
+                // edge the whole way — nothing about the window moves.
+                Self.dockShape(onLeft: onLeft)
+                    .fill(Color.black)
+                    .frame(
+                        width: isWide ? EdgeDockCoordinator.width : EdgeDockCoordinator.handleWidth,
+                        height: isTall ? proxy.size.height : EdgeDockCoordinator.handleHeight)
+                    .offset(y: isTall ? 0 : geometry.handleOffset)
+                Group {
+                    if isTall {
+                        // Out of the docked edge as the height arrives, so the
+                        // rings come from the screen's side rather than
+                        // brightening in place.
+                        strip.transition(.move(edge: onLeft ? .leading : .trailing).combined(with: .opacity))
+                    } else if !isWide {
+                        handle
+                            .offset(y: geometry.handleOffset)
+                            .transition(.opacity)
+                    }
+                }
+                // Fixed at its own size and pinned to the docked edge, so the
+                // shape growing around it reveals it instead of reflowing it.
+                .fixedSize()
+                // Clipped to the shape as it grows: the rings arrive while the
+                // height is still stretching, and unclipped they showed above
+                // and below the black.
+                .frame(width: proxy.size.width, height: proxy.size.height, alignment: onLeft ? .leading : .trailing)
+                .mask(alignment: onLeft ? .leading : .trailing) {
+                    Self.dockShape(onLeft: onLeft)
+                        .frame(
+                            width: isWide ? EdgeDockCoordinator.width : EdgeDockCoordinator.handleWidth,
+                            height: isTall ? proxy.size.height : EdgeDockCoordinator.handleHeight)
+                        .offset(y: isTall ? 0 : geometry.handleOffset)
                 }
             }
-            // Fixed at its own size and pinned to the docked edge, so the
-            // silhouette growing around it reveals it instead of reflowing
-            // it. Vertically centred because both frames share a midpoint:
-            // 18x92 and 74x332 have the same centre.
-            .fixedSize()
+            .frame(width: proxy.size.width, height: proxy.size.height, alignment: onLeft ? .leading : .trailing)
         }
         // The same three actions the menu-bar item offers on its secondary
         // click, so the dock is complete on its own when the menu-bar item
@@ -591,6 +593,7 @@ struct EdgeDockView: View {
             if let banner { play(banner) }
         }
         .onChange(of: expanded) { _, isOpen in
+            stage(isOpen)
             if !isOpen {
                 coordinator.hideCallout()
                 hovered = nil
@@ -648,14 +651,33 @@ struct EdgeDockView: View {
         }
     }
 
+    /// Open: the capsule widens, then the strip stretches tall and the rings
+    /// slide in. Shut: the reverse, height first. `QUOTABAR_DOCK_SLIDE`
+    /// scales both steps to catch a frame of them.
+    private func stage(_ open: Bool) {
+        let k = EdgeDockCoordinator.slideDuration / 0.24
+        guard !Motion.reduced else {
+            wide = open
+            tall = open
+            return
+        }
+        if open {
+            withAnimation(.easeOut(duration: 0.18 * k)) { wide = true }
+            withAnimation(.spring(response: 0.36 * k, dampingFraction: 0.86).delay(0.14 * k)) { tall = true }
+        } else {
+            withAnimation(.easeInOut(duration: 0.2 * k)) { tall = false }
+            withAnimation(.easeIn(duration: 0.16 * k).delay(0.17 * k)) { wide = false }
+        }
+    }
+
     private func play(_ banner: ResetBanner) {
         resetTask?.cancel()
         let id = banner.provider
         ringOverride[id] = banner.usedBefore
         coordinator.setExpanded(true) { expanded = $0 }
         resetTask = Task { @MainActor in
-            // Out first; the fill starts once the strip has arrived.
-            try? await Task.sleep(for: .milliseconds(300))
+            // Out first — wider, then taller; the fill starts once it has arrived.
+            try? await Task.sleep(for: .milliseconds(520))
             guard !Task.isCancelled else { return }
             playing = banner
             withAnimation(Motion.animation(.timingCurve(0.22, 0.9, 0.24, 1, duration: 1.0).delay(0.15))) {
