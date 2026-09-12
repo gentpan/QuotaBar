@@ -542,38 +542,6 @@ private struct UptimeStrip: View {
     }
 }
 
-private extension AboutPane {
-    func aboutLink(_ title: String, _ detail: String, symbol: String, url: String) -> some View {
-        Button {
-            if let url = URL(string: url) { NSWorkspace.shared.open(url) }
-        } label: {
-            HStack(spacing: Design.space2) {
-                Image(systemName: symbol)
-                    .font(.system(size: 12, weight: .medium))
-                    .frame(width: 16)
-                VStack(alignment: .leading, spacing: 1) {
-                    Text(title)
-                        .font(.system(size: 12, weight: .medium))
-                    Text(detail)
-                        .font(.system(size: 11))
-                        .foregroundStyle(.secondary)
-                }
-                Image(systemName: "arrow.up.right")
-                    .font(.system(size: 9, weight: .semibold))
-                    .foregroundStyle(.tertiary)
-            }
-            .padding(.horizontal, Design.space3)
-            .padding(.vertical, Design.space2)
-            .background(
-                RoundedRectangle(cornerRadius: Design.radiusTile, style: .continuous)
-                    .fill(Design.surfaceStrong))
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .help(url)
-    }
-}
-
 // MARK: - Providers
 
 struct ProvidersPane: View {
@@ -1813,59 +1781,6 @@ struct FeedbackPane: View {
 }
 
 // MARK: - About
-
-struct AboutPane: View {
-    var body: some View {
-        SettingsCard {
-            HStack(spacing: Design.space3) {
-                if let url = Bundle.main.url(forResource: "AppIcon", withExtension: "icns"),
-                   let image = NSImage(contentsOf: url)
-                {
-                    Image(nsImage: image)
-                        .resizable()
-                        .scaledToFit()
-                        .frame(width: 52, height: 52)
-                }
-                VStack(alignment: .leading, spacing: 3) {
-                    HStack(alignment: .firstTextBaseline, spacing: Design.space2) {
-                        Text("QuotaBar")
-                            .font(Design.wordmark(size: 17))
-                        Text(SettingsView.version)
-                            .font(.system(size: 12))
-                            .monospacedDigit()
-                            .foregroundStyle(.secondary)
-                    }
-                    Text(L10n.t(
-                        "Every AI coding limit, in your menu bar.",
-                        "把每个 AI 编码服务的额度都放进菜单栏。"))
-                        .font(.system(size: 12))
-                        .foregroundStyle(.secondary)
-                }
-                Spacer(minLength: 0)
-            }
-
-            // Where to find the project and its author. Plain links, in a
-            // row, each opening in the browser.
-            HStack(spacing: Design.space4) {
-                aboutLink(L10n.t("Website", "网站"), "quota.bar", symbol: "globe", url: "https://quota.bar")
-                aboutLink("GitHub", "gentpan/quotabar", symbol: "chevron.left.forwardslash.chevron.right", url: "https://github.com/gentpan/quotabar")
-                aboutLink("X", "@gentpan", symbol: "at", url: "https://x.com/gentpan")
-                Spacer(minLength: 0)
-            }
-            .padding(.top, Design.space1)
-        }
-
-        SettingsCard(L10n.t("Your data", "你的数据")) {
-            SettingFootnote(L10n.t(
-                "Automatic providers reuse the session your CLI already created. Manually entered tokens are stored in the macOS keychain — never in a file.",
-                "自动型服务商复用 CLI 已有的登录会话；手动填写的凭据保存在 macOS 钥匙串中，不写入任何文件。"))
-            SettingFootnote(L10n.t(
-                "Spend figures are estimates computed locally from the CLIs' session logs at published list prices. They are not a bill.",
-                "费用为本地会话日志按官方标价估算的结果，仅供参考，不等于实际账单。"))
-        }
-    }
-}
-
 
 /// The proxy address, applied on Return or with the button.
 private struct ProxyRow: View {
