@@ -166,6 +166,10 @@ final class Coordinators {
             }
         }
         guard !privacyMasked else { return }
+        let severity = store.islandProviders.compactMap { store.headlinePercent(for: $0) }
+            .map { store.alertSettings.level(for: $0) }
+            .max() ?? .none
+        island.noteSeverity(severity, enabled: store.experience.islandAutoPeek)
         if store.presentation != presentation {
             presentation = store.presentation
             island.sync(store: store)

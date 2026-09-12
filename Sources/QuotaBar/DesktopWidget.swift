@@ -171,7 +171,7 @@ struct DesktopWidgetView: View {
         switch density {
         case .compact:
             HStack(spacing: Design.space3) {
-                ForEach(store.widgetProviders) { id in
+                ForEach(providers) { id in
                     ProviderRing(
                         id: id,
                         percent: percent(id),
@@ -182,18 +182,36 @@ struct DesktopWidgetView: View {
             }
         case .standard:
             HStack(alignment: .top, spacing: Design.space4 - 2) {
-                ForEach(store.widgetProviders) { id in
-                    ProviderRing(
-                        id: id,
-                        percent: percent(id),
-                        alerts: store.alertSettings,
-                        diameter: 40)
+                ForEach(providers) { id in
+                    VStack(spacing: 3) {
+                        ProviderRing(
+                            id: id,
+                            percent: percent(id),
+                            alerts: store.alertSettings,
+                            diameter: 40)
+                        if let resetsAt = store.headlineWindow(for: id)?.resetsAt {
+                            Text(QuotaFormat.tick(to: resetsAt))
+                                .font(.system(size: 9, design: .monospaced))
+                                .foregroundStyle(.white.opacity(0.45))
+                        }
+                    }
                 }
             }
         case .detailed:
             VStack(alignment: .leading, spacing: Design.space3) {
-                ForEach(store.widgetProviders) { id in
+                ForEach(providers) { id in
                     detailRow(id)
+                }
+                if store.cost.hasData {
+                    HStack {
+                        Text(L10n.t("Today", "今日"))
+                        Text(QuotaFormat.money(store.cost.spend(.today).usd)).monospacedDigit()
+                        Spacer()
+                        Text(SpendPeriod.window.displayName(windowDays: store.cost.windowDays))
+                        Text(QuotaFormat.money(store.cost.spend(.window).usd)).monospacedDigit()
+                    }
+                    .font(.system(size: 10))
+                    .foregroundStyle(.white.opacity(0.55))
                 }
             }
             .frame(width: 250, alignment: .leading)
@@ -230,11 +248,18 @@ struct DesktopWidgetView: View {
                                 .frame(width: 22, alignment: .leading)
                         }
                         Meter(
-                            percent: window.usedPercent,
+                            percent: window.usedPercent.map { store.meterMode.shownPercent(fromUsed: $0) },
                             tint: window.usedPercent.map(tint) ?? .clear,
                             style: store.meterStyle,
                             height: 4,
                             track: Color.white.opacity(0.15))
+                        .paceTick(window, mode: store.meterMode, always: store.experience.alwaysShowPace)
+                        if let resetsAt = window.resetsAt {
+                            Text(QuotaFormat.tick(to: resetsAt))
+                                .font(.system(size: 9, design: .monospaced))
+                                .foregroundStyle(.white.opacity(0.45))
+                                .frame(width: 44, alignment: .trailing)
+                        }
                     }
                 }
             }
@@ -260,6 +285,12 @@ struct DesktopWidgetView: View {
 
     private func percent(_ id: ProviderID) -> Double? {
         store.headlinePercent(for: id)
+    }
+
+    /// In the order enabled, or closest to the limit first when asked.
+    private var providers: [ProviderID] {
+        guard store.experience.widgetSortsByUrgency else { return store.widgetProviders }
+        return store.widgetProviders.sorted { (percent($0) ?? -1) > (percent($1) ?? -1) }
     }
 
     private func tint(_ percent: Double) -> Color {

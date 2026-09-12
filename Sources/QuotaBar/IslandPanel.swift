@@ -39,21 +39,26 @@ enum IslandPanelLayout {
 struct IslandPanel: View {
     @ObservedObject var store: UsageStore
     let notch: IslandCoordinator.NotchMetrics?
-    /// 额度 shows the quota tiles; 用量 shows what each provider consumed,
-    /// from the local logs where there are any — the footer chip flips it.
-    @State private var page: Page = .quota
+    @ObservedObject var bridge: IslandCoordinator.Bridge
 
-    enum Page {
+    /// 额度 shows the quota tiles; 用量 what each provider consumed from the
+    /// local logs; 总览 the spend across them. After codex-island: swipe with
+    /// two fingers, or click a dot in the footer.
+    enum Page: CaseIterable {
         case quota
         case usage
+        case overview
 
         var label: String {
             switch self {
             case .quota: L10n.t("Quota", "额度")
             case .usage: L10n.t("Usage", "用量")
+            case .overview: L10n.t("Overview", "总览")
             }
         }
     }
+
+    private var page: Page { bridge.page }
 
     /// Left takes the first `slots` enabled providers, right the next.
     private var left: [ProviderID] { Array(store.islandProviders.prefix(store.islandSlots)) }
@@ -65,14 +70,30 @@ struct IslandPanel: View {
         VStack(spacing: 0) {
             header
                 .frame(height: IslandPanelLayout.headerHeight(notch: notch?.height ?? 0))
-            HStack(alignment: .top, spacing: 0) {
-                column(left)
-                    .frame(width: IslandPanelLayout.columnWidth, alignment: .topLeading)
-                Color.clear.frame(width: notch?.notchWidth ?? IslandPanelLayout.columnGap)
-                column(right)
-                    .frame(width: IslandPanelLayout.columnWidth, alignment: .topLeading)
+            Group {
+                if page == .overview {
+                    IslandOverview(store: store)
+                        .transition(.chartSwap)
+                } else {
+                    HStack(alignment: .top, spacing: 0) {
+                        column(left)
+                            .frame(width: IslandPanelLayout.columnWidth, alignment: .topLeading)
+                        Color.clear.frame(width: notch?.notchWidth ?? IslandPanelLayout.columnGap)
+                        column(right)
+                            .frame(width: IslandPanelLayout.columnWidth, alignment: .topLeading)
+                    }
+                    .transition(.chartSwap)
+                }
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
             .padding(.vertical, IslandPanelLayout.bodyPadding)
+            .contentShape(Rectangle())
+            // ⌘-click cycles the chart style, as in codex-island.
+            .simultaneousGesture(TapGesture().modifiers(.command).onEnded {
+                withAnimation(Motion.animation(Motion.chartSwap)) {
+                    store.updateExperience { $0.islandChart = $0.islandChart.next }
+                }
+            })
             footer
                 .frame(height: IslandPanelLayout.footerHeight)
         }
@@ -125,18 +146,19 @@ struct IslandPanel: View {
                 CalloutButton(symbol: "gearshape", help: L10n.t("Settings", "设置")) {
                     SettingsWindow.open()
                 }
-                // Three quick switches, each a chip that names its current
-                // state: bar style, used-or-remaining, quota-or-usage.
-                chip(store.meterStyle.displayName, help: L10n.t("Switch bar style", "切换进度条样式")) {
-                    store.setMeterStyle(store.meterStyle == .stepped ? .continuous : .stepped)
+                // Quick switches, each a chip that names its current state:
+                // chart style (⌘-click the panel cycles it too), used or
+                // remaining; then the page dots.
+                chip(store.experience.islandChart.displayName, help: L10n.t("Chart style (⌘-click the panel)", "图表样式（也可在面板上 ⌘ 点击切换）")) {
+                    withAnimation(Motion.animation(Motion.chartSwap)) {
+                        store.updateExperience { $0.islandChart = $0.islandChart.next }
+                    }
                 }
                 chip(store.meterMode.displayName, help: L10n.t("Show used or remaining", "显示已用还是剩余")) {
                     store.setMeterMode(store.meterMode == .used ? .remaining : .used)
                 }
-                chip(page.label, help: L10n.t("Quota or consumption", "额度还是用量")) {
-                    if page == .quota { store.wantLedger() }
-                    withAnimation(.easeOut(duration: 0.2)) { page = page == .quota ? .usage : .quota }
-                }
+                Spacer(minLength: 0)
+                pageDots
                 Spacer(minLength: 0)
                 IslandSyncStatus(store: store)
             }
@@ -146,6 +168,23 @@ struct IslandPanel: View {
 }
 
 private extension IslandPanel {
+    var pageDots: some View {
+        HStack(spacing: 5) {
+            ForEach(Page.allCases, id: \.self) { option in
+                Circle()
+                    .fill(Color.white.opacity(option == page ? 0.78 : 0.22))
+                    .frame(width: 5, height: 5)
+                    .contentShape(Rectangle().inset(by: -6))
+                    .onTapGesture {
+                        if option != .quota { store.wantLedger() }
+                        withAnimation(Motion.animation(Motion.pageSwipe)) { bridge.page = option }
+                    }
+                    .help(option.label)
+            }
+        }
+        .animation(Motion.animation(Motion.strongEaseOut), value: page)
+    }
+
     /// A tap gesture rather than a `Button`, for the reason CalloutButton
     /// gives: this panel is never key, and buttons do not fire in it.
     func chip(_ label: String, help: String, action: @escaping () -> Void) -> some View {
@@ -174,10 +213,7 @@ private struct IslandSyncStatus: View {
     var body: some View {
         let failing = store.failingProviders.count
         HStack(spacing: 5) {
-            Circle()
-                .fill(failing > 0 ? Color(hex: "F5A524") : Color(hex: "3DD68C"))
-                .frame(width: 6, height: 6)
-                .shadow(color: (failing > 0 ? Color(hex: "F5A524") : Color(hex: "3DD68C")).opacity(0.55), radius: 3)
+            BreathingDot(active: true, color: failing > 0 ? Palette.amber : Palette.live, pulse: store.tick)
             Text(label(failing: failing))
                 .font(.system(size: 11, weight: .medium))
                 .foregroundStyle(.white.opacity(0.55))
@@ -248,13 +284,15 @@ private struct IslandProviderBlock: View {
                 Spacer(minLength: 0)
             }
             switch page {
+            case .overview:
+                EmptyView()
             case .quota:
                 if horizons.isEmpty {
                     emptyTile
                 } else {
                     HStack(alignment: .top, spacing: 18) {
                         ForEach(horizons) { window in
-                            IslandTile(window: window, accent: Color(hex: id.accentHex), store: store)
+                            IslandTile(window: window, accent: Color(hex: id.accentHex), store: store, id: id)
                                 .frame(maxWidth: .infinity)
                         }
                     }
@@ -346,6 +384,7 @@ private struct IslandTile: View {
     let window: UsageWindow
     let accent: Color
     @ObservedObject var store: UsageStore
+    var id: ProviderID = .claude
 
     private var used: Double { window.usedPercent ?? 0 }
     private var percent: Double { store.meterMode.shownPercent(fromUsed: used) }
@@ -360,29 +399,101 @@ private struct IslandTile: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            HStack(alignment: .firstTextBaseline) {
-                Text(window.scope ?? window.shortLabel.map(horizonName) ?? window.title)
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundStyle(.white.opacity(0.55))
-                    .lineLimit(1)
-                Spacer(minLength: 4)
-                HStack(alignment: .firstTextBaseline, spacing: 1) {
-                    Text("\(Int(percent.rounded()))")
-                        .font(.system(size: 18, weight: .semibold, design: .monospaced))
-                        .foregroundStyle(figureColor)
-                        .contentTransition(.numericText())
-                    Text("%")
-                        .font(.system(size: 11, weight: .medium))
-                        .foregroundStyle(.white.opacity(0.5))
+            switch store.experience.islandChart {
+            case .numeric:
+                numeric
+            case .ring:
+                ringTile
+            default:
+                HStack(alignment: .firstTextBaseline) {
+                    label
+                    Spacer(minLength: 4)
+                    figureView(size: 18)
                 }
+                chart
+                resetLine
             }
-            Meter(percent: percent, tint: accent, style: store.meterStyle, height: 13, track: .white.opacity(0.10))
-            Text(window.resetsAt.map { QuotaFormat.resetLabel(to: $0) } ?? (window.detail ?? " "))
-                .font(.system(size: 10, design: .monospaced))
-                .foregroundStyle(.white.opacity(0.45))
-                .lineLimit(1)
         }
         .frame(height: IslandPanelLayout.tileHeight, alignment: .top)
+        .animation(Motion.animation(Motion.chartSwap), value: store.experience.islandChart)
+    }
+
+    private var label: some View {
+        Text(window.scope ?? window.shortLabel.map(horizonName) ?? window.title)
+            .font(.system(size: 11, weight: .medium))
+            .foregroundStyle(.white.opacity(0.55))
+            .lineLimit(1)
+    }
+
+    private func figureView(size: CGFloat) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 1) {
+            Text("\(Int(percent.rounded()))")
+                .font(.system(size: size, weight: .semibold, design: .monospaced))
+                .foregroundStyle(figureColor)
+                .contentTransition(.numericText(value: percent))
+            Text("%")
+                .font(.system(size: max(11, size * 0.45), weight: .medium))
+                .foregroundStyle(.white.opacity(0.5))
+        }
+    }
+
+    @ViewBuilder
+    private var chart: some View {
+        switch store.experience.islandChart {
+        case .bar:
+            Meter(percent: percent, tint: accent, style: .continuous, height: 10, track: .white.opacity(0.10))
+                .transition(.chartSwap)
+        case .spark:
+            let values = store.history[id] ?? []
+            if values.count > 1 {
+                SparklineView(values: values, accent: accent)
+                    .frame(height: 22)
+                    .transition(.chartSwap)
+            } else {
+                Meter(percent: percent, tint: accent, style: .continuous, height: 10, track: .white.opacity(0.10))
+            }
+        default:
+            Meter(percent: percent, tint: accent, style: .stepped, height: 13, track: .white.opacity(0.10))
+                .transition(.chartSwap)
+        }
+    }
+
+    private var resetLine: some View {
+        Text(window.resetsAt.map { store.resetText($0) } ?? (window.detail ?? " "))
+            .font(.system(size: 10, design: .monospaced))
+            .foregroundStyle(.white.opacity(0.45))
+            .lineLimit(1)
+    }
+
+    private var numeric: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            label
+            figureView(size: 34)
+            resetLine
+        }
+        .transition(.chartSwap)
+    }
+
+    private var ringTile: some View {
+        HStack(spacing: 12) {
+            ZStack {
+                Circle().stroke(Color.white.opacity(0.1), lineWidth: 6)
+                Circle()
+                    .trim(from: 0, to: max(0.01, percent / 100))
+                    .stroke(accent, style: StrokeStyle(lineWidth: 6, lineCap: .round))
+                    .rotationEffect(.degrees(-90))
+                Text("\(Int(percent.rounded()))")
+                    .font(.system(size: 15, weight: .semibold, design: .monospaced))
+                    .foregroundStyle(figureColor)
+                    .contentTransition(.numericText(value: percent))
+            }
+            .frame(width: 58, height: 58)
+            VStack(alignment: .leading, spacing: 4) {
+                label
+                resetLine
+            }
+        }
+        .transition(.chartSwap)
     }
 
     /// "5h" → "5 小时", "7d" → "周": the reference names the horizon, not
@@ -395,5 +506,67 @@ private struct IslandTile: View {
         case "30d": L10n.t("month", "月")
         default: short
         }
+    }
+}
+
+
+/// The overview page: spend today and over the window, counting up, with
+/// each CLI's share, and the way to the share card.
+private struct IslandOverview: View {
+    @ObservedObject var store: UsageStore
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 36) {
+            figure(.today)
+            figure(.window)
+            VStack(alignment: .leading, spacing: 8) {
+                ForEach(store.cost.spend(.window).contributions, id: \.source) { item in
+                    let total = max(0.000_001, store.cost.spend(.window).usd)
+                    VStack(alignment: .leading, spacing: 3) {
+                        HStack {
+                            Text(item.source.displayName)
+                                .font(.system(size: 11, weight: .medium))
+                                .foregroundStyle(.white.opacity(0.8))
+                            Spacer()
+                            Text(QuotaFormat.money(item.usd))
+                                .font(.system(size: 11, design: .monospaced))
+                                .foregroundStyle(.white.opacity(0.7))
+                        }
+                        GeometryReader { proxy in
+                            ZStack(alignment: .leading) {
+                                Capsule().fill(Color.white.opacity(0.08))
+                                Capsule().fill(Color(hex: item.source.accentHex)).frame(width: max(3, proxy.size.width * item.usd / total))
+                            }
+                        }
+                        .frame(height: 5)
+                    }
+                }
+                Pressable(action: { ShareStudio.open(store: store) }) {
+                    Label(L10n.t("Share usage card", "分享用量卡片"), systemImage: "square.and.arrow.up")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(.black)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 6)
+                        .background(Capsule().fill(Color.white))
+                }
+                .padding(.top, 4)
+            }
+            .frame(maxWidth: .infinity)
+        }
+        .padding(.horizontal, 8)
+    }
+
+    private func figure(_ period: SpendPeriod) -> some View {
+        let spend = store.cost.spend(period)
+        return VStack(alignment: .leading, spacing: 6) {
+            Text(period.displayName(windowDays: store.cost.windowDays))
+                .font(.system(size: 11, weight: .medium))
+                .foregroundStyle(.white.opacity(0.55))
+            CountUpMoney(usd: spend.usd, font: .system(size: 34, weight: .semibold, design: .monospaced), color: .white)
+            Text("\(QuotaFormat.compact(spend.tokens(store.experience.tokenCounting))) tokens")
+                .font(.system(size: 11, design: .monospaced))
+                .foregroundStyle(.white.opacity(0.45))
+        }
+        .frame(width: 180, alignment: .leading)
     }
 }

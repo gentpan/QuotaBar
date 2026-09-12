@@ -206,6 +206,8 @@ public struct ExperiencePrefs: Codable, Equatable, Sendable {
     /// The island opens for a few seconds when a window crosses its warning.
     public var islandAutoPeek: Bool = true
     public var islandChart: IslandChartStyle = .stepped
+    /// The desktop card lists the provider closest to its limit first.
+    public var widgetSortsByUrgency: Bool = false
 
     // Privacy and system
     public var hideWhenSharing: Bool = false
@@ -228,7 +230,7 @@ public struct ExperiencePrefs: Codable, Equatable, Sendable {
     private enum CodingKeys: String, CodingKey {
         case resetTimeFormat, clockStyle, alwaysShowPace, urgencyStyle, tokenCounting, currency
         case panelDensity, showSpendCard, spendMetric, expandedCards, welcomeDismissed, providersDetected
-        case reduceMotion, islandGlow, lowPowerGlow, islandAutoPeek, islandChart
+        case reduceMotion, islandGlow, lowPowerGlow, islandAutoPeek, islandChart, widgetSortsByUrgency
         case hideWhenSharing, hotkey, paceAlerts, localAPI, proxy, betaUpdates
         case shareSignature, shareShowsSignature, shareCardShownForVersion
     }
@@ -262,6 +264,7 @@ public struct ExperiencePrefs: Codable, Equatable, Sendable {
         lowPowerGlow = value(.lowPowerGlow, d.lowPowerGlow)
         islandAutoPeek = value(.islandAutoPeek, d.islandAutoPeek)
         islandChart = choice(.islandChart, d.islandChart)
+        widgetSortsByUrgency = value(.widgetSortsByUrgency, d.widgetSortsByUrgency)
         hideWhenSharing = value(.hideWhenSharing, d.hideWhenSharing)
         hotkey = try? c.decodeIfPresent(Hotkey.self, forKey: .hotkey)
         paceAlerts = value(.paceAlerts, d.paceAlerts)

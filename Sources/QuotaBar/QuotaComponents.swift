@@ -225,15 +225,6 @@ struct QuotaRowView: View {
         .help(projectionHelp)
     }
 
-    private var showsTick: Bool {
-        guard let verdict else { return false }
-        switch verdict {
-        case .close, .over: return true
-        case .ahead: return experience.alwaysShowPace
-        case .spent: return false
-        }
-    }
-
     private var meter: some View {
         let shown = used.map { store.meterMode.shownPercent(fromUsed: $0) }
         return Meter(
@@ -241,18 +232,7 @@ struct QuotaRowView: View {
             tint: fillColor,
             style: store.meterStyle,
             height: compact ? 4 : 5)
-            .overlay(alignment: .leading) {
-                if showsTick, let pace {
-                    GeometryReader { proxy in
-                        let fraction = store.meterMode == .used ? pace.tickFraction : 1 - pace.tickFraction
-                        let x = min(max(proxy.size.width * fraction - 1, 0), proxy.size.width - 2)
-                        RoundedRectangle(cornerRadius: 1)
-                            .fill(Color.white.opacity(0.85))
-                            .frame(width: 2, height: proxy.size.height + 4)
-                            .offset(x: x, y: -2)
-                    }
-                }
-            }
+            .paceTick(window, mode: store.meterMode, always: experience.alwaysShowPace)
             .help(projectionHelp)
             .animation(Motion.animation(.easeOut(duration: 0.3)), value: shown)
     }
@@ -346,6 +326,29 @@ struct QuotaRowView: View {
             return over > 0
                 ? L10n.t("~\(over)% over the limit at reset", "按当前速度，重置时约超出 \(over)%")
                 : L10n.t("~100% used at reset", "按当前速度，重置时正好用完")
+        }
+    }
+}
+
+// MARK: - Pace tick
+
+extension View {
+    /// openusage's even-pace tick over a bar, where the window is close to
+    /// or past running out (or always, when asked).
+    func paceTick(_ window: UsageWindow, mode: MeterMode, always: Bool) -> some View {
+        overlay(alignment: .leading) {
+            if let pace = window.pace(), let verdict = pace.verdict,
+               verdict == .close || verdict == .over || (always && verdict == .ahead)
+            {
+                GeometryReader { proxy in
+                    let fraction = mode == .used ? pace.tickFraction : 1 - pace.tickFraction
+                    let x = min(max(proxy.size.width * fraction - 1, 0), proxy.size.width - 2)
+                    RoundedRectangle(cornerRadius: 1)
+                        .fill(Color.white.opacity(0.85))
+                        .frame(width: 2, height: proxy.size.height + 4)
+                        .offset(x: x, y: -2)
+                }
+            }
         }
     }
 }

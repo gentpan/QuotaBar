@@ -14,6 +14,25 @@ final class IslandCoordinator {
     private weak var store: UsageStore?
     private(set) var expanded = false
 
+    /// Room around the silhouette for the glow, after codex-island. The
+    /// window is this much wider and taller than the shape; outside the
+    /// shape it lets clicks through.
+    static let glowMargin: CGFloat = 22
+
+    /// What the view observes that the coordinator decides: a peek request
+    /// when a window crosses its warning, whether the island can be seen.
+    final class Bridge: ObservableObject {
+        @Published var peek = 0
+        @Published var occluded = false
+        @Published var page: IslandPanel.Page = .quota
+    }
+
+    let bridge = Bridge()
+    private var mouseMonitors: [Any] = []
+    private var occlusionObserver: NSObjectProtocol?
+    private var lastSeverity: AlertLevel = .none
+    private var severityBaselined = false
+
     func sync(store: UsageStore) {
         if store.presentation == .island {
             show(store: store)
@@ -25,9 +44,23 @@ final class IslandCoordinator {
     func hide() {
         collapseTask?.cancel()
         collapseTask = nil
+        for monitor in mouseMonitors { NSEvent.removeMonitor(monitor) }
+        mouseMonitors = []
+        if let occlusionObserver { NotificationCenter.default.removeObserver(occlusionObserver) }
+        occlusionObserver = nil
         panel?.orderOut(nil)
         panel = nil
         expanded = false
+    }
+
+    /// Opens the island for a few seconds when a tracked window newly
+    /// crosses its warning line — unless it is already open.
+    func noteSeverity(_ severity: AlertLevel, enabled: Bool) {
+        defer { lastSeverity = severity }
+        // What is already past its line at launch is the baseline, not news.
+        guard severityBaselined else { severityBaselined = true; return }
+        guard enabled, panel != nil, severity > lastSeverity, severity != .none, !expanded else { return }
+        bridge.peek &+= 1
     }
 
     private func show(store: UsageStore) {
@@ -48,13 +81,54 @@ final class IslandCoordinator {
         panel.acceptsMouseMovedEvents = true
         panel.isMovable = false
         panel.animationBehavior = .none
-        let host = FirstMouseHostingView(rootView: IslandView(store: store, coordinator: self))
+        let host = IslandHostingView(rootView: IslandView(store: store, coordinator: self, bridge: bridge))
+        host.coordinator = self
         // The frame is ours; the content fills whatever it is given.
         host.sizingOptions = []
         panel.contentView = host
         self.panel = panel
         layout(expanded: false, animated: false)
         panel.orderFrontRegardless()
+        installMouseTracking()
+        occlusionObserver = NotificationCenter.default.addObserver(
+            forName: NSWindow.didChangeOcclusionStateNotification, object: panel, queue: .main)
+        { [weak self] _ in
+            MainActor.assumeIsolated {
+                guard let self, let panel = self.panel else { return }
+                self.bridge.occluded = !panel.occlusionState.contains(.visible)
+            }
+        }
+    }
+
+    /// The silhouette in window coordinates: the window minus the glow margin.
+    func silhouetteContains(screenPoint point: NSPoint) -> Bool {
+        guard let panel else { return false }
+        let frame = panel.frame
+        let margin = Self.glowMargin
+        let shape = NSRect(x: frame.minX + margin, y: frame.minY + margin, width: frame.width - margin * 2, height: frame.height - margin)
+        return shape.contains(point)
+    }
+
+    /// Click-through outside the shape: the margin that holds the glow must
+    /// not swallow clicks meant for the menu bar or the window beneath.
+    private func installMouseTracking() {
+        let update: () -> Void = { [weak self] in
+            guard let self, let panel = self.panel else { return }
+            let inside = self.silhouetteContains(screenPoint: NSEvent.mouseLocation)
+            if panel.ignoresMouseEvents == inside { panel.ignoresMouseEvents = !inside }
+        }
+        update()
+        if let global = NSEvent.addGlobalMonitorForEvents(matching: [.mouseMoved, .leftMouseDragged], handler: { _ in
+            MainActor.assumeIsolated { update() }
+        }) {
+            mouseMonitors.append(global)
+        }
+        if let local = NSEvent.addLocalMonitorForEvents(matching: [.mouseMoved, .leftMouseDragged], handler: { event in
+            MainActor.assumeIsolated { update() }
+            return event
+        }) {
+            mouseMonitors.append(local)
+        }
     }
 
     /// Re-places the panel after a setting changed the strip's width.
@@ -88,7 +162,9 @@ final class IslandCoordinator {
     /// thread for the whole animation.
     func layout(expanded: Bool, animated: Bool) {
         guard let panel, let screen = Self.hostScreen, let store else { return }
-        let size = Self.size(expanded: expanded, store: store)
+        let shape = Self.size(expanded: expanded, store: store)
+        let margin = Self.glowMargin
+        let size = NSSize(width: shape.width + margin * 2, height: shape.height + margin)
         let frame = NSRect(
             x: screen.frame.midX - size.width / 2,
             y: screen.frame.maxY - size.height,
@@ -179,17 +255,28 @@ final class IslandCoordinator {
 struct IslandView: View {
     @ObservedObject var store: UsageStore
     var coordinator: IslandCoordinator
+    @ObservedObject var bridge: IslandCoordinator.Bridge
     @State private var expanded = false
     /// The panel's content fades in a beat after the silhouette starts to
     /// grow, and is gone before it starts to shrink — the shape is the
     /// animation, the content arrives in it.
     @State private var contentVisible = false
+    @State private var hovering = false
+    @State private var peekTask: Task<Void, Never>?
 
     var body: some View {
         ZStack(alignment: .top) {
+            if store.experience.islandGlow {
+                IslandGlow(
+                    shape: silhouette,
+                    color: glowColor,
+                    ambient: !store.experience.lowPowerGlow || glowEvent,
+                    sweeping: !bridge.occluded && (!store.experience.lowPowerGlow || glowEvent) && !Motion.reduced,
+                    expanded: expanded)
+            }
             silhouette.fill(Color.black)
             if expanded {
-                IslandPanel(store: store, notch: notchMetrics)
+                IslandPanel(store: store, notch: notchMetrics, bridge: bridge)
                     .opacity(contentVisible ? 1 : 0)
                     .offset(y: contentVisible ? 0 : -8)
                     .allowsHitTesting(contentVisible)
@@ -200,17 +287,58 @@ struct IslandView: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-        .onHover { hovering in
-            coordinator.requestExpanded(hovering) { value in
-                expanded = value
-                if value {
-                    withAnimation(.easeOut(duration: 0.22).delay(0.1)) { contentVisible = true }
-                } else {
-                    withAnimation(.easeOut(duration: 0.12)) { contentVisible = false }
-                }
+        .contentShape(silhouette)
+        .onHover { inside in
+            hovering = inside
+            peekTask?.cancel()
+            setExpanded(inside)
+        }
+        .padding(.horizontal, IslandCoordinator.glowMargin)
+        .padding(.bottom, IslandCoordinator.glowMargin)
+        .onChange(of: bridge.peek) { _, _ in
+            // A window just crossed its warning: open for four seconds, then
+            // close again unless the pointer has arrived meanwhile.
+            setExpanded(true)
+            peekTask?.cancel()
+            peekTask = Task { @MainActor in
+                try? await Task.sleep(for: .seconds(4))
+                guard !Task.isCancelled, !hovering else { return }
+                setExpanded(false)
             }
         }
         .environment(\.colorScheme, .dark)
+        .honoursReducedMotion()
+    }
+
+    private func setExpanded(_ value: Bool) {
+        coordinator.requestExpanded(value) { value in
+            expanded = value
+            if value {
+                withAnimation(Motion.animation(.easeOut(duration: 0.22).delay(0.1))) { contentVisible = true }
+            } else {
+                withAnimation(Motion.animation(.easeOut(duration: 0.12))) { contentVisible = false }
+            }
+        }
+    }
+
+    /// Under low power the glow shows only while something is happening.
+    private var glowEvent: Bool {
+        hovering || store.enabled.contains { store.isLoading($0) } || store.isComputingCost || severity != .none
+    }
+
+    private var severity: AlertLevel {
+        store.islandProviders.compactMap { store.headlinePercent(for: $0) }
+            .map { store.alertSettings.level(for: $0) }
+            .max() ?? .none
+    }
+
+    /// Cobalt at rest; amber or red when a tracked window is past its line.
+    private var glowColor: Color {
+        switch severity {
+        case .none: Palette.cobalt
+        case .warning: Palette.amber
+        case .critical: Palette.red
+        }
     }
 
     /// Read per render rather than captured at construction: the app survives
@@ -439,5 +567,86 @@ struct NotchSlot: View {
 
     private var resetsAt: Date? {
         id.flatMap { store.headlineWindow(for: $0) }?.resetsAt
+    }
+}
+
+
+// MARK: - Glow
+
+/// codex-island's halo: a soft coloured shadow round the silhouette and a
+/// light that orbits its outline. Cobalt at rest, amber or red past the
+/// alert lines; the sweep pauses when nobody can see the island.
+struct IslandGlow: View {
+    let shape: UnevenRoundedRectangle
+    let color: Color
+    /// Halo on.
+    let ambient: Bool
+    /// Orbiting light on.
+    let sweeping: Bool
+    let expanded: Bool
+
+    var body: some View {
+        ZStack {
+            if sweeping {
+                TimelineView(.animation(minimumInterval: 1 / 30)) { context in
+                    let rotation = (context.date.timeIntervalSinceReferenceDate * 100).truncatingRemainder(dividingBy: 360)
+                    shape
+                        .stroke(
+                            AngularGradient(
+                                gradient: Gradient(stops: [
+                                    .init(color: .clear, location: 0),
+                                    .init(color: color.opacity(0), location: 0.55),
+                                    .init(color: color, location: 0.78),
+                                    .init(color: .white.opacity(0.95), location: 0.92),
+                                    .init(color: color.opacity(0), location: 1),
+                                ]),
+                                center: .center,
+                                angle: .degrees(rotation)),
+                            lineWidth: 4)
+                        .blur(radius: 3)
+                }
+            }
+            shape
+                .fill(Color.black)
+                .shadow(color: color.opacity(ambient ? 0.35 : 0), radius: 14)
+                .shadow(color: expanded ? .black.opacity(0.5) : .clear, radius: 20, y: 10)
+        }
+        .animation(.easeInOut(duration: 0.45), value: color)
+        .animation(.easeInOut(duration: 0.25), value: ambient)
+        .allowsHitTesting(false)
+    }
+}
+
+/// Hosts the island: first click counts, and a two-finger horizontal swipe
+/// (or shift-scroll) turns the open panel's pages.
+final class IslandHostingView<Content: View>: NSHostingView<Content> {
+    weak var coordinator: IslandCoordinator?
+    private var swipeX: CGFloat = 0
+
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
+
+    override func scrollWheel(with event: NSEvent) {
+        guard let coordinator, coordinator.expanded else { return super.scrollWheel(with: event) }
+        let horizontal = event.hasPreciseScrollingDeltas ? event.scrollingDeltaX : (event.modifierFlags.contains(.shift) ? event.scrollingDeltaY : 0)
+        switch event.phase {
+        case .began: swipeX = 0
+        case .changed: swipeX += horizontal
+        case .ended:
+            if abs(swipeX) > 40 { coordinator.turnPage(swipeX < 0 ? 1 : -1) }
+            swipeX = 0
+        default:
+            if event.phase.isEmpty, abs(horizontal) > 2 { coordinator.turnPage(horizontal < 0 ? 1 : -1) }
+        }
+    }
+}
+
+extension IslandCoordinator {
+    func turnPage(_ step: Int) {
+        let pages = IslandPanel.Page.allCases
+        guard let index = pages.firstIndex(of: bridge.page) else { return }
+        let next = min(max(index + step, 0), pages.count - 1)
+        guard next != index else { return }
+        if pages[next] != .quota { store?.wantLedger() }
+        withAnimation(Motion.animation(Motion.pageSwipe)) { bridge.page = pages[next] }
     }
 }
