@@ -81,6 +81,13 @@ dev loop runs the bare binary, so a `Bundle.module` lookup would behave
 differently between the two. Brand names (`ProviderID.displayName`) stay
 untranslated.
 
+### Changelog
+
+Every change to the app itself (a feature, a visual change, a bug fix) gets a
+line in `CHANGELOG.md`, in Chinese, under 未发布 and the day's date, in the
+same commit or the one right after. A release moves those lines under its
+version heading. Server moves, the site and build tooling are not recorded.
+
 ### Credentials
 
 Manually entered tokens/cookies/API keys go to the **login keychain only**, via
