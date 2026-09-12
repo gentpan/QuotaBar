@@ -481,6 +481,13 @@ struct EdgeDockView: View {
     /// strip stretches to its full height and the rings arrive.
     @State private var wide = false
     @State private var tall = false
+    /// Reaching the edge shows the icons only. A card needs a hover that was
+    /// meant: once the strip has finished opening, the pointer has to move
+    /// onto a ring — the ring it happened to land on when the strip grew
+    /// under it does not count until it moves.
+    @State private var armed = false
+    @State private var armOrigin: NSPoint?
+    @State private var armTask: Task<Void, Never>?
     /// The reset being played, and the figure its ring shows meanwhile — the
     /// reading from before, then animated to the one now.
     @State private var playing: ResetBanner?
@@ -656,17 +663,67 @@ struct EdgeDockView: View {
     /// scales both steps to catch a frame of them.
     private func stage(_ open: Bool) {
         let k = EdgeDockCoordinator.slideDuration / 0.24
+        if open {
+            if coordinator.alwaysVisible {
+                // Nothing grows under the pointer; hovering is already meant.
+                armTask?.cancel()
+                armOrigin = nil
+                armed = true
+            } else {
+                arm(after: Motion.reduced ? 0.05 : 0.45 * k)
+            }
+        }
         guard !Motion.reduced else {
             wide = open
             tall = open
+            if !open { disarm() }
             return
         }
         if open {
             withAnimation(.easeOut(duration: 0.18 * k)) { wide = true }
             withAnimation(.spring(response: 0.36 * k, dampingFraction: 0.86).delay(0.14 * k)) { tall = true }
         } else {
+            disarm()
             withAnimation(.easeInOut(duration: 0.2 * k)) { tall = false }
             withAnimation(.easeIn(duration: 0.16 * k).delay(0.17 * k)) { wide = false }
+        }
+    }
+
+    /// Cards become available once the strip has opened, measured from where
+    /// the pointer was at that moment.
+    private func arm(after seconds: Double) {
+        armTask?.cancel()
+        armTask = Task { @MainActor in
+            try? await Task.sleep(for: .seconds(seconds))
+            guard !Task.isCancelled else { return }
+            armOrigin = NSEvent.mouseLocation
+            armed = true
+        }
+    }
+
+    private func disarm() {
+        armTask?.cancel()
+        armed = false
+        armOrigin = nil
+    }
+
+    /// The pointer over a ring: a card only once armed, and only after the
+    /// pointer has moved a few points since — so the ring under a pointer
+    /// that simply arrived at the edge stays quiet.
+    private func ringHover(_ id: ProviderID, _ phase: HoverPhase) {
+        switch phase {
+        case .active:
+            let pinnedOpen = coordinator.alwaysVisible && !expanded
+            guard armed || pinnedOpen else { return }
+            if let origin = armOrigin {
+                let here = NSEvent.mouseLocation
+                guard hypot(here.x - origin.x, here.y - origin.y) >= 6 else { return }
+                armOrigin = nil
+            }
+            hoverClearTask?.cancel()
+            if hovered != id { hovered = id }
+        case .ended:
+            if hovered == id { scheduleHoverClear() }
         }
     }
 
@@ -735,14 +792,7 @@ struct EdgeDockView: View {
                     }
                     .scaleEffect(playing?.provider == id && !Motion.reduced ? 1.06 : 1, anchor: .top)
                     .animation(Motion.animation(.spring(response: 0.4, dampingFraction: 0.5)), value: playing?.id)
-                    .onHover { inside in
-                        if inside {
-                            hoverClearTask?.cancel()
-                            hovered = id
-                        } else if hovered == id {
-                            scheduleHoverClear()
-                        }
-                    }
+                    .onContinuousHover { phase in ringHover(id, phase) }
                     // Declared before the single tap: SwiftUI resolves the
                     // higher count first only if it is attached first.
                     .onTapGesture(count: 2) {

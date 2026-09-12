@@ -50,13 +50,14 @@ English and Simplified Chinese and follows the system language unless you pick o
 <!-- changelog:start -->
 <!-- Generated from CHANGELOG.md by Scripts/sync_changelog.py. Do not edit by hand. -->
 
-Latest release **0.5.0** (2026-09-13) · **4** changes in development · [full changelog](CHANGELOG.md) (kept in Chinese)
+Latest release **0.5.0** (2026-09-13) · **5** changes in development · [full changelog](CHANGELOG.md) (kept in Chinese)
 
 <details open>
-<summary><b>2026-09-13</b> · Unreleased · 3 style · 1 fixed</summary>
+<summary><b>2026-09-13</b> · Unreleased · 4 style · 1 fixed</summary>
 
 **Style**
 
+- 边缘停靠条靠近时只展开出图标，不再立刻弹出左侧卡片：等停靠条完全展开后，把鼠标移到某个图标上才显示该服务商的详情卡片；之后在图标之间移动，卡片会直接跟着切换。锁定显示时悬停图标直接显示卡片。
 - 边缘停靠条的展开改为两段：小胶囊先横向拉宽，再纵向拉高，圆环在形状里淡入滑出，不会露在黑色区域外；收起时先缩短高度，再收窄回胶囊。
 - 字标 QuotaBar 的字体从 Sora 换成 Instrument Sans 半粗，设置侧边栏、关于页、下拉面板、刘海岛、分享卡片和复制图片的底栏都跟着换；关于页开源致谢里的字体一并改为 Instrument Sans。
 - 分享用量卡片窗口不再有单独的灰色标题栏：标题栏改为透明，卡片预览和右侧设置一直铺到窗口顶部，和设置窗口一样是一整块；卡片和右侧标题避开左上角的红绿灯按钮并上下对齐。
