@@ -48,9 +48,10 @@
 }
 
 @font-face {
-  font-family: "Sora";
-  src: url("assets/fonts/Sora-VariableFont_wght.ttf?v=e92ca10a") format("truetype-variations");
-  font-weight: 100 800;
+  font-family: "Instrument Sans";
+  src: url("assets/fonts/InstrumentSans-Variable.ttf?v=e92ca10a") format("truetype-variations");
+  font-weight: 400 700;
+  font-stretch: 75% 100%;
   font-display: swap;
 }
 
@@ -65,7 +66,8 @@ body {
   margin: 0;
   background: var(--canvas);
   color: var(--ink);
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial,
+  /* 西文走 Instrument Sans，中文落到各平台的系统中文字体 */
+  font-family: "Instrument Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial,
     "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
   font-size: 16px;
   line-height: 1.5;
@@ -85,9 +87,9 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
 }
 
 .wordmark {
-  font-family: "Sora", -apple-system, BlinkMacSystemFont, sans-serif;
+  font-family: "Instrument Sans", -apple-system, BlinkMacSystemFont, sans-serif;
   font-weight: 600;
-  letter-spacing: -0.01em;
+  letter-spacing: -0.015em;
 }
 
 /* ── Buttons ────────────────────────────────────────────────────────── */

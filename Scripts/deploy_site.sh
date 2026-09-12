@@ -30,7 +30,7 @@ echo "内容指纹 v=$STAMP"
 
 # Rewrite every ?v=… in the HTML, and the font URL the stylesheet carries.
 /usr/bin/sed -i '' -E "s/\?v=[A-Za-z0-9]+/?v=$STAMP/g" web/index.html web/changelog.html
-/usr/bin/sed -i '' -E "s/(Sora-VariableFont_wght\.ttf)\?v=[A-Za-z0-9]+/\1?v=$STAMP/" web/styles.css
+/usr/bin/sed -i '' -E "s/(InstrumentSans-Variable\.ttf)\?v=[A-Za-z0-9]+/\1?v=$STAMP/" web/styles.css
 # replica.js 里的 LOGOV 也要跟上，否则 JS 渲染出的那些 logo 拿的是旧指纹。
 /usr/bin/sed -i '' -E "s/(var LOGOV = \")\?v=[A-Za-z0-9]+/\1?v=$STAMP/" web/replica.js
 

@@ -167,9 +167,9 @@ struct AboutPane: View {
             Credit(name: "theSVG", author: "thesvg.org", license: "MIT",
                    use: L10n.t("The vector masters of the provider logos", "服务商标志的矢量原图"),
                    url: "https://github.com/GLINCKER/thesvg"),
-            Credit(name: "Sora", author: "The Sora Project Authors", license: "SIL OFL 1.1",
+            Credit(name: "Instrument Sans", author: "The Instrument Sans Project Authors", license: "SIL OFL 1.1",
                    use: L10n.t("The typeface of the QuotaBar wordmark", "QuotaBar 字标所用的字体"),
-                   url: "https://github.com/sora-xor/sora-font"),
+                   url: "https://github.com/Instrument/instrument-sans"),
         ]
     }
 

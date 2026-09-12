@@ -7,7 +7,7 @@ web/
   index.html
   styles.css
   app.js
-  assets/          真机截图 + 应用图标 + Sora 字体
+  assets/          真机截图 + 应用图标 + Instrument Sans 字体
 ```
 
 本地预览：
@@ -41,5 +41,6 @@ python3 -m http.server 8080 --directory web
 
 ## 字体
 
-字标用 Sora（SIL OFL 1.1），随站点分发，许可全文在
-`assets/fonts/OFL.txt`。正文走系统字体栈，在 Mac 上就是 SF Pro。
+字标和正文的西文用 Instrument Sans（SIL OFL 1.1，可变字体，字重 400–700、字宽
+75–100），随站点分发，许可全文在 `assets/fonts/OFL.txt`；中文落到各平台的系统中文
+字体（Mac 上是苹方）。页面顶部模仿 macOS 的菜单栏和刘海岛、停靠条等仿真组件保留系统字体。

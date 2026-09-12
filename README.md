@@ -50,13 +50,14 @@ English and Simplified Chinese and follows the system language unless you pick o
 <!-- changelog:start -->
 <!-- Generated from CHANGELOG.md by Scripts/sync_changelog.py. Do not edit by hand. -->
 
-Latest release **0.5.0** (2026-09-13) · **1** changes in development · [full changelog](CHANGELOG.md) (kept in Chinese)
+Latest release **0.5.0** (2026-09-13) · **2** changes in development · [full changelog](CHANGELOG.md) (kept in Chinese)
 
 <details open>
-<summary><b>2026-09-13</b> · Unreleased · 1 style</summary>
+<summary><b>2026-09-13</b> · Unreleased · 2 style</summary>
 
 **Style**
 
+- 字标 QuotaBar 的字体从 Sora 换成 Instrument Sans 半粗，设置侧边栏、关于页、下拉面板、刘海岛、分享卡片和复制图片的底栏都跟着换；关于页开源致谢里的字体一并改为 Instrument Sans。
 - 分享用量卡片窗口不再有单独的灰色标题栏：标题栏改为透明，卡片预览和右侧设置一直铺到窗口顶部，和设置窗口一样是一整块；卡片和右侧标题避开左上角的红绿灯按钮并上下对齐。
 
 </details>
@@ -426,7 +427,7 @@ QuotaBar builds on these open-source projects and this typeface. Thank you.
 | [OpenUsage](https://github.com/robinebers/openusage) | Robin Ebers | MIT | The menu panel, pace hints and the share card |
 | [CodexBar](https://github.com/steipete/CodexBar) | Peter Steinberger | MIT | How providers report their usage; QuotaBar is a clean-room Swift implementation inspired by it |
 | [theSVG](https://github.com/GLINCKER/thesvg) | thesvg.org | MIT | The vector masters of the provider logos, kept in `Assets/logos-src-*.svg` |
-| [Sora](https://github.com/sora-xor/sora-font) | The Sora Project Authors | SIL OFL 1.1 | The typeface of the QuotaBar wordmark |
+| [Instrument Sans](https://github.com/Instrument/instrument-sans) | The Instrument Sans Project Authors | SIL OFL 1.1 | The typeface of the QuotaBar wordmark and the website |
 
 QuotaBar is an independent third-party app. It is not affiliated with, endorsed by, or
 sponsored by Anthropic, OpenAI, Cursor, Google, xAI, GitHub, X or any other company it

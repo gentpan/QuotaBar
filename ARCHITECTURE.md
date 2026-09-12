@@ -352,7 +352,8 @@ monochrome until a threshold on purpose, because the menu bar is shared space.
 
 ### The wordmark
 
-The word "QuotaBar" is set in Sora; everything else stays on the system face,
+The word "QuotaBar" is set in Instrument Sans at semibold (the owner's pick on
+2026-09-13, replacing Sora); everything else stays on the system face,
 which is what a macOS app should read as. The font ships inside the bundle —
 `Sources/QuotaBar/Resources/fonts`, copied by `package_app.sh`, declared by
 `ATSApplicationFontsPath` in Info.plist — because it is not a system font and
@@ -363,9 +364,9 @@ font on its own when the family is not registered, which is what the dev loop
 gets: a bare binary has no bundle to register a font from, so the snapshots
 render the fallback and that is correct rather than broken.
 
-Sora is SIL OFL 1.1, so `OFL.txt` ships beside it — the licence requires the
-font to travel with its text. The copyright line came out of the font's own
-name table rather than from memory.
+Instrument Sans is SIL OFL 1.1, taken from google/fonts (`ofl/instrumentsans`)
+as one variable file with width and weight axes, so `OFL.txt` ships beside it —
+the licence requires the font to travel with its text.
 
 ### Design tokens
 

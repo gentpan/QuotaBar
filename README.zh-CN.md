@@ -49,13 +49,14 @@ Gatekeeper 可以直接打开。
 <!-- changelog:start -->
 <!-- 由 Scripts/sync_changelog.py 从 CHANGELOG.md 生成，请勿手改。 -->
 
-最新版本 **0.5.0**（2026-09-13） · 开发中 **1** 项改动尚未发布 · [完整更新日志](CHANGELOG.md)
+最新版本 **0.5.0**（2026-09-13） · 开发中 **2** 项改动尚未发布 · [完整更新日志](CHANGELOG.md)
 
 <details open>
-<summary><b>2026-09-13</b> · 未发布 · 样式 1</summary>
+<summary><b>2026-09-13</b> · 未发布 · 样式 2</summary>
 
 **样式**
 
+- 字标 QuotaBar 的字体从 Sora 换成 Instrument Sans 半粗，设置侧边栏、关于页、下拉面板、刘海岛、分享卡片和复制图片的底栏都跟着换；关于页开源致谢里的字体一并改为 Instrument Sans。
 - 分享用量卡片窗口不再有单独的灰色标题栏：标题栏改为透明，卡片预览和右侧设置一直铺到窗口顶部，和设置窗口一样是一整块；卡片和右侧标题避开左上角的红绿灯按钮并上下对齐。
 
 </details>
@@ -400,7 +401,7 @@ QuotaBar 参考或使用了以下开源项目和字体，在此致谢。
 | [OpenUsage](https://github.com/robinebers/openusage) | Robin Ebers | MIT | 下拉面板、用量节奏提示与分享卡片 |
 | [CodexBar](https://github.com/steipete/CodexBar) | Peter Steinberger | MIT | 各服务商用量的读取方式；QuotaBar 受其启发，用 Swift 独立重新实现 |
 | [theSVG](https://github.com/GLINCKER/thesvg) | thesvg.org | MIT | 服务商标志的矢量原图，保存在 `Assets/logos-src-*.svg` |
-| [Sora](https://github.com/sora-xor/sora-font) | The Sora Project Authors | SIL OFL 1.1 | QuotaBar 字标所用的字体 |
+| [Instrument Sans](https://github.com/Instrument/instrument-sans) | The Instrument Sans Project Authors | SIL OFL 1.1 | QuotaBar 字标和官网所用的字体 |
 
 QuotaBar 是独立的第三方应用，与 Anthropic、OpenAI、Cursor、Google、xAI、GitHub、X
 以及文中提及的其他公司均无隶属、认可或赞助关系。相关名称和标志归各自所有者所有。

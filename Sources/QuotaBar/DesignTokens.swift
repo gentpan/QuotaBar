@@ -107,7 +107,8 @@ enum Design {
         adaptive(light: QuotaTheme.inkHex, dark: QuotaTheme.inkDarkHex)
     }
 
-    /// The wordmark's face. Sora ships inside the bundle, in
+    /// The wordmark's face, Instrument Sans at semibold. It ships inside the
+    /// bundle as a variable font (width and weight axes), in
     /// `Resources/fonts`, declared by `ATSApplicationFontsPath` in Info.plist.
     ///
     /// `Font.custom` falls back to the system font on its own when the family
@@ -116,7 +117,7 @@ enum Design {
     /// Only ever used for the word "QuotaBar" — body text stays on the system
     /// face, which is what a macOS app should read as.
     static func wordmark(size: CGFloat, weight: Font.Weight = .semibold) -> Font {
-        Font.custom("Sora", size: size).weight(weight)
+        Font.custom("Instrument Sans", size: size).weight(weight)
     }
 
     private static func adaptive(light: String, dark: String) -> Color {
