@@ -4,7 +4,7 @@
 
 # QuotaBar
 
-**Every AI coding limit, in your menu bar.**
+**Every AI coding limit, a glance away — in the notch, at the screen's edge, or in the menu bar.**
 
 [![CI](https://github.com/gentpan/quotabar/actions/workflows/ci.yml/badge.svg)](https://github.com/gentpan/quotabar/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/release/gentpan/quotabar?color=6ee02b&label=release)](https://github.com/gentpan/quotabar/releases/latest)
