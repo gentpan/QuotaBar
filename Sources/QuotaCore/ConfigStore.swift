@@ -42,6 +42,10 @@ public struct QuotaConfig: Codable, Sendable, Equatable {
     public var islandPin: ProviderID?
     public var dockPin: ProviderID?
     public var widgetPin: ProviderID?
+    /// Display UUID of the screen the dock, island and widget are put on.
+    /// nil follows the menu bar (and the notch, for the island); a display
+    /// that is not connected right now falls back to the same.
+    public var displayScreen: String?
 
     /// Only ever populated by decoding a pre-Keychain config file. `ConfigStore`
     /// drains it into the keychain on load and rewrites the file without it;
@@ -80,6 +84,7 @@ public struct QuotaConfig: Codable, Sendable, Equatable {
         islandPin: ProviderID? = nil,
         dockPin: ProviderID? = nil,
         widgetPin: ProviderID? = nil,
+        displayScreen: String? = nil,
         legacyCredentials: [ProviderID: String] = [:])
     {
         self.enabled = enabled
@@ -108,6 +113,7 @@ public struct QuotaConfig: Codable, Sendable, Equatable {
         self.islandPin = islandPin
         self.dockPin = dockPin
         self.widgetPin = widgetPin
+        self.displayScreen = displayScreen
         self.legacyCredentials = legacyCredentials
     }
 
@@ -116,6 +122,7 @@ public struct QuotaConfig: Codable, Sendable, Equatable {
         case selected, updateFeed, checksForUpdates, updatePolicy
         case dockEdge, dockPosition, dockAlwaysVisible, islandSlots
         case widgetEnabled, widgetDensity, widgetX, widgetY, widgetAlwaysOnTop, widgetScope, islandPin, dockPin, widgetPin
+        case displayScreen
         case legacyCredentials = "credentials"
     }
 
@@ -171,6 +178,8 @@ public struct QuotaConfig: Codable, Sendable, Equatable {
         islandPin = QuotaConfig.decodeEnum(from: container, forKey: .islandPin)
         dockPin = QuotaConfig.decodeEnum(from: container, forKey: .dockPin)
         widgetPin = QuotaConfig.decodeEnum(from: container, forKey: .widgetPin)
+        displayScreen = (try? container.decodeIfPresent(String.self, forKey: .displayScreen))
+            .flatMap { $0.isEmpty ? nil : $0 }
         legacyCredentials = QuotaConfig.decodeLegacyCredentials(from: container)
         hasLegacyCredentialKey = container.contains(.legacyCredentials)
     }
@@ -249,6 +258,7 @@ public struct QuotaConfig: Codable, Sendable, Equatable {
         try container.encodeIfPresent(islandPin, forKey: .islandPin)
         try container.encodeIfPresent(dockPin, forKey: .dockPin)
         try container.encodeIfPresent(widgetPin, forKey: .widgetPin)
+        try container.encodeIfPresent(displayScreen, forKey: .displayScreen)
         // `legacyCredentials` intentionally omitted.
     }
 }
@@ -553,6 +563,14 @@ public final class ConfigStore: @unchecked Sendable {
             return config.dockPin
         }
         set { mutate { $0.dockPin = newValue } }
+    }
+
+    public var displayScreen: String? {
+        get {
+            lock.lock(); defer { lock.unlock() }
+            return config.displayScreen
+        }
+        set { mutate { $0.displayScreen = newValue } }
     }
 
     public var widgetPin: ProviderID? {

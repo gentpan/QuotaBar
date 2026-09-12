@@ -288,13 +288,21 @@ final class UsageStore: ObservableObject {
             }
             return out
         }
-        for (id, status) in fresh { serviceStatus[id] = status }
+        for (id, status) in fresh {
+            serviceStatus[id] = status
+            // The one strip a closed row shows; the rest load when it opens.
+            if let primary = StatusPages.primaryComponent(for: id, in: status.components) {
+                loadUptime(for: id, only: primary.id)
+            }
+        }
     }
 
-    /// Fetches the 90-day history of every component the page lists, once.
-    func loadUptime(for id: ProviderID) {
+    /// Fetches the 90-day history of every component the page lists — or of
+    /// the one named — once.
+    func loadUptime(for id: ProviderID, only component: String? = nil) {
         guard let status = serviceStatus[id] else { return }
-        for component in status.components where uptime[component.id] == nil && !uptimeLoading.contains(component.id) {
+        let wanted = status.components.filter { component == nil || $0.id == component }
+        for component in wanted where uptime[component.id] == nil && !uptimeLoading.contains(component.id) {
             uptimeLoading.insert(component.id)
             Task {
                 let days = await StatusPages.uptime(for: id, component: component.id)
@@ -529,6 +537,20 @@ final class UsageStore: ObservableObject {
     func setWidgetScope(_ scope: WidgetScope) {
         config.widgetScope = scope
         objectWillChange.send()
+        widgetRevision &+= 1
+    }
+
+    // MARK: Screen
+
+    var displayScreen: String? { config.displayScreen }
+
+    /// Every surface moves: the dock and island re-place themselves, the
+    /// widget goes to the same screen at its stored fractions.
+    func setDisplayScreen(_ id: String?) {
+        config.displayScreen = id
+        objectWillChange.send()
+        dockRevision &+= 1
+        islandRevision &+= 1
         widgetRevision &+= 1
     }
 

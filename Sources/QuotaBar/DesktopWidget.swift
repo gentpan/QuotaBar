@@ -16,6 +16,8 @@ final class DesktopWidgetCoordinator {
         if store.widgetEnabled {
             show(store: store)
             applyLevel()
+            // The screen may have changed under it.
+            reposition()
         } else {
             hide()
         }

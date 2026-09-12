@@ -108,11 +108,13 @@ final class IslandCoordinator {
         }
     }
 
-    /// Prefer the built-in display that actually has a notch; fall back to the
-    /// screen holding the menu bar. `NSScreen.main` follows the key window,
-    /// which for a menu-bar-only app can be any display.
+    /// The screen the owner chose; else the built-in display that actually
+    /// has a notch; else the screen holding the menu bar. `NSScreen.main`
+    /// follows the key window, which for a menu-bar-only app can be any
+    /// display.
     static var hostScreen: NSScreen? {
-        NSScreen.screens.first { $0.safeAreaInsets.top > 0 }
+        ScreenChoice.chosen
+            ?? NSScreen.screens.first { $0.safeAreaInsets.top > 0 }
             ?? NSScreen.screens.first
             ?? NSScreen.main
     }

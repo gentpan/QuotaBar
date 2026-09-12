@@ -65,8 +65,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             Snapshot.themePreview(directory: directory)
             NSApp.terminate(nil)
         }
-        if arguments.contains("--settings-window") {
-            Diagnostics.settingsWindow()
+        if let index = arguments.firstIndex(of: "--settings-window") {
+            // `--settings-window status` opens straight to a section.
+            let section = index + 1 < arguments.count ? SettingsSection(rawValue: arguments[index + 1]) : nil
+            Diagnostics.settingsWindow(section: section ?? .providers)
             return
         }
         if arguments.contains("--windows") {
@@ -108,6 +110,7 @@ final class Coordinators {
     private var widgetRevision = -1
     private var dockRevision = -1
     private var islandRevision = -1
+    private var screenObserver: NSObjectProtocol?
 
     func start(store: UsageStore) {
         status.onStoreChange = { [weak self, weak store] in
@@ -116,6 +119,18 @@ final class Coordinators {
         }
         status.start(store: store)
         sync(store: store)
+        // A display plugged in or pulled: whatever screen each surface now
+        // belongs on, it goes there.
+        screenObserver = NotificationCenter.default.addObserver(
+            forName: NSApplication.didChangeScreenParametersNotification, object: nil, queue: .main)
+        { [weak self, weak store] _ in
+            guard let self, let store else { return }
+            MainActor.assumeIsolated {
+                self.dock.relayout()
+                self.island.relayout()
+                self.widget.sync(store: store)
+            }
+        }
     }
 
     /// Only one alternate presentation is live at a time; the menu-bar item

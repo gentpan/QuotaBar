@@ -29,15 +29,15 @@ enum Diagnostics {
     @MainActor private static var debugWindow: NSWindow?
 
     @MainActor
-    static func settingsWindow() {
+    static func settingsWindow(section: SettingsSection = .providers) {
         // After SwiftUI has finished building its scenes. Creating the window
         // from inside `applicationDidFinishLaunching` gets it ordered out again
         // as the MenuBarExtra scene comes up.
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { build() }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { build(section: section) }
     }
 
     @MainActor
-    private static func build() {
+    private static func build(section: SettingsSection) {
         // An accessory app is never activated as a side effect, and this one
         // wants to be looked at.
         NSApp.setActivationPolicy(.regular)
@@ -46,7 +46,7 @@ enum Diagnostics {
             styleMask: [.titled, .closable, .fullSizeContentView],
             backing: .buffered,
             defer: false)
-        window.contentView = NSHostingView(rootView: SettingsView(store: UsageStore()))
+        window.contentView = NSHostingView(rootView: SettingsView(store: UsageStore(), section: section))
         window.isReleasedWhenClosed = false
         // Floating, because the point of this flag is to look at the window:
         // activating an accessory process does not reliably outrank whatever

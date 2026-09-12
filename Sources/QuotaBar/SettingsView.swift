@@ -286,8 +286,10 @@ struct SettingsView: View {
             .padding(.bottom, Design.space4)
 
             if scrollable {
+                // `.never`, not `.hidden`: hidden still flashes the bar
+                // whenever the content grows, as it does when a row opens.
                 ScrollView { paneBody }
-                    .scrollIndicators(.hidden)
+                    .scrollIndicators(.never)
             } else {
                 paneBody
             }
@@ -385,13 +387,28 @@ struct StatusPane: View {
                 if let status {
                     ServiceStatusBadge(status: status, size: 12, ink: .primary)
                         .frame(width: 96, alignment: .leading)
-                    Spacer(minLength: Design.space2)
+                    // The provider's own service — claude.ai, the Codex CLI —
+                    // over the last 30 days, without opening the row. The
+                    // rest of what the page lists waits inside.
+                    if let primary = StatusPages.primaryComponent(for: id, in: status.components),
+                       let days = store.uptime[primary.id], !days.isEmpty
+                    {
+                        let recent = Array(days.suffix(30))
+                        Text(String(format: "%.2f%%", UptimeDay.uptimePercent(recent)))
+                            .font(.system(size: 10, design: .monospaced))
+                            .foregroundStyle(.secondary)
+                            .frame(width: 48, alignment: .trailing)
+                        UptimeStrip(days: recent)
+                    } else {
+                        Spacer(minLength: Design.space2)
+                    }
                     Text(L10n.t(
                         "checked \(QuotaFormat.age(of: status.checkedAt))",
                         "\(QuotaFormat.age(of: status.checkedAt))检查"))
                         .font(.system(size: 11))
                         .foregroundStyle(.tertiary)
                         .lineLimit(1)
+                        .frame(width: 92, alignment: .trailing)
                 } else {
                     Text(L10n.t("Not read yet", "尚未读取"))
                         .font(.system(size: 12))
@@ -1060,6 +1077,9 @@ struct MenuBarStylePicker: View {
 
 struct PresentationPane: View {
     @ObservedObject var store: UsageStore
+    /// Re-read when a display comes or goes, so the picker lists what is
+    /// actually there.
+    @State private var screens = NSScreen.screens
 
     var body: some View {
         SettingsCard(L10n.t("Where the panel lives", "面板位置")) {
@@ -1069,6 +1089,22 @@ struct PresentationPane: View {
                     selection: store.presentation,
                     onSelect: { store.setPresentation($0) })
                 .frame(maxWidth: 320)
+            }
+
+            // Only a question on a Mac with more than one display.
+            if screens.count > 1 {
+                SettingRow(
+                    L10n.t("Screen", "屏幕"),
+                    caption: L10n.t(
+                        "Automatic follows the menu bar; the island, the notch. The widget goes along.",
+                        "自动跟随菜单栏所在的屏幕，刘海岛跟随带刘海的屏幕。桌面小工具同屏。"))
+                {
+                    GlassSegmented(
+                        options: ScreenChoice.options,
+                        selection: ScreenChoice.selection,
+                        onSelect: { store.setDisplayScreen($0) })
+                    .frame(maxWidth: 440)
+                }
             }
 
             if store.presentation == .island {
@@ -1101,6 +1137,10 @@ struct PresentationPane: View {
                     "Drag the dock up or down to move it; the position is remembered. Click a ring to open the panel for that provider.",
                     "上下拖动可移动停靠条，位置会被记住。点击圆环可打开该服务商的完整面板。"))
             }
+        }
+
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didChangeScreenParametersNotification)) { _ in
+            screens = NSScreen.screens
         }
 
         SettingsCard(L10n.t("Desktop widget", "桌面小工具")) {

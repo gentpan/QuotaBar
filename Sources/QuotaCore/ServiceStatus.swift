@@ -116,6 +116,36 @@ public enum StatusPages {
         case googleCloud(product: String)
     }
 
+    /// The one component that stands for the provider on a single line: the
+    /// service the app's readings come from — claude.ai, the Codex CLI, the
+    /// Cursor IDE — not whatever the page happens to list first (Claude's
+    /// page puts "Claude for Government" beside claude.ai). Matched by name,
+    /// exact before loose, in order of preference; a page that has renamed
+    /// everything still answers with its first entry.
+    static func primaryComponentNames(for id: ProviderID) -> [String] {
+        switch id {
+        case .claude: ["claude.ai", "Claude Code"]
+        case .codex: ["CLI", "Codex API", "Codex Web"]
+        case .cursor: ["IDE", "cursor.com"]
+        case .kimi: ["Open API", "API Service", "K2 Model"]
+        case .minimax: ["Large Language Models"]
+        case .manus: ["manus.im"]
+        case .deepseek: ["API Service"]
+        default: []
+        }
+    }
+
+    public static func primaryComponent(for id: ProviderID, in components: [ServiceComponent]) -> ServiceComponent? {
+        let names = primaryComponentNames(for: id)
+        for name in names {
+            if let hit = components.first(where: { $0.name.caseInsensitiveCompare(name) == .orderedSame }) { return hit }
+        }
+        for name in names {
+            if let hit = components.first(where: { $0.name.localizedCaseInsensitiveContains(name) }) { return hit }
+        }
+        return components.first
+    }
+
     /// The providers with a status feed readable without signing in. xAI's
     /// page sits behind a bot wall, Z.ai and OpenCode have none.
     static func feed(for id: ProviderID) -> Feed? {

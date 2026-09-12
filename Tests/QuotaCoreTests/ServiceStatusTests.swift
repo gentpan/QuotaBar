@@ -54,6 +54,24 @@ final class ServiceStatusTests: XCTestCase {
         XCTAssertEqual(status.components.first?.level, .minor)
     }
 
+    /// The strip on a closed row is the provider's own service, not the
+    /// page's first entry.
+    func testPrimaryComponentIsTheServiceNotTheFirstEntry() {
+        func c(_ name: String) -> ServiceComponent { ServiceComponent(id: name, name: name, level: .operational) }
+        XCTAssertEqual(
+            StatusPages.primaryComponent(for: .claude, in: [c("Claude for Government"), c("claude.ai"), c("Claude Code")])?.name,
+            "claude.ai")
+        XCTAssertEqual(
+            StatusPages.primaryComponent(for: .deepseek, in: [c("网页对话服务 (Web Chat Service)"), c("API 服务 (API Service)")])?.name,
+            "API 服务 (API Service)")
+        // Exact before loose: "api.manus.im" also contains the name.
+        XCTAssertEqual(StatusPages.primaryComponent(for: .manus, in: [c("api.manus.im"), c("manus.im")])?.name, "manus.im")
+        XCTAssertEqual(StatusPages.primaryComponent(for: .codex, in: [c("Login"), c("CLI"), c("Codex API")])?.name, "CLI")
+        // A page that renamed everything still answers with something.
+        XCTAssertEqual(StatusPages.primaryComponent(for: .cursor, in: [c("Everything")])?.name, "Everything")
+        XCTAssertNil(StatusPages.primaryComponent(for: .gemini, in: []))
+    }
+
     func testUptimeDaysAreSortedBandedAndGreyDropped() throws {
         let data = Data("""
         {"months":[

@@ -162,6 +162,7 @@ final class ConfigStoreTests: XCTestCase {
         first.menuBarIconMode = .logo
         first.dockPin = .claude
         first.widgetScope = .pinned
+        first.displayScreen = "37D8832A-2D66-02CA-B9F7-8F30A301B230"
         first.presentation = .island
         first.language = .zhHans
         first.setEnabled(.gemini, true)
@@ -176,6 +177,7 @@ final class ConfigStoreTests: XCTestCase {
         XCTAssertEqual(second.dockPin, .claude)
         XCTAssertNil(second.islandPin)
         XCTAssertEqual(second.widgetScope, .pinned)
+        XCTAssertEqual(second.displayScreen, "37D8832A-2D66-02CA-B9F7-8F30A301B230")
         XCTAssertEqual(second.presentation, .island)
         XCTAssertEqual(second.language, .zhHans)
         XCTAssertTrue(second.isEnabled(.gemini))
