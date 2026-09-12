@@ -55,45 +55,35 @@ struct SpendCardView: View {
 
     // MARK: Header
 
+    /// One line: what the ring measures, as a pull-down title on the left —
+    /// the period switch below is the only row of tabs — and three buttons of
+    /// one size on the right: where the figures come from, share, copy.
     private var header: some View {
-        HStack(spacing: 6) {
+        HStack(alignment: .center, spacing: 0) {
             if forExport {
                 Text(metric.displayName)
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundStyle(.white)
-                Text("· \(period.displayName(windowDays: store.cost.windowDays))")
+                Text(" · \(period.displayName(windowDays: store.cost.windowDays))")
                     .font(.system(size: 12))
                     .foregroundStyle(.white.opacity(0.5))
             } else {
-                ForEach(SpendMetric.allCases) { option in
-                    Text(option.displayName)
-                        .font(.system(size: 11, weight: option == metric ? .semibold : .medium))
-                        .foregroundStyle(option == metric ? .white : .white.opacity(0.45))
-                        .padding(.horizontal, 7)
-                        .padding(.vertical, 3)
-                        .background(Capsule().fill(Color.white.opacity(option == metric ? 0.12 : 0)))
-                        .contentShape(Rectangle())
-                        .onTapGesture {
-                            withAnimation(Motion.animation(Motion.chartSwap)) {
-                                store.updateExperience { $0.spendMetric = option }
-                            }
-                        }
-                }
+                MetricPicker(store: store, metric: metric)
             }
-            Spacer(minLength: 4)
+            Spacer(minLength: 8)
             if !forExport {
-                Image(systemName: "info.circle")
-                    .font(.system(size: 10))
-                    .foregroundStyle(.white.opacity(0.35))
-                    .help(sourcesNote)
-                CalloutButton(symbol: "square.and.arrow.up", help: L10n.t("Share weekly card", "分享周用量卡片")) {
-                    ShareStudio.open(store: store)
-                }
-                CalloutButton(symbol: "doc.on.doc", help: L10n.t("Copy as image", "复制为图片")) {
-                    copyImage()
+                HStack(spacing: 2) {
+                    InfoButton(text: sourcesNote)
+                    CalloutButton(symbol: "square.and.arrow.up", help: L10n.t("Share usage card", "分享用量卡片")) {
+                        ShareStudio.open(store: store)
+                    }
+                    CalloutButton(symbol: "doc.on.doc", help: L10n.t("Copy as image", "复制为图片")) {
+                        copyImage()
+                    }
                 }
             }
         }
+        .frame(height: 24)
     }
 
     private var sourcesNote: String {
@@ -278,5 +268,90 @@ struct RingSector: Shape {
         path.addArc(center: centre, radius: inner, startAngle: a1, endAngle: a0, clockwise: true)
         path.closeSubpath()
         return path
+    }
+}
+
+
+/// "花费 ⌄": the ring's metric as a pull-down title. A list in a popover
+/// rather than a menu, because this panel never activates the app and the
+/// menu would open behind whatever is in front.
+private struct MetricPicker: View {
+    @ObservedObject var store: UsageStore
+    let metric: SpendMetric
+    @State private var open = false
+    @State private var hovered = false
+
+    var body: some View {
+        HStack(spacing: 5) {
+            Text(metric.displayName)
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(.white)
+            Image(systemName: "chevron.down")
+                .font(.system(size: 9, weight: .bold))
+                .foregroundStyle(.white.opacity(0.5))
+                .rotationEffect(.degrees(open ? 180 : 0))
+        }
+        .padding(.horizontal, 8)
+        .frame(height: 24)
+        .background(
+            RoundedRectangle(cornerRadius: 6, style: .continuous)
+                .fill(Color.white.opacity(hovered || open ? 0.10 : 0)))
+        .padding(.leading, -8)
+        .contentShape(Rectangle())
+        .onHover { hovered = $0 }
+        .onTapGesture { open.toggle() }
+        .animation(Motion.animation(Motion.hoverFade), value: hovered)
+        .animation(Motion.animation(Motion.strongEaseOut), value: open)
+        .popover(isPresented: $open, arrowEdge: .bottom) {
+            VStack(alignment: .leading, spacing: 2) {
+                ForEach(SpendMetric.allCases) { option in
+                    HStack(spacing: 8) {
+                        Image(systemName: "checkmark")
+                            .font(.system(size: 10, weight: .bold))
+                            .foregroundStyle(.white)
+                            .opacity(option == metric ? 1 : 0)
+                            .frame(width: 12)
+                        Text(option.displayName)
+                            .font(.system(size: 12, weight: option == metric ? .semibold : .regular))
+                            .foregroundStyle(.white)
+                        Spacer(minLength: 0)
+                    }
+                    .padding(.horizontal, 10)
+                    .frame(height: 28)
+                    .contentShape(Rectangle())
+                    .onTapGesture {
+                        withAnimation(Motion.animation(Motion.chartSwap)) {
+                            store.updateExperience { $0.spendMetric = option }
+                        }
+                        open = false
+                    }
+                }
+            }
+            .padding(6)
+            .frame(width: 190)
+            .background(Color(white: 0.1))
+            .environment(\.colorScheme, .dark)
+        }
+    }
+}
+
+/// The ⓘ as a button of the same size as its neighbours; a click shows
+/// where the figures come from.
+private struct InfoButton: View {
+    let text: String
+    @State private var open = false
+
+    var body: some View {
+        CalloutButton(symbol: "info.circle", help: text) { open.toggle() }
+            .popover(isPresented: $open, arrowEdge: .bottom) {
+                Text(text)
+                    .font(.system(size: 12))
+                    .foregroundStyle(.white.opacity(0.85))
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(12)
+                    .frame(width: 240, alignment: .leading)
+                    .background(Color(white: 0.1))
+                    .environment(\.colorScheme, .dark)
+            }
     }
 }
