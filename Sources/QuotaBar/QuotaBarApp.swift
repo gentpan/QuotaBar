@@ -31,6 +31,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         _ = NSApplicationMain(CommandLine.argc, CommandLine.unsafeArgv)
     }
 
+    /// Opening the app while it runs — from Launchpad, Spotlight, or the
+    /// Finder — means "show me". With the menu-bar item hidden it is also
+    /// the way back to Settings.
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows: Bool) -> Bool {
+        SettingsWindow.open()
+        return false
+    }
+
     func applicationDidFinishLaunching(_ notification: Notification) {
         // Info.plist carries LSUIElement for the packaged app; setting it here
         // too keeps the dev loop (bare binary, no bundle) out of the Dock.

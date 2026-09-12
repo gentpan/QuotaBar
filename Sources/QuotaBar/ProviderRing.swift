@@ -121,7 +121,8 @@ struct ProviderCallout: View {
     /// the sign the owner asked for that the press did something — or for
     /// four seconds, whichever comes first.
     @State private var refreshing = false
-    @State private var refreshTick = 0
+    /// How many days the back face covers: 7, 14 or 30, picked at its foot.
+    @State private var range = 14
 
     private var phase: ProviderPhase? { store.states[id] }
     private var status: ServiceStatus? { store.serviceStatus[id] }
@@ -185,12 +186,17 @@ struct ProviderCallout: View {
                         store.refresh(id)
                     }
                 }
-                CalloutButton(
-                    symbol: flipped ? "list.bullet" : "chart.bar.xaxis",
-                    help: flipped ? L10n.t("Show quota", "显示额度") : L10n.t("Show usage", "显示用量"))
-                {
-                    if !flipped { store.wantLedger() }
-                    withAnimation(.easeInOut(duration: 0.45)) { flipped.toggle() }
+                // Only where there is something behind: a provider without
+                // local logs has nothing to show but its readings, and a
+                // chart of twenty-four identical bars said so at length.
+                if costSource != nil {
+                    CalloutButton(
+                        symbol: flipped ? "list.bullet" : "chart.bar.xaxis",
+                        help: flipped ? L10n.t("Show quota", "显示额度") : L10n.t("Show usage", "显示用量"))
+                    {
+                        if !flipped { store.wantLedger() }
+                        withAnimation(.easeInOut(duration: 0.45)) { flipped.toggle() }
+                    }
                 }
             }
             let account = phase?.snapshot?.account.flatMap { $0.isEmpty ? nil : $0 }
@@ -285,6 +291,23 @@ struct ProviderCallout: View {
 
     // MARK: Back: usage
 
+    private func usageFigure(_ label: String, _ value: String, _ cost: String) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(label.uppercased())
+                .font(.system(size: 9, weight: .semibold, design: .monospaced))
+                .tracking(0.6)
+                .foregroundStyle(.white.opacity(0.55))
+            Text(value)
+                .font(.system(size: 15, weight: .semibold, design: .monospaced))
+                .foregroundStyle(.white)
+                .contentTransition(.numericText())
+            Text(cost)
+                .font(.system(size: 10, design: .monospaced))
+                .foregroundStyle(.white.opacity(0.4))
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
     /// The CLI whose local logs this provider's traffic lands in, if any.
     private var costSource: CostSource? {
         switch id {
@@ -305,50 +328,43 @@ struct ProviderCallout: View {
                     .font(.system(size: 11))
                     .foregroundStyle(.white.opacity(0.55))
             } else {
+                // Today, then the chosen span: its tokens and its estimate.
+                // The span is the foot's 7/14/30 switch, and the bars are
+                // the same days, so the figures and the chart agree.
+                let recent = Array(store.ledger.days(in: .year).suffix(range))
+                let today = store.ledger.sum(.today, source: source)
+                let span = recent.reduce(into: (tokens: 0, usd: 0.0)) { acc, day in
+                    let tokens = day.bySource[source] ?? 0
+                    acc.tokens += tokens
+                    acc.usd += day.usd * Double(tokens) / Double(max(1, day.tokens))
+                }
                 VStack(alignment: .leading, spacing: Design.space3) {
                     HStack(alignment: .top, spacing: Design.space3) {
-                        ForEach([LedgerPeriod.today, .week, .month]) { period in
-                            let sum = store.ledger.sum(period, source: source)
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(period.displayName.uppercased())
-                                    .font(.system(size: 9, weight: .semibold, design: .monospaced))
-                                    .tracking(0.6)
-                                    .foregroundStyle(.white.opacity(0.55))
-                                Text(QuotaFormat.compact(sum.tokens))
-                                    .font(.system(size: 15, weight: .semibold, design: .monospaced))
-                                    .foregroundStyle(.white)
-                                Text(QuotaFormat.usd(sum.usd))
-                                    .font(.system(size: 10, design: .monospaced))
-                                    .foregroundStyle(.white.opacity(0.4))
-                            }
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                        }
+                        usageFigure(L10n.t("Today", "今天"), QuotaFormat.compact(today.tokens), QuotaFormat.usd(today.usd))
+                        usageFigure(L10n.t("\(range) days", "\(range) 天"), QuotaFormat.compact(span.tokens), QuotaFormat.usd(span.usd))
+                        usageFigure(L10n.t("Per day", "日均"), QuotaFormat.compact(span.tokens / max(1, recent.count)), QuotaFormat.usd(span.usd / Double(max(1, recent.count))))
                     }
                     Spacer(minLength: Design.space2)
-                    let recent = Array(store.ledger.days(in: .year).suffix(14))
-                    DailyBars(days: recent, source: source, accent: Color(hex: source.accentHex))
+                    DailyBars(days: recent, source: source, accent: Color(hex: source.accentHex)) {
+                        HStack(spacing: 2) {
+                            ForEach([7, 14, 30], id: \.self) { days in
+                                let on = days == range
+                                Text("\(days)d")
+                                    .font(.system(size: 9, weight: .bold, design: .monospaced))
+                                    .foregroundStyle(.white.opacity(on ? 0.95 : 0.45))
+                                    .padding(.horizontal, 5)
+                                    .padding(.vertical, 2)
+                                    .background(RoundedRectangle(cornerRadius: 3).fill(.white.opacity(on ? 0.14 : 0)))
+                                    .contentShape(Rectangle())
+                                    .onTapGesture { withAnimation(.easeOut(duration: 0.2)) { range = days } }
+                            }
+                        }
+                    }
                 }
                 .frame(maxHeight: .infinity, alignment: .top)
             }
         } else {
-            let history = store.history[id] ?? []
-            if history.count > 1 {
-                VStack(alignment: .leading, spacing: Design.space2) {
-                    MiniBars(values: Array(history.suffix(24)), accent: Color(hex: id.accentHex), ceiling: 100)
-                    Text(L10n.t(
-                        "Headline reading over the last \(min(history.count, 24)) refreshes",
-                        "最近 \(min(history.count, 24)) 次刷新的用量读数"))
-                        .font(.system(size: 10))
-                        .foregroundStyle(.white.opacity(0.4))
-                }
-            } else {
-                Text(L10n.t(
-                    "No local logs for this provider — only the quota readings.",
-                    "这个服务商没有本地日志，只有额度读数。"))
-                    .font(.system(size: 11))
-                    .foregroundStyle(.white.opacity(0.55))
-                    .fixedSize(horizontal: false, vertical: true)
-            }
+            EmptyView()
         }
     }
 }
@@ -395,10 +411,12 @@ struct CalloutButton: View {
 
 /// A fortnight of days as bars, sat on the card's floor, with the day
 /// under the pointer read out where the caption is.
-struct DailyBars: View {
+struct DailyBars<Trailing: View>: View {
     let days: [UsageDay]
     let source: CostSource
     let accent: Color
+    /// Sits at the foot's right end: the span switch.
+    @ViewBuilder var trailing: Trailing
     @State private var hovered: Int?
 
     private var peak: Double {
@@ -420,16 +438,20 @@ struct DailyBars: View {
                 }
             }
             .frame(height: 56, alignment: .bottom)
-            Text(caption)
-                .font(.system(size: 10, design: .monospaced))
-                .foregroundStyle(.white.opacity(hovered == nil ? 0.4 : 0.7))
-                .lineLimit(1)
+            HStack(spacing: Design.space2) {
+                Text(caption)
+                    .font(.system(size: 10, design: .monospaced))
+                    .foregroundStyle(.white.opacity(hovered == nil ? 0.4 : 0.7))
+                    .lineLimit(1)
+                Spacer(minLength: 0)
+                trailing
+            }
         }
     }
 
     private var caption: String {
         guard let hovered, days.indices.contains(hovered) else {
-            return L10n.t("Last 14 days · tokens incl. cache", "最近 14 天 · token 含缓存")
+            return L10n.t("Last \(days.count) days · tokens incl. cache", "最近 \(days.count) 天 · token 含缓存")
         }
         let day = days[hovered]
         let tokens = day.bySource[source] ?? 0

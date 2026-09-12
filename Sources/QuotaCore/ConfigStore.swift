@@ -4,6 +4,7 @@ public struct QuotaConfig: Codable, Sendable, Equatable {
     public var enabled: [ProviderID]
     public var refreshMinutes: Int
     public var menuBarStyle: MenuBarStyle
+    public var menuBarIconMode: MenuBarIconMode
     public var meterMode: MeterMode
     public var meterStyle: MeterStyle
     public var presentation: Presentation
@@ -51,6 +52,7 @@ public struct QuotaConfig: Codable, Sendable, Equatable {
         enabled: [ProviderID] = [.codex, .claude],
         refreshMinutes: Int = 5,
         menuBarStyle: MenuBarStyle = .dualBar,
+        menuBarIconMode: MenuBarIconMode = .meter,
         meterMode: MeterMode = .remaining,
         meterStyle: MeterStyle = .stepped,
         presentation: Presentation = .menuBar,
@@ -74,6 +76,7 @@ public struct QuotaConfig: Codable, Sendable, Equatable {
         self.enabled = enabled
         self.refreshMinutes = refreshMinutes
         self.menuBarStyle = menuBarStyle
+        self.menuBarIconMode = menuBarIconMode
         self.meterMode = meterMode
         self.meterStyle = meterStyle
         self.presentation = presentation
@@ -96,7 +99,7 @@ public struct QuotaConfig: Codable, Sendable, Equatable {
     }
 
     private enum CodingKeys: String, CodingKey {
-        case enabled, refreshMinutes, menuBarStyle, meterMode, meterStyle, presentation, alerts, language
+        case enabled, refreshMinutes, menuBarStyle, menuBarIconMode, meterMode, meterStyle, presentation, alerts, language
         case selected, updateFeed, checksForUpdates, updatePolicy
         case dockEdge, dockPosition, dockAlwaysVisible, islandSlots
         case widgetEnabled, widgetDensity, widgetX, widgetY, widgetAlwaysOnTop
@@ -116,6 +119,7 @@ public struct QuotaConfig: Codable, Sendable, Equatable {
             ?? defaults.refreshMinutes
         menuBarStyle = QuotaConfig.decodeEnum(from: container, forKey: .menuBarStyle)
             ?? defaults.menuBarStyle
+        menuBarIconMode = QuotaConfig.decodeEnum(from: container, forKey: .menuBarIconMode) ?? defaults.menuBarIconMode
         meterMode = QuotaConfig.decodeEnum(from: container, forKey: .meterMode) ?? defaults.meterMode
         meterStyle = QuotaConfig.decodeEnum(from: container, forKey: .meterStyle) ?? defaults.meterStyle
         presentation = QuotaConfig.decodeEnum(from: container, forKey: .presentation)
@@ -205,6 +209,7 @@ public struct QuotaConfig: Codable, Sendable, Equatable {
         try container.encode(enabled, forKey: .enabled)
         try container.encode(refreshMinutes, forKey: .refreshMinutes)
         try container.encode(menuBarStyle, forKey: .menuBarStyle)
+        try container.encode(menuBarIconMode, forKey: .menuBarIconMode)
         try container.encode(meterStyle, forKey: .meterStyle)
         try container.encode(meterMode, forKey: .meterMode)
         try container.encode(presentation, forKey: .presentation)
@@ -397,6 +402,14 @@ public final class ConfigStore: @unchecked Sendable {
             return config.menuBarStyle
         }
         set { mutate { $0.menuBarStyle = newValue } }
+    }
+
+    public var menuBarIconMode: MenuBarIconMode {
+        get {
+            lock.lock(); defer { lock.unlock() }
+            return config.menuBarIconMode
+        }
+        set { mutate { $0.menuBarIconMode = newValue } }
     }
 
     public var meterMode: MeterMode {

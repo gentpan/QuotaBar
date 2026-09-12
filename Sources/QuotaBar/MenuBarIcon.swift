@@ -9,6 +9,21 @@ enum MenuBarIcon {
     /// it upstream. `mode` decides whether the glyph fills with that or with
     /// what is left; the tint is unaffected either way.
     /// Convenience for callers with a single figure (previews, settings).
+    /// The app's own mark — the three bars off the icon, without the green
+    /// tile — as a template, so the bar draws it in its own ink, white on
+    /// dark and black on light, the way every system item is drawn.
+    static func appMark() -> NSImage {
+        if let url = ProviderGlyph.markURL(named: "quotabar-mark"), let image = NSImage(contentsOf: url) {
+            image.isTemplate = true
+            image.size = NSSize(width: 16, height: 16)
+            return image
+        }
+        let fallback = NSImage(systemSymbolName: "chart.bar.fill", accessibilityDescription: "QuotaBar")
+            ?? NSImage()
+        fallback.isTemplate = true
+        return fallback
+    }
+
     static func render(
         percent: Double?,
         style: MenuBarStyle,
@@ -597,7 +612,12 @@ struct ProviderGlyph: View {
     /// Looks in the packaged app bundle first, then the SwiftPM resource bundle (dev runs).
     /// Never touches `Bundle.module`, whose generated accessor traps when the bundle is absent.
     static func logoURL(for id: ProviderID, dark: Bool = false) -> URL? {
-        let fileName = "\(id.rawValue)\(dark ? "-dark" : "").png"
+        markURL(named: "\(id.rawValue)\(dark ? "-dark" : "")")
+    }
+
+    /// Any file in the logos folder, by name without extension.
+    static func markURL(named name: String) -> URL? {
+        let fileName = "\(name).png"
         let fm = FileManager.default
         var candidates: [URL] = []
         if let resources = Bundle.main.resourceURL {

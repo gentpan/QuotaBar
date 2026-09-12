@@ -74,15 +74,26 @@ final class StatusItemCoordinator: NSObject {
     /// tick, and swapping an identical image every 30 seconds is a flicker
     /// waiting to happen.
     private func render() {
-        guard let store, let button = item?.button else { return }
-        let key = "\(store.meterReading)|\(store.menuBarStyle.rawValue)|\(store.alertLevel)|\(store.meterMode.rawValue)"
+        guard let store, let item, let button = item.button else { return }
+        let key = "\(store.menuBarIconMode.rawValue)|\(store.meterReading)|\(store.menuBarStyle.rawValue)|\(store.alertLevel)|\(store.meterMode.rawValue)"
         guard key != lastImageKey else { return }
         lastImageKey = key
-        button.image = MenuBarIcon.render(
-            reading: store.meterReading,
-            style: store.menuBarStyle,
-            level: store.alertLevel,
-            mode: store.meterMode)
+        switch store.menuBarIconMode {
+        case .hidden:
+            // Gone from the bar; the dock's and island's menus, and opening
+            // the app again, are the ways back to Settings.
+            item.isVisible = false
+        case .logo:
+            item.isVisible = true
+            button.image = MenuBarIcon.appMark()
+        case .meter:
+            item.isVisible = true
+            button.image = MenuBarIcon.render(
+                reading: store.meterReading,
+                style: store.menuBarStyle,
+                level: store.alertLevel,
+                mode: store.meterMode)
+        }
     }
 
     @objc private func clicked() {

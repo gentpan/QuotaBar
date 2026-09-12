@@ -95,6 +95,23 @@ public enum MeterMode: String, Codable, CaseIterable, Identifiable, Sendable {
     }
 }
 
+/// What the menu-bar item shows: a reading, the app's own mark, or nothing.
+public enum MenuBarIconMode: String, Codable, CaseIterable, Identifiable, Sendable {
+    case meter
+    case logo
+    case hidden
+
+    public var id: String { rawValue }
+
+    public var displayName: String {
+        switch self {
+        case .meter: L10n.t("Reading", "用量图标")
+        case .logo: L10n.t("Logo", "应用 Logo")
+        case .hidden: L10n.t("Hidden", "隐藏")
+        }
+    }
+}
+
 /// What happens when a newer build is found.
 public enum UpdatePolicy: String, Codable, CaseIterable, Identifiable, Sendable {
     /// Download, verify, replace the bundle and relaunch, unprompted.

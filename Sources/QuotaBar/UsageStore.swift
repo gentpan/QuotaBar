@@ -47,6 +47,7 @@ final class UsageStore: ObservableObject {
     }
     @Published var refreshMinutes: Int
     @Published var menuBarStyle: MenuBarStyle
+    @Published var menuBarIconMode: MenuBarIconMode
     @Published var meterMode: MeterMode
     @Published var meterStyle: MeterStyle
     @Published var presentation: Presentation
@@ -124,6 +125,7 @@ final class UsageStore: ObservableObject {
         self.enabled = []
         self.refreshMinutes = ConfigStore.shared.refreshMinutes
         self.menuBarStyle = ConfigStore.shared.menuBarStyle
+        self.menuBarIconMode = ConfigStore.shared.menuBarIconMode
         self.meterMode = ConfigStore.shared.meterMode
         self.meterStyle = ConfigStore.shared.meterStyle
         self.presentation = .menuBar
@@ -136,6 +138,7 @@ final class UsageStore: ObservableObject {
         self.enabled = ConfigStore.shared.enabledProviders
         self.refreshMinutes = ConfigStore.shared.refreshMinutes
         self.menuBarStyle = ConfigStore.shared.menuBarStyle
+        self.menuBarIconMode = ConfigStore.shared.menuBarIconMode
         self.meterMode = ConfigStore.shared.meterMode
         self.meterStyle = ConfigStore.shared.meterStyle
         self.presentation = ConfigStore.shared.presentation
@@ -622,6 +625,11 @@ final class UsageStore: ObservableObject {
     func setMenuBarStyle(_ style: MenuBarStyle) {
         menuBarStyle = style
         config.menuBarStyle = style
+    }
+
+    func setMenuBarIconMode(_ mode: MenuBarIconMode) {
+        menuBarIconMode = mode
+        config.menuBarIconMode = mode
     }
 
     func setMeterMode(_ mode: MeterMode) {

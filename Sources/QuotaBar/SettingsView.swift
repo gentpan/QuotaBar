@@ -389,7 +389,11 @@ struct ProvidersPane: View {
                         isExpanded: expanded == id,
                         onToggle: {
                             expanded = expanded == id ? nil : id
-                        })
+                        },
+                        // Switched on with nothing to read: open the row, so
+                        // the next thing seen is how to sign in, not a
+                        // spinner that ends in an error.
+                        onEnabledUnconfigured: { expanded = id })
                 }
             }
         }
@@ -410,6 +414,7 @@ struct ProviderSettingsRow: View {
     let id: ProviderID
     let isExpanded: Bool
     let onToggle: () -> Void
+    var onEnabledUnconfigured: () -> Void = {}
 
     private var configured: Bool { store.isConfigured(id) }
     private var isManual: Bool { id.credentialHint != nil }
@@ -456,7 +461,10 @@ struct ProviderSettingsRow: View {
 
             Toggle("", isOn: Binding(
                 get: { store.isEnabled(id) },
-                set: { store.setEnabled(id, $0) }))
+                set: { on in
+                    store.setEnabled(id, on)
+                    if on, !store.isConfigured(id) { onEnabledUnconfigured() }
+                }))
                 .labelsHidden()
                 // Explicit: an unstyled Toggle is a checkbox on macOS, and the
                 // rest of this window is switches.
@@ -520,6 +528,26 @@ private struct CredentialEditor: View {
     var body: some View {
         VStack(alignment: .leading, spacing: Design.space3) {
             Divider().opacity(0.4)
+
+            if store.isEnabled(id), !store.isConfigured(id) {
+                HStack(alignment: .top, spacing: Design.space2) {
+                    Circle()
+                        .fill(Color(hex: "F5A524"))
+                        .frame(width: 6, height: 6)
+                        .padding(.top, 5)
+                    Text(isManual
+                        ? (BrowserLogin.supports(id)
+                            ? L10n.t("No sign-in found on this Mac. Sign in below, or paste the credential.",
+                                     "本机没有找到登录信息。可在下方用浏览器登录，或粘贴凭据。")
+                            : L10n.t("No sign-in found on this Mac. Paste the credential below.",
+                                     "本机没有找到登录信息。请在下方粘贴凭据。"))
+                        : L10n.t("No sign-in found on this Mac. \(id.setupHint)",
+                                 "本机没有找到登录信息。\(id.setupHint)"))
+                        .font(.system(size: 12))
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
 
             if isManual {
                 SettingRow(L10n.t("Credential", "凭据")) {
@@ -594,6 +622,11 @@ private struct CredentialEditor: View {
             if id == .claude, store.claudeNeedsAuthorization {
                 Button(L10n.t("Allow keychain access", "授权钥匙串访问")) { store.authorizeClaude() }
                     .glassAction(prominent: true)
+            }
+
+            if BrowserLogin.supports(id) {
+                Button(L10n.t("Sign in in a browser…", "浏览器登录…")) { BrowserLogin.present(for: id, store: store) }
+                    .glassAction(prominent: saved.isEmpty)
             }
 
             Button(action: test) {
@@ -702,10 +735,29 @@ struct AppearancePane: View {
 
     var body: some View {
         SettingsCard(L10n.t("Menu-bar glyph", "菜单栏图标")) {
-            MenuBarStylePicker(
-                selection: store.menuBarStyle,
-                mode: store.meterMode,
-                onSelect: { store.setMenuBarStyle($0) })
+            SettingRow(L10n.t("Shows", "显示")) {
+                GlassSegmented(
+                    options: MenuBarIconMode.allCases.map { (value: $0, label: $0.displayName) },
+                    selection: store.menuBarIconMode,
+                    onSelect: { store.setMenuBarIconMode($0) })
+                .frame(maxWidth: 320)
+            }
+
+            switch store.menuBarIconMode {
+            case .meter:
+                MenuBarStylePicker(
+                    selection: store.menuBarStyle,
+                    mode: store.meterMode,
+                    onSelect: { store.setMenuBarStyle($0) })
+            case .logo:
+                SettingFootnote(L10n.t(
+                    "The app's mark, drawn in the menu bar's own ink. Click it for Settings.",
+                    "只显示应用标记，按菜单栏自身的颜色绘制。点击打开设置。"))
+            case .hidden:
+                SettingFootnote(L10n.t(
+                    "No menu-bar item. Reach Settings from the dock's or island's right-click menu, or by opening QuotaBar again.",
+                    "菜单栏不显示任何图标。可从停靠条或刘海岛的右键菜单打开设置，或再次打开 QuotaBar。"))
+            }
 
             SettingRow(L10n.t("Fills with", "填充口径")) {
                 GlassSegmented(
