@@ -318,7 +318,7 @@ struct ShareStudioView: View {
         VStack(alignment: .leading, spacing: 16) {
             Text(L10n.t("Usage card", "用量卡片"))
                 .font(.system(size: 16, weight: .semibold))
-            if store.isUpdatingArchive {
+            if !store.logsReady {
                 HStack(spacing: 6) {
                     ProgressView().controlSize(.mini)
                     Text(L10n.t("Reading local logs…", "正在读取本地日志…"))

@@ -146,7 +146,7 @@ final class MenuPanelController {
                 self.close()
                 return nil
             case (true, "r"):
-                self.store?.refreshAll()
+                self.store?.forceRefreshAll()
                 return nil
             case (true, ","):
                 self.close()
@@ -357,13 +357,19 @@ private struct PanelFooter: View {
             Rectangle().fill(Color.white.opacity(0.08)).frame(height: 0.5)
             HStack(spacing: 8) {
                 BreathingDot(active: store.failingProviders.isEmpty, color: store.failingProviders.isEmpty ? Palette.live : Palette.amber, pulse: store.tick)
-                VStack(alignment: .leading, spacing: 1) {
+                // One line: the version, then when the next automatic refresh is.
+                HStack(spacing: 5) {
                     Text(version)
                         .font(.system(size: 11, weight: .medium))
                         .foregroundStyle(.white.opacity(0.7))
+                    Text("·")
+                        .font(.system(size: 11))
+                        .foregroundStyle(.white.opacity(0.3))
                     refreshLine
                 }
-                Spacer()
+                .lineLimit(1)
+                Spacer(minLength: 6)
+                refreshAllButton
                 CalloutButton(symbol: "gearshape", help: L10n.t("Settings (⌘,)", "设置（⌘,）")) {
                     MenuPanelController.shared.close()
                     SettingsWindow.open()
@@ -372,21 +378,35 @@ private struct PanelFooter: View {
                     .frame(width: 22, height: 22)
             }
             .padding(.horizontal, 12)
-            .padding(.vertical, 9)
+            .padding(.vertical, 10)
         }
         .background(Color(white: 0.06))
     }
 
+    /// Refreshes everything — every provider, the status pages and the logs
+    /// — and spins until all of it is back. A card's own button refreshes
+    /// just that card.
+    @ViewBuilder
+    private var refreshAllButton: some View {
+        if store.isForceRefreshing {
+            ProgressView()
+                .controlSize(.small)
+                .frame(width: 22, height: 22)
+                .help(L10n.t("Refreshing everything…", "正在全部刷新…"))
+        } else {
+            CalloutButton(symbol: "arrow.clockwise", help: L10n.t("Refresh everything (⌘R)", "全部刷新（⌘R）")) {
+                store.forceRefreshAll()
+            }
+        }
+    }
+
     @ViewBuilder
     private var refreshLine: some View {
-        let loading = store.enabled.contains { store.isLoading($0) } || store.isComputingCost
         TimelineView(.periodic(from: .now, by: 15)) { context in
-            Text(loading ? L10n.t("Refreshing…", "正在刷新…") : nextRefresh(now: context.date))
-                .font(.system(size: 10))
+            Text(store.isForceRefreshing ? L10n.t("Refreshing…", "正在刷新…") : nextRefresh(now: context.date))
+                .font(.system(size: 11))
+                .monospacedDigit()
                 .foregroundStyle(.white.opacity(0.45))
-                .contentShape(Rectangle())
-                .onTapGesture { store.refreshAll() }
-                .help(L10n.t("Refresh now (⌘R)", "立即刷新（⌘R）"))
         }
     }
 
@@ -446,7 +466,7 @@ private struct OptionsMenuButton: NSViewRepresentable {
             copy.submenu = submenu
             menu.addItem(copy)
             menu.addItem(.separator())
-            add(menu, L10n.t("Refresh Now", "立即刷新"), "r") { [store] in store.refreshAll() }
+            add(menu, L10n.t("Refresh Everything", "全部刷新"), "r") { [store] in store.forceRefreshAll() }
             add(menu, L10n.t("Check for Updates…", "检查更新…"), "") { [store] in store.checkForUpdate() }
             add(menu, L10n.t("About QuotaBar", "关于 QuotaBar"), "") {
                 MenuPanelController.shared.close()

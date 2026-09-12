@@ -99,10 +99,16 @@ final class EdgeDockCoordinator {
     /// The full card is wider than the summary.
     static let detailWidth: CGFloat = 320
 
+    /// Measured card sizes by what decides them — provider, full or summary,
+    /// and the store's revision — so moving between rings reuses a layout
+    /// instead of building a throwaway hosting view for every hover.
+    private var calloutSizes: [String: CGSize] = [:]
+
     func showCallout<Content: View>(
         at index: Int?,
         total: Int,
         width: CGFloat? = nil,
+        sizeKey: String? = nil,
         @ViewBuilder content: () -> Content)
     {
         let width = width ?? Self.calloutWidth
@@ -122,8 +128,18 @@ final class EdgeDockCoordinator {
             host.sizingOptions = []
             panel.contentView = host
         }
-        // Measure the incoming content, not the host mid-crossfade.
-        let size = NSHostingView(rootView: root).fittingSize
+        // Measure the incoming content, not the host mid-crossfade — once per
+        // provider and revision.
+        let size: CGSize
+        if let sizeKey, let cached = calloutSizes[sizeKey] {
+            size = cached
+        } else {
+            size = NSHostingView(rootView: root).fittingSize
+            if let sizeKey {
+                if calloutSizes.count > 64 { calloutSizes.removeAll() }
+                calloutSizes[sizeKey] = size
+            }
+        }
 
         // Line the bubble up with the ring it belongs to. The strip lays its
         // rings out from the top, and AppKit measures from the bottom. Against
@@ -591,7 +607,15 @@ struct EdgeDockView: View {
     private func presentCallout(for id: ProviderID?) {
         let index = id.flatMap { store.dockProviders.firstIndex(of: $0) }
         let isDetail = id != nil && detail == id
-        coordinator.showCallout(at: index, total: store.dockProviders.count, width: isDetail ? EdgeDockCoordinator.detailWidth : EdgeDockCoordinator.calloutWidth) {
+        // Everything that changes the card's height: its data (the tick moves
+        // on every refresh), the preferences, the bar style.
+        let sizeKey = id.map { "\($0.rawValue)|\(isDetail)|\(store.tick)|\(store.experienceRevision)|\(store.meterStyle.rawValue)|\(store.serviceStatus[$0]?.level.rawValue ?? "")" }
+        coordinator.showCallout(
+            at: index,
+            total: store.dockProviders.count,
+            width: isDetail ? EdgeDockCoordinator.detailWidth : EdgeDockCoordinator.calloutWidth,
+            sizeKey: sizeKey)
+        {
             if let id {
                 ProviderCallout(store: store, id: id, detail: isDetail)
                     .onHover { coordinator.setCalloutHovered($0) }

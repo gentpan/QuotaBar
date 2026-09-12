@@ -22,7 +22,7 @@ struct SpendCardView: View {
             if !forExport {
                 periodPicker
             }
-            if store.isComputingCost && !store.cost.hasData {
+            if !store.logsReady && !store.cost.hasData {
                 HStack(spacing: 6) {
                     ProgressView().controlSize(.mini)
                     Text(L10n.t("Reading local session logs…", "正在读取本地会话日志…"))

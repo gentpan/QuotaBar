@@ -204,6 +204,77 @@ final class CostEstimatorTests: XCTestCase {
         XCTAssertEqual(summary.todayTokens, 1_000_000)
     }
 
+    // MARK: Archive-derived figures
+
+    /// The app now shows spend and the year from the archive instead of
+    /// rescanning the logs. On the same logs the two must agree: totals,
+    /// today and yesterday, per CLI, per model, tokens with and without cache,
+    /// and the ledger's days.
+    func testArchiveDerivedFiguresMatchAScanOfTheLogs() throws {
+        let calendar = Calendar.current
+        let yesterday = calendar.date(byAdding: .day, value: -1, to: localDayStart)!.addingTimeInterval(3600)
+        let lastWeek = calendar.date(byAdding: .day, value: -6, to: localDayStart)!.addingTimeInterval(7200)
+        let todayStamp = iso(localDayStart.addingTimeInterval(3600))
+        try writeClaude("a.jsonl", lines: [
+            claudeLine(messageID: "m1", requestID: "r1", timestamp: todayStamp, input: 1_000, output: 20_000, write5m: 3_000, read: 40_000),
+            claudeLine(messageID: "m2", requestID: "r2", model: "claude-sonnet-5", timestamp: iso(yesterday), input: 500, output: 9_000, read: 7_000),
+            claudeLine(messageID: "m3", requestID: "r3", timestamp: iso(lastWeek), output: 50_000),
+        ])
+        // The same turn replayed in a second session file is counted once.
+        try writeClaude("b.jsonl", lines: [
+            claudeLine(messageID: "m1", requestID: "r1", timestamp: todayStamp, input: 1_000, output: 20_000, write5m: 3_000, read: 40_000),
+        ])
+        try writeCodex("rollout-1.jsonl", lines: [
+            codexLine(timestamp: todayStamp, input: 90_000, cached: 60_000, output: 4_000),
+            codexLine(timestamp: iso(lastWeek), input: 10_000, cached: 0, output: 1_000),
+        ])
+
+        let scanned = CostEstimator.summary(paths: paths, now: now)
+        var archive = UsageArchive()
+        archive.merge(CostEstimator.archiveRecords(paths: paths, since: .distantPast), scannedAt: now, full: true)
+        let derived = archive.costSummary(now: now)
+
+        XCTAssertEqual(derived.windowUSD, scanned.windowUSD, accuracy: 0.000_001)
+        XCTAssertEqual(derived.windowTokens, scanned.windowTokens)
+        XCTAssertEqual(derived.todayUSD, scanned.todayUSD, accuracy: 0.000_001)
+        XCTAssertEqual(derived.todayTokens, scanned.todayTokens)
+        XCTAssertEqual(derived.topModel, scanned.topModel)
+        for period in SpendPeriod.allCases {
+            let a = derived.spend(period), b = scanned.spend(period)
+            XCTAssertEqual(a.usd, b.usd, accuracy: 0.000_001, "\(period)")
+            XCTAssertEqual(a.tokens, b.tokens, "\(period)")
+            XCTAssertEqual(a.billableTokens, b.billableTokens, "\(period)")
+            XCTAssertEqual(a.tokensBySource, b.tokensBySource, "\(period)")
+            XCTAssertEqual(Set(a.models.map(\.model)), Set(b.models.map(\.model)), "\(period)")
+        }
+        XCTAssertEqual(derived.daily.map(\.tokens), scanned.daily.map(\.tokens))
+
+        let scannedLedger = CostEstimator.ledger(paths: paths, now: now)
+        let derivedLedger = archive.ledger(now: now)
+        XCTAssertEqual(derivedLedger.days.count, scannedLedger.days.count)
+        XCTAssertEqual(derivedLedger.days.map(\.tokens), scannedLedger.days.map(\.tokens))
+        XCTAssertEqual(derivedLedger.total(.source(.codexCLI)), scannedLedger.total(.source(.codexCLI)))
+        XCTAssertEqual(derivedLedger.models().map(\.model), scannedLedger.models().map(\.model))
+    }
+
+    /// A log that keeps growing must not pile up parses in memory: the cache
+    /// holds one parse per file, and forgets files the scan no longer reaches.
+    func testTheParseCacheKeepsOneEntryPerFile() throws {
+        try writeClaude("a.jsonl", lines: [claudeLine(messageID: "m1", requestID: "r1", output: 1_000)])
+        _ = CostEstimator.archiveRecords(paths: paths, since: .distantPast)
+        try writeClaude("a.jsonl", lines: [
+            claudeLine(messageID: "m1", requestID: "r1", output: 1_000),
+            claudeLine(messageID: "m2", requestID: "r2", output: 2_000),
+        ])
+        let records = CostEstimator.archiveRecords(paths: paths, since: .distantPast)
+        let tokens = records.values.flatMap { $0.values.flatMap { $0.values } }.reduce(0) { $0 + $1.output }
+        XCTAssertEqual(tokens, 3_000, "the grown file is read afresh, not served from the old parse")
+        XCTAssertEqual(CostEstimator.cachedFileCount, 1)
+        try FileManager.default.removeItem(at: claudeRoot.appendingPathComponent("a.jsonl"))
+        _ = CostEstimator.archiveRecords(paths: paths, since: .distantPast)
+        XCTAssertEqual(CostEstimator.cachedFileCount, 0, "a deleted file is let go")
+    }
+
     // MARK: Attribution
 
     func testSpendIsAttributedPerCLI() throws {

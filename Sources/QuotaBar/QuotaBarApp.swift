@@ -92,6 +92,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             Diagnostics.printStatus()
             NSApp.terminate(nil)
         }
+        if arguments.contains("--archive-timing") {
+            Diagnostics.printArchiveTiming()
+            NSApp.terminate(nil)
+        }
         if arguments.contains("--json") {
             // `QuotaBar --json [--force]`: the limits other tools read,
             // through the last readings when they are under five minutes old.

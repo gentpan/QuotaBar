@@ -78,14 +78,7 @@ extension UsageStore {
 
     /// Folds the latest logs into the archive, off the main actor.
     func updateArchive() async {
-        guard !isUpdatingArchive else { return }
-        isUpdatingArchive = true
-        let updated = await Task.detached(priority: .utility) {
-            UsageArchiveStore.shared.update()
-        }.value
-        archive = updated
-        isUpdatingArchive = false
-        ShareStudio.openOnceAfterUpdate(store: self)
+        await refreshCostNow()
     }
 
     // MARK: Screen sharing

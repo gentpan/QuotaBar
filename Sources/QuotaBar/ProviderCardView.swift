@@ -222,7 +222,7 @@ struct ProviderCardView: View {
                 TrendBars(days: days, accent: Color(hex: id.accentHex))
                     .frame(width: 170)
             } else {
-                Text(store.isUpdatingArchive ? L10n.t("Reading logs…", "正在读取日志…") : L10n.t("No data", "暂无数据"))
+                Text(!store.logsReady ? L10n.t("Reading logs…", "正在读取日志…") : L10n.t("No data", "暂无数据"))
                     .font(.system(size: 11))
                     .foregroundStyle(.white.opacity(0.45))
             }

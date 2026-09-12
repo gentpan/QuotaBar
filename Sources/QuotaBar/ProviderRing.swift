@@ -357,8 +357,8 @@ struct ProviderCallout: View {
     @ViewBuilder
     private var usageFace: some View {
         if let source = costSource {
-            if store.ledger.isEmpty {
-                Text(store.isComputingLedger
+            if !store.logsReady || store.ledger.isEmpty {
+                Text(!store.logsReady
                     ? L10n.t("Reading local session logs…", "正在读取本地会话日志…")
                     : L10n.t("Nothing logged locally yet.", "本地还没有记录。"))
                     .font(.system(size: 11))

@@ -38,7 +38,7 @@ struct UsagePane: View {
             }
             .glassAction()
             Spacer(minLength: 0)
-            if store.isComputingLedger {
+            if !store.logsReady {
                 HStack(spacing: Design.space1 + 2) {
                     ProgressView().controlSize(.mini)
                     Text(L10n.t("Scanning session logs…", "正在扫描会话日志…"))
@@ -48,7 +48,7 @@ struct UsagePane: View {
             }
         }
 
-        if store.ledger.isEmpty {
+        if !store.logsReady || !store.ledger.hasData {
             placeholder
         } else {
             switch tab {
@@ -61,7 +61,7 @@ struct UsagePane: View {
     }
 
     private var placeholder: some View {
-        Text(store.isComputingLedger
+        Text(!store.logsReady
             ? L10n.t("Reading this year's session logs. The first pass over a large tree takes a while.",
                      "正在读取今年的会话日志。日志很多时，第一次要等一会儿。")
             : L10n.t("Nothing logged yet.", "还没有记录。"))

@@ -207,6 +207,28 @@ enum Diagnostics {
         func append(_ item: (ProviderID, UsageSnapshot?, String?)) { lock.withLock { items.append(item) } }
     }
 
+    /// How long the archive path takes: loading it, deriving the figures
+    /// from it, and the incremental scan that keeps it current.
+    static func printArchiveTiming() {
+        func ms(_ start: Date) -> String { String(format: "%.0f ms", Date().timeIntervalSince(start) * 1000) }
+        var out = ""
+        var t = Date()
+        let store = UsageArchiveStore()
+        let archive = store.current
+        out += "Load archive (\(archive.days.count) days, full scan \(archive.fullScanDone)): \(ms(t))\n"
+        t = Date()
+        let summary = archive.costSummary()
+        let ledger = archive.ledger()
+        out += "Derive spend + year ledger: \(ms(t))  (today \(QuotaFormat.usd(summary.todayUSD)), year \(QuotaFormat.compact(ledger.total())) tokens)\n"
+        t = Date()
+        let updated = store.update()
+        out += "Incremental scan since \(archive.incrementalCutoff().map { QuotaFormat.shortDay($0) } ?? "the beginning"): \(ms(t))  (today now \(QuotaFormat.usd(updated.costSummary().todayUSD)))\n"
+        t = Date()
+        _ = store.update()
+        out += "Second incremental scan (parse cache warm): \(ms(t))\n"
+        FileHandle.standardOutput.write(Data(out.utf8))
+    }
+
     static func printCost() {
         // The panel refreshes this on its own cycle; the CLI has to ask.
         let semaphore = DispatchSemaphore(value: 0)

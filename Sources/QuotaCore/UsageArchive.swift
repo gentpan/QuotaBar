@@ -249,3 +249,92 @@ public final class UsageArchiveStore: @unchecked Sendable {
         return copy
     }
 }
+
+// MARK: - The figures the app shows, straight from the archive
+
+extension UsageArchive {
+    /// The year-to-date ledger behind the usage pane, the card's back and the
+    /// island's usage page — built from the archive in memory, so it is there
+    /// the moment any of them opens, instead of after a scan of the logs.
+    public func ledger(now: Date = Date(), calendar: Calendar = .current) -> UsageLedger {
+        let year = calendar.component(.year, from: now)
+        guard let yearStart = calendar.date(from: DateComponents(year: year, month: 1, day: 1)),
+              let yearEnd = calendar.date(byAdding: .year, value: 1, to: yearStart)
+        else { return .empty }
+        var modelSources: [String: CostSource] = [:]
+        var result: [UsageDay] = []
+        var cursor = yearStart
+        while cursor < yearEnd {
+            var day = UsageDay(day: cursor)
+            for (raw, models) in days[Self.dayKey(cursor)] ?? [:] {
+                guard let source = CostSource(rawValue: raw) else { continue }
+                for (model, entry) in models {
+                    day.bySource[source, default: 0] += entry.allTokens
+                    day.byModel[model, default: 0] += entry.allTokens
+                    day.usd += entry.usd
+                    day.input += entry.input
+                    day.output += entry.output
+                    day.cacheRead += entry.cacheRead
+                    day.cacheWrite += entry.cacheWrite
+                    modelSources[model] = source
+                }
+            }
+            result.append(day)
+            guard let next = calendar.date(byAdding: .day, value: 1, to: cursor) else { break }
+            cursor = next
+        }
+        return UsageLedger(
+            year: year,
+            days: result,
+            today: calendar.startOfDay(for: now),
+            modelSources: modelSources,
+            scannedAt: lastScan ?? now)
+    }
+
+    /// Today, yesterday and the trailing window, by CLI and by model — the
+    /// spend card's figures — from the archive in memory.
+    public func costSummary(lookbackDays: Int = 31, now: Date = Date(), calendar: Calendar = .current) -> CostSummary {
+        let today = calendar.startOfDay(for: now)
+        guard let windowStart = calendar.date(byAdding: .day, value: -(lookbackDays - 1), to: today),
+              let yesterday = calendar.date(byAdding: .day, value: -1, to: today)
+        else { return .empty }
+        var summary = CostSummary()
+        summary.windowDays = lookbackDays
+        var periods: [SpendPeriod: SpendBreakdown] = [.today: SpendBreakdown(), .yesterday: SpendBreakdown(), .window: SpendBreakdown()]
+        var perModel: [String: Double] = [:]
+        var daily: [DailyCost] = []
+        var cursor = windowStart
+        while cursor <= today {
+            var bucket = DailyCost(day: cursor)
+            for (raw, models) in days[Self.dayKey(cursor)] ?? [:] {
+                guard let source = CostSource(rawValue: raw) else { continue }
+                for (model, entry) in models {
+                    let tokens = entry.allTokens
+                    let billable = entry.billableTokens
+                    bucket.usd += entry.usd
+                    bucket.tokens += tokens
+                    bucket.billableTokens += billable
+                    summary.windowUSD += entry.usd
+                    summary.windowTokens += tokens
+                    summary.windowBySource[source, default: 0] += entry.usd
+                    perModel[model, default: 0] += entry.usd
+                    periods[.window]?.add(entry.usd, tokens: tokens, billable: billable, model: model, from: source)
+                    if cursor == today {
+                        summary.todayUSD += entry.usd
+                        summary.todayTokens += tokens
+                        periods[.today]?.add(entry.usd, tokens: tokens, billable: billable, model: model, from: source)
+                    } else if cursor == yesterday {
+                        periods[.yesterday]?.add(entry.usd, tokens: tokens, billable: billable, model: model, from: source)
+                    }
+                }
+            }
+            daily.append(bucket)
+            guard let next = calendar.date(byAdding: .day, value: 1, to: cursor) else { break }
+            cursor = next
+        }
+        summary.periods = periods
+        summary.daily = daily
+        summary.topModel = perModel.max { $0.value < $1.value }?.key
+        return summary
+    }
+}

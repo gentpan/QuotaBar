@@ -359,7 +359,11 @@ public struct CostPaths: Sendable {
 public enum CostEstimator {
     /// In-memory memo keyed by (path, mtime, size) so steady-state refreshes
     /// only re-parse files that actually changed.
-    private static var cache: [String: [TokenEvent]] = [:]
+    /// One entry per file path, stamped with the mtime and size it was parsed
+    /// at. Keyed by path, not by path+stamp: a session log that is still being
+    /// written changes stamp on every refresh, and keying by stamp kept every
+    /// earlier parse of it alive for as long as the app ran.
+    private static var cache: [String: (stamp: String, events: [TokenEvent])] = [:]
     private static let lock = NSLock()
     /// Lines bigger than this are base64/tool-output blobs — never usage rows.
     private static let maxLineBytes = 200_000
@@ -529,6 +533,12 @@ public enum CostEstimator {
         return out
     }
 
+    /// How many files the parse memo holds; for the tests.
+    static var cachedFileCount: Int {
+        lock.lock(); defer { lock.unlock() }
+        return cache.count
+    }
+
     /// Drops the parsed-file memo; used by tests and after a manual rescan.
     public static func resetCache() {
         lock.lock()
@@ -696,23 +706,39 @@ public enum CostEstimator {
         // left most of the machine idle.
         var out: [TokenEvent] = []
         var pending: [(url: URL, key: String, size: Int)] = []
+        var visited = Set<String>()
         for case let url as URL in enumerator {
             guard filter(url) else { continue }
             let values = try? url.resourceValues(forKeys: [.contentModificationDateKey, .fileSizeKey])
             guard let mtime = values?.contentModificationDate, mtime >= cutoff else { continue }
-            // Size is part of the key: an append within the same mtime second
-            // would otherwise serve a stale parse.
+            // Size is part of the stamp: an append within the same mtime
+            // second would otherwise serve a stale parse.
             let size = values?.fileSize ?? -1
-            let key = "\(url.path)|\(mtime.timeIntervalSince1970)|\(size)"
+            let stamp = "\(mtime.timeIntervalSince1970)|\(size)"
+            visited.insert(url.path)
             lock.lock()
-            let cached = cache[key]
+            let cached = cache[url.path]
             lock.unlock()
-            if let cached {
-                out.append(contentsOf: cached)
+            if let cached, cached.stamp == stamp {
+                out.append(contentsOf: cached.events)
             } else {
-                pending.append((url, key, size))
+                pending.append((url, stamp, size))
             }
         }
+        // Files under this root the scan no longer reaches — older than the
+        // cutoff, or deleted — have nothing more to give; let them go.
+        // The enumerator may hand back /private/var for /var, and
+        // resolvingSymlinksInPath goes the other way, so both sides are
+        // compared without the /private.
+        func plain(_ path: String) -> String {
+            path.hasPrefix("/private/") ? String(path.dropFirst("/private".count)) : path
+        }
+        let prefix = plain(root.path.hasSuffix("/") ? root.path : root.path + "/")
+        lock.lock()
+        for path in cache.keys where plain(path).hasPrefix(prefix) && !visited.contains(path) {
+            cache[path] = nil
+        }
+        lock.unlock()
         guard !pending.isEmpty else { return out }
 
         // Longest-processing-time-first: session logs are wildly uneven (a real
@@ -731,7 +757,7 @@ public enum CostEstimator {
         }
         for (index, item) in pending.enumerated() {
             lock.lock()
-            cache[item.key] = parsed[index]
+            cache[item.url.path] = (item.key, parsed[index])
             lock.unlock()
             out.append(contentsOf: parsed[index])
         }

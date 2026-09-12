@@ -64,7 +64,6 @@ final class UsageStore: ObservableObject {
     /// kept fresh on the refresh cycle alongside the spend summary.
     @Published var ledger: UsageLedger = .empty
     @Published var isComputingLedger = false
-    private var ledgerWanted = false
     /// How far an update has got. Checked once per launch — often enough for
     /// a tool people leave running, and it avoids hammering an unauthenticated
     /// API that rate-limits by IP.
@@ -107,6 +106,8 @@ final class UsageStore: ObservableObject {
     @Published var isUpdatingArchive = false
     /// When the next automatic refresh is due, for the panel footer.
     @Published var nextRefreshAt = Date().addingTimeInterval(300)
+    /// The footer's refresh-everything is running.
+    @Published var isForceRefreshing = false
     /// True while something is capturing the screen and the owner asked for
     /// usage to be hidden then.
     @Published var isPrivacyMasked = false
@@ -186,6 +187,9 @@ final class UsageStore: ObservableObject {
             }
         }
         HTTP.configureProxy(experience.proxy)
+        // Spend and the year from the archive on disk: there before the first
+        // scan has read a single log.
+        applyArchive(UsageArchiveStore.shared.current)
         prepareNotifications()
         refreshConfigured()
         checkForUpdate()
@@ -299,8 +303,34 @@ final class UsageStore: ObservableObject {
     /// its 20s timeout hold the entire panel hostage.
     private func refresh(_ ids: [ProviderID]) {
         guard !ids.isEmpty else { return }
+        Task { await refreshNow(ids) }
+    }
+
+    /// The footer's refresh button: every provider whatever it is doing,
+    /// credentials read afresh, the status pages, and the logs — the lot,
+    /// not the one card a card's own button refreshes. The automatic timer
+    /// starts over from here.
+    func forceRefreshAll() {
+        guard !isForceRefreshing else { return }
+        isForceRefreshing = true
+        config.invalidateCredentialCache()
+        LocalCredentials.invalidateClaudeToken()
+        startAutoRefresh()
+        Task {
+            async let providers: Void = refreshNow(enabled)
+            async let status: Void = refreshServiceStatus()
+            async let logs: Void = refreshCostNow()
+            _ = await (providers, status, logs)
+            isForceRefreshing = false
+            tick &+= 1
+        }
+    }
+
+    private func refreshNow(_ ids: [ProviderID]) async {
+        guard !ids.isEmpty else { return }
         for id in ids { markLoading(id) }
-        Task { [config] in
+        do {
+            let config = self.config
             await withTaskGroup(of: (ProviderID, Result<UsageSnapshot, Error>).self) { group in
                 for id in ids {
                     group.addTask {
@@ -315,8 +345,8 @@ final class UsageStore: ObservableObject {
                     self.apply(id, result)
                 }
             }
-            self.finishRefresh()
-            self.refreshConfigured()
+            finishRefresh()
+            refreshConfigured()
         }
     }
 
@@ -664,42 +694,51 @@ final class UsageStore: ObservableObject {
     }
 
     func refreshCost() {
+        Task { await refreshCostNow() }
+    }
+
+    /// Spend, the year's ledger and the archive, from one pass over the logs.
+    ///
+    /// The archive is the source: the first time it reads every log, after
+    /// that only the files touched in the last two days, and every figure the
+    /// app shows is derived from it in memory. So the panel, the card's back,
+    /// the island's usage page and the usage pane have their numbers the
+    /// moment they open — from the archive loaded at launch — and the scan
+    /// only ever brings them up to the minute in the background.
+    func refreshCostNow() async {
         guard !isComputingCost else { return }
         isComputingCost = true
-        Task {
-            // Refresh published model prices before scanning, so a newly
-            // released model is not priced through a stale prefix guess.
-            await PricingCatalog.shared.refreshIfNeeded()
-            // Pure local file IO over thousands of session logs; keep it off
-            // the main actor.
-            let summary = await Task.detached(priority: .utility) {
-                CostEstimator.summary()
-            }.value
-            self.cost = summary
-            self.isComputingCost = false
-            if self.ledgerWanted { await self.buildLedger() }
-            await self.updateArchive()
-        }
-    }
-
-    /// The usage pane asks for the ledger the first time it appears.
-    func wantLedger() {
-        guard !ledgerWanted else { return }
-        ledgerWanted = true
-        // A spend scan already running will build the ledger when it
-        // finishes; otherwise start now.
-        guard !isComputingCost else { return }
-        Task { await buildLedger() }
-    }
-
-    private func buildLedger() async {
-        guard !isComputingLedger else { return }
         isComputingLedger = true
-        let built = await Task.detached(priority: .utility) {
-            CostEstimator.ledger()
+        isUpdatingArchive = true
+        // Refresh published model prices before scanning, so a newly released
+        // model is not priced through a stale prefix guess.
+        await PricingCatalog.shared.refreshIfNeeded()
+        let updated = await Task.detached(priority: .utility) {
+            UsageArchiveStore.shared.update()
         }.value
-        ledger = built
+        applyArchive(updated)
+        isComputingCost = false
         isComputingLedger = false
+        isUpdatingArchive = false
+        ShareStudio.openOnceAfterUpdate(store: self)
+    }
+
+    /// Everything local-log shaped, re-derived from the archive.
+    func applyArchive(_ archive: UsageArchive) {
+        self.archive = archive
+        guard archive.fullScanDone else { return }
+        cost = archive.costSummary()
+        ledger = archive.ledger()
+    }
+
+    /// True once the logs have been read in full at least once; until then a
+    /// page with no figures is still reading, not empty.
+    var logsReady: Bool { archive.fullScanDone }
+
+    /// Kept for the views that ask: the ledger is derived from the archive
+    /// and always current, so only a Mac that has never been scanned waits.
+    func wantLedger() {
+        if !logsReady && !isComputingCost { refreshCost() }
     }
 
     // MARK: Alerts
