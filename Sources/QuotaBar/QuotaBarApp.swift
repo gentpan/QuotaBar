@@ -87,6 +87,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             Diagnostics.printStatus()
             NSApp.terminate(nil)
         }
+        if arguments.contains("--json") {
+            // `QuotaBar --json [--force]`: the limits other tools read,
+            // through the last readings when they are under five minutes old.
+            Diagnostics.printLimitsJSON(force: arguments.contains("--force"))
+            NSApp.terminate(nil)
+        }
         if arguments.contains("--credentials") {
             Diagnostics.printCredentials()
             NSApp.terminate(nil)
@@ -151,6 +157,7 @@ final class Coordinators {
     /// Only one alternate presentation is live at a time; the menu-bar item
     /// stays regardless, as the settings entry point.
     private var privacyMasked = false
+    private var experienceRevision = -1
 
     private func sync(store: UsageStore) {
         if store.isPrivacyMasked != privacyMasked {
@@ -164,6 +171,14 @@ final class Coordinators {
                 presentation = nil
                 widgetRevision = -1
             }
+        }
+        if store.experienceRevision != experienceRevision {
+            experienceRevision = store.experienceRevision
+            GlobalHotkey.shared.action = { [weak self] in
+                MenuPanelController.shared.toggle(from: self?.status.button)
+            }
+            GlobalHotkey.shared.apply(store.experience.hotkey)
+            LocalAPIServer.shared.apply(enabled: store.experience.localAPI, store: store)
         }
         guard !privacyMasked else { return }
         let severity = store.islandProviders.compactMap { store.headlinePercent(for: $0) }

@@ -36,6 +36,26 @@ public enum UpdateFeed: Sendable, Equatable {
         }
     }
 
+    /// Every recent release, pre-releases included — for the beta channel.
+    var listURL: URL? {
+        switch self {
+        case let .github(repo): URL(string: "https://api.github.com/repos/\(repo)/releases?per_page=15")
+        case .custom: nil
+        }
+    }
+
+    /// The newest non-draft release in a GitHub list, pre-release or not.
+    static func newest(in data: Data, page: URL) -> UpdateRelease? {
+        guard let list = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]] else { return nil }
+        let releases = list
+            .filter { ($0["draft"] as? Bool) != true }
+            .compactMap { item -> UpdateRelease? in
+                guard let data = try? JSONSerialization.data(withJSONObject: item) else { return nil }
+                return parseGitHub(data, page: page)
+            }
+        return releases.max { UpdateCheck.compare($1.version, isNewerThan: $0.version) }
+    }
+
     var fallbackPage: URL {
         switch self {
         case let .github(repo):

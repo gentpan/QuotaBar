@@ -74,6 +74,7 @@ extension UsageStore {
         }.value
         archive = updated
         isUpdatingArchive = false
+        ShareStudio.openOnceAfterUpdate(store: self)
     }
 
     // MARK: Screen sharing

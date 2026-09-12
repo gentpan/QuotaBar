@@ -166,6 +166,47 @@ enum Diagnostics {
         var lines: [(ProviderID, ServiceStatus?)] = []
     }
 
+    /// Cached readings under five minutes old are used as they are; older
+    /// ones, missing ones, or all of them with `force`, are fetched first.
+    static func printLimitsJSON(force: Bool) {
+        let config = ConfigStore.shared
+        let box = LimitsBox()
+        let semaphore = DispatchSemaphore(value: 0)
+        Task.detached {
+            await withTaskGroup(of: (ProviderID, UsageSnapshot?, String?).self) { group in
+                for id in config.enabledProviders {
+                    group.addTask {
+                        let cached = SnapshotCache.shared.snapshot(for: id)
+                        if !force, let cached, Date().timeIntervalSince(cached.fetchedAt) < 300 {
+                            return (id, cached, nil)
+                        }
+                        do {
+                            let fresh = try await ProviderRegistry.make(id).fetch(config: config)
+                            SnapshotCache.shared.store(fresh, for: id)
+                            return (id, fresh, nil)
+                        } catch {
+                            return (id, cached, error.localizedDescription)
+                        }
+                    }
+                }
+                for await item in group { box.append(item) }
+            }
+            semaphore.signal()
+        }
+        _ = semaphore.wait(timeout: .now() + 45)
+        let order = config.enabledProviders
+        let items = box.items.sorted { (order.firstIndex(of: $0.0) ?? 0) < (order.firstIndex(of: $1.0) ?? 0) }
+        let data = LimitsJSON.make(providers: items.map { (id: $0.0, snapshot: $0.1, error: $0.2) })
+        FileHandle.standardOutput.write(data)
+        FileHandle.standardOutput.write(Data("\n".utf8))
+    }
+
+    private final class LimitsBox: @unchecked Sendable {
+        private let lock = NSLock()
+        private(set) var items: [(ProviderID, UsageSnapshot?, String?)] = []
+        func append(_ item: (ProviderID, UsageSnapshot?, String?)) { lock.withLock { items.append(item) } }
+    }
+
     static func printCost() {
         // The panel refreshes this on its own cycle; the CLI has to ask.
         let semaphore = DispatchSemaphore(value: 0)

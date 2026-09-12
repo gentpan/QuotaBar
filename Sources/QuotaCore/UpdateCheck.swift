@@ -35,21 +35,43 @@ public enum UpdateCheck {
     }
 
     /// Numeric component-wise comparison, so 0.2.10 sorts above 0.2.9 —
-    /// a string compare would get that backwards.
+    /// a string compare would get that backwards. A pre-release sorts below
+    /// the release it leads to: 0.5.0-beta.2 < 0.5.0, and beta.2 > beta.1.
     static func compare(_ lhs: String, isNewerThan rhs: String) -> Bool {
-        let left = components(lhs)
-        let right = components(rhs)
-        for index in 0..<max(left.count, right.count) {
-            let a = index < left.count ? left[index] : 0
-            let b = index < right.count ? right[index] : 0
+        let (leftCore, leftPre) = split(lhs)
+        let (rightCore, rightPre) = split(rhs)
+        for index in 0..<max(leftCore.count, rightCore.count) {
+            let a = index < leftCore.count ? leftCore[index] : 0
+            let b = index < rightCore.count ? rightCore[index] : 0
             if a != b { return a > b }
         }
-        return false
+        switch (leftPre, rightPre) {
+        case (nil, nil): return false
+        case (nil, _?): return true
+        case (_?, nil): return false
+        case let (a?, b?):
+            for index in 0..<max(a.count, b.count) {
+                let x = index < a.count ? a[index] : 0
+                let y = index < b.count ? b[index] : 0
+                if x != y { return x > y }
+            }
+            return false
+        }
     }
 
-    private static func components(_ version: String) -> [Int] {
-        version
-            .split(whereSeparator: { !$0.isNumber })
-            .compactMap { Int($0) }
+    public static func isPrerelease(_ version: String) -> Bool {
+        split(version).1 != nil
+    }
+
+    private static func split(_ version: String) -> ([Int], [Int]?) {
+        let trimmed = version.hasPrefix("v") ? String(version.dropFirst()) : version
+        let parts = trimmed.split(separator: "-", maxSplits: 1)
+        let core = parts.first.map { numbers(String($0)) } ?? []
+        let pre = parts.count > 1 ? numbers(String(parts[1])) : nil
+        return (core, pre)
+    }
+
+    private static func numbers(_ text: String) -> [Int] {
+        text.split(whereSeparator: { !$0.isNumber }).compactMap { Int($0) }
     }
 }

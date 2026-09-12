@@ -50,15 +50,19 @@ public enum Updater {
 
     public static func check(
         feed: UpdateFeed,
-        currentVersion: String) async -> UpdateRelease?
+        currentVersion: String,
+        includePrereleases: Bool = false) async -> UpdateRelease?
     {
-        guard let response = try? await HTTP.get(feed.requestURL, headers: [
+        let url = includePrereleases ? feed.listURL ?? feed.requestURL : feed.requestURL
+        guard let response = try? await HTTP.get(url, headers: [
             "Accept": "application/vnd.github+json",
             "User-Agent": "QuotaBar",
-        ]), response.status == 200,
-            let release = feed.parse(response.data),
-            UpdateCheck.compare(release.version, isNewerThan: currentVersion)
+        ]), response.status == 200
         else { return nil }
+        let release = includePrereleases && feed.listURL != nil
+            ? UpdateFeed.newest(in: response.data, page: feed.fallbackPage)
+            : feed.parse(response.data)
+        guard let release, UpdateCheck.compare(release.version, isNewerThan: currentVersion) else { return nil }
         return release
     }
 

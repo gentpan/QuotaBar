@@ -31,6 +31,12 @@ struct UsagePane: View {
                 selection: tab,
                 onSelect: { tab = $0 })
             .frame(width: 200)
+            Button {
+                ShareStudio.open(store: store)
+            } label: {
+                Label(L10n.t("Share usage card", "分享用量卡片"), systemImage: "square.and.arrow.up")
+            }
+            .glassAction()
             Spacer(minLength: 0)
             if store.isComputingLedger {
                 HStack(spacing: Design.space1 + 2) {

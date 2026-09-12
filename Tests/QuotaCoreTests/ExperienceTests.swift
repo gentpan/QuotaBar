@@ -158,3 +158,39 @@ final class CurrencyAndTimeTests: XCTestCase {
         XCTAssertNil(ProxySpec("ftp://x:1"))
     }
 }
+
+final class LimitsAndUpdatesTests: XCTestCase {
+    func testLimitsJSONCarriesWindowsAndPaceButNoAccount() throws {
+        let now = Date(timeIntervalSince1970: 1_800_000_000)
+        let window = UsageWindow(title: "5h", usedPercent: 50, resetsAt: now.addingTimeInterval(13_500), windowSeconds: 18_000)
+        let snapshot = UsageSnapshot(planName: "Max", account: "secret@example.com", windows: [window], fetchedAt: now)
+        let data = LimitsJSON.make(providers: [(id: .claude, snapshot: snapshot, error: nil), (id: .codex, snapshot: nil, error: "expired")], now: now)
+        let text = String(decoding: data, as: UTF8.self)
+        XCTAssertFalse(text.contains("secret@example.com"))
+        let root = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        let providers = try XCTUnwrap(root["providers"] as? [[String: Any]])
+        let windows = try XCTUnwrap(providers[0]["windows"] as? [[String: Any]])
+        XCTAssertEqual(windows[0]["leftPercent"] as? Double, 50)
+        XCTAssertEqual((windows[0]["pace"] as? [String: Any])?["verdict"] as? String, "over")
+        XCTAssertEqual(providers[1]["error"] as? String, "expired")
+    }
+
+    func testPrereleasesSortBelowTheirRelease() {
+        XCTAssertTrue(UpdateCheck.compare("0.5.0", isNewerThan: "0.5.0-beta.3"))
+        XCTAssertFalse(UpdateCheck.compare("0.5.0-beta.3", isNewerThan: "0.5.0"))
+        XCTAssertTrue(UpdateCheck.compare("0.5.0-beta.2", isNewerThan: "0.5.0-beta.1"))
+        XCTAssertTrue(UpdateCheck.compare("0.5.0-beta.1", isNewerThan: "0.4.0"))
+        XCTAssertTrue(UpdateCheck.compare("0.2.10", isNewerThan: "0.2.9"))
+        XCTAssertTrue(UpdateCheck.isPrerelease("v0.5.0-rc.1"))
+    }
+
+    func testTheNewestReleaseInAListSkipsDrafts() throws {
+        let list = """
+        [{"tag_name":"v0.6.0","draft":true,"assets":[{"name":"QuotaBar.zip","browser_download_url":"https://x/6.zip"}]},
+         {"tag_name":"v0.5.0-beta.1","prerelease":true,"assets":[{"name":"QuotaBar.zip","browser_download_url":"https://x/5b.zip"}]},
+         {"tag_name":"v0.4.0","assets":[{"name":"QuotaBar.zip","browser_download_url":"https://x/4.zip"}]}]
+        """
+        let release = UpdateFeed.newest(in: Data(list.utf8), page: URL(string: "https://x")!)
+        XCTAssertEqual(release?.version, "0.5.0-beta.1")
+    }
+}

@@ -1042,11 +1042,68 @@ struct AppearancePane: View {
             }
 
             SettingFootnote(L10n.t(
-                "Affects the menu-bar glyph only. Percentages inside the panel always show how much has been used.",
-                "只影响菜单栏图标。面板内的百分比始终表示已用量。"))
+                "Used or left applies everywhere; clicking any percentage flips it too.",
+                "已用或剩余在所有界面同步生效，点击任意百分比也能切换。"))
             SettingFootnote(L10n.t(
                 "The glyph reports whichever provider the panel is focused on. Pick Overview in the panel to have it cover everything enabled.",
                 "菜单栏图标显示的是面板中当前选中的服务商。在面板里选「总览」可让它覆盖所有已启用的服务商。"))
+        }
+
+        SettingsCard(L10n.t("Figures and bars", "数字与进度条")) {
+            SettingRow(L10n.t("Bar colour", "变色方式"), caption: L10n.t("By usage: the whole bar. Figure only: the bar keeps the brand colour. By pace: a verdict on the burn rate.", "按用量：整条进度条变色。只让数字变色：进度条保持品牌色。按节奏：按消耗速度判断。")) {
+                GlassSegmented(
+                    options: UrgencyStyle.allCases.map { (value: $0, label: $0.displayName) },
+                    selection: store.experience.urgencyStyle,
+                    onSelect: { value in store.updateExperience { $0.urgencyStyle = value } })
+                .frame(maxWidth: 360)
+            }
+            SettingRow(L10n.t("Reset times", "重置时间"), caption: L10n.t("Click any reset label to flip it too.", "点击任意重置时间也能切换。")) {
+                GlassSegmented(
+                    options: ResetTimeFormat.allCases.map { (value: $0, label: $0.displayName) },
+                    selection: store.experience.resetTimeFormat,
+                    onSelect: { value in store.updateExperience { $0.resetTimeFormat = value } })
+                .frame(maxWidth: 240)
+            }
+            SettingRow(L10n.t("Clock", "时钟")) {
+                GlassSegmented(
+                    options: ClockStyle.allCases.map { (value: $0, label: $0.displayName) },
+                    selection: store.experience.clockStyle,
+                    onSelect: { value in store.updateExperience { $0.clockStyle = value } })
+                .frame(maxWidth: 300)
+            }
+            SettingToggle(
+                L10n.t("Always show pacing", "始终显示节奏"), caption: L10n.t("The even-pace tick and a projection on every bar, not only close ones.", "每条进度条都显示匀速刻度和重置时的预计，而不只是余量紧张的。"),
+                isOn: Binding(
+                    get: { store.experience.alwaysShowPace },
+                    set: { value in store.updateExperience { $0.alwaysShowPace = value } }))
+            SettingToggle(
+                L10n.t("Reduce animations", "减少动画"), caption: L10n.t("Also follows the system's Reduce Motion.", "同时跟随系统的减弱动态效果设置。"),
+                isOn: Binding(
+                    get: { store.experience.reduceMotion },
+                    set: { value in store.updateExperience { $0.reduceMotion = value } }))
+        }
+
+        SettingsCard(L10n.t("Menu panel", "下拉面板")) {
+            SettingRow(L10n.t("Density", "密度")) {
+                GlassSegmented(
+                    options: PanelDensity.allCases.map { (value: $0, label: $0.displayName) },
+                    selection: store.experience.panelDensity,
+                    onSelect: { value in store.updateExperience { $0.panelDensity = value } })
+                .frame(maxWidth: 220)
+            }
+            SettingToggle(
+                L10n.t("Show total spend", "显示花费卡片"),
+                isOn: Binding(
+                    get: { store.experience.showSpendCard },
+                    set: { value in store.updateExperience { $0.showSpendCard = value } }))
+            SettingRow(L10n.t("Shortcut", "全局快捷键"), caption: L10n.t("Opens the panel from anywhere.", "在任何地方打开下拉面板。")) {
+                HotkeyRecorder(hotkey: store.experience.hotkey) { hotkey in
+                    store.updateExperience { $0.hotkey = hotkey }
+                }
+            }
+            SettingFootnote(L10n.t(
+                "Click the menu-bar item to open it; Esc closes, ⌘R refreshes, ⌘, opens Settings. Right-click a card to copy it as an image.",
+                "点菜单栏图标打开；Esc 关闭，⌘R 刷新，⌘, 打开设置。右键卡片可复制为图片。"))
         }
     }
 }
@@ -1138,6 +1195,30 @@ struct PresentationPane: View {
                 SettingFootnote(L10n.t(
                     "How many providers sit either side of the notch, in the order they are enabled. Hover to open the full panel.",
                     "刘海两侧各显示几个服务商，按启用顺序排列。悬停即从顶部展开完整面板。"))
+            SettingToggle(
+                L10n.t("Glow", "光晕"), caption: L10n.t("A halo that turns amber or red near the limit, and a light that orbits the outline.", "轮廓外的柔光，接近上限时变琥珀或红色，另有一道光沿轮廓环绕。"),
+                isOn: Binding(
+                    get: { store.experience.islandGlow },
+                    set: { value in store.updateExperience { $0.islandGlow = value } }))
+            SettingToggle(
+                L10n.t("Low power", "低功耗"), caption: L10n.t("Glow only while refreshing, hovered or alerting.", "只在刷新、悬停或告警时发光。"),
+                isOn: Binding(
+                    get: { store.experience.lowPowerGlow },
+                    set: { value in store.updateExperience { $0.lowPowerGlow = value } }))
+            .disabled(!store.experience.islandGlow)
+            .opacity(!store.experience.islandGlow ? 0.45 : 1)
+            SettingToggle(
+                L10n.t("Open when a limit nears", "越线时自动弹出"), caption: L10n.t("Opens for four seconds when a window crosses its warning.", "额度第一次超过告警线时展开 4 秒。"),
+                isOn: Binding(
+                    get: { store.experience.islandAutoPeek },
+                    set: { value in store.updateExperience { $0.islandAutoPeek = value } }))
+            SettingRow(L10n.t("Chart", "图表样式"), caption: L10n.t("⌘-click the open panel to cycle.", "在展开的面板上按住 ⌘ 点击也能切换。")) {
+                GlassSegmented(
+                    options: IslandChartStyle.allCases.map { (value: $0, label: $0.displayName) },
+                    selection: store.experience.islandChart,
+                    onSelect: { value in store.updateExperience { $0.islandChart = value } })
+                .frame(maxWidth: 380)
+            }
             }
 
             if store.presentation == .edgeDock {
@@ -1200,6 +1281,11 @@ struct PresentationPane: View {
                     set: { store.setWidgetAlwaysOnTop($0) }))
                 .disabled(!store.widgetEnabled)
                 .opacity(store.widgetEnabled ? 1 : 0.45)
+            SettingToggle(
+                L10n.t("Closest to the limit first", "按紧迫度排序"),
+                isOn: Binding(
+                    get: { store.experience.widgetSortsByUrgency },
+                    set: { value in store.updateExperience { $0.widgetSortsByUrgency = value } }))
             SettingFootnote(L10n.t(
                 "Sits on the desktop, below your windows, unless kept above. Drag it to move; the position is remembered.",
                 "默认位于桌面、在窗口之下（可改为置顶）。拖动即可移动，位置会被记住。"))
@@ -1263,6 +1349,21 @@ struct AlertsPane: View {
                 "Only thresholds at or above the warning level are offered — a critical below it can never be reached.",
                 "紧急阈值只提供不低于警告阈值的档位，否则永远不会触发。"))
         }
+
+        SettingsCard(L10n.t("Pace", "节奏提醒")) {
+            paceToggle(L10n.t("Almost out", "快用完了"), L10n.t("Under 10% left, balances included.", "剩余不到 10%，包括没有重置周期的余额。"), \.almostOut)
+            paceToggle(L10n.t("Cutting it close", "余量很紧"), L10n.t("Projected to finish the window with little left.", "按当前速度，重置时所剩无几。"), \.cuttingClose)
+            paceToggle(L10n.t("Will run out", "重置前会用完"), L10n.t("Projected to run out before the window resets.", "按当前速度，会在重置前用完。"), \.willRunOut)
+            SettingFootnote(L10n.t(
+                "Each fires once per crossing and once per reset period. What is already true when QuotaBar starts sets the baseline without a notification.",
+                "每次越线只提醒一次，每个重置周期也只提醒一次。QuotaBar 启动时已经成立的情况只作为基线，不会提醒。"))
+        }
+    }
+
+    private func paceToggle(_ title: String, _ caption: String, _ key: WritableKeyPath<PaceAlertPrefs, Bool>) -> some View {
+        SettingToggle(title, caption: caption, isOn: Binding(
+            get: { store.experience.paceAlerts[keyPath: key] },
+            set: { value in store.updateExperience { $0.paceAlerts[keyPath: key] = value } }))
     }
 }
 
@@ -1299,6 +1400,48 @@ struct GeneralPane: View {
                     Spacer(minLength: 0)
                 }
             }
+        }
+
+        SettingsCard(L10n.t("Figures", "数据口径")) {
+            SettingRow(L10n.t("Currency", "货币"), caption: L10n.t("Daily reference rates; prices stay in dollars.", "按每日参考汇率换算，价格本身仍以美元计。")) {
+                Picker("", selection: Binding(
+                    get: { store.experience.currency },
+                    set: { value in store.updateExperience { $0.currency = value } }))
+                {
+                    ForEach(CurrencyRates.supported, id: \.self) { code in
+                        Text("\(CurrencyRates.displayName(for: code)) · \(code)").tag(code)
+                    }
+                }
+                .labelsHidden()
+                .frame(width: 200)
+            }
+            SettingRow(L10n.t("Tokens", "token 统计"), caption: L10n.t("All tokens includes cache reads and writes.", "全部 token 包含缓存读写。")) {
+                GlassSegmented(
+                    options: TokenCounting.allCases.map { (value: $0, label: $0.displayName) },
+                    selection: store.experience.tokenCounting,
+                    onSelect: { value in store.updateExperience { $0.tokenCounting = value } })
+                .frame(maxWidth: 300)
+            }
+        }
+
+        SettingsCard(L10n.t("Privacy", "隐私")) {
+            SettingToggle(
+                L10n.t("Hide usage while the screen is shared", "共享屏幕时隐藏用量"), caption: L10n.t("While a share or recording is on, the menu bar shows only the mark and the dock, island and desktop card step aside.", "共享屏幕或录屏期间，菜单栏只显示 logo，停靠条、刘海岛和桌面卡片暂时隐藏。"),
+                isOn: Binding(
+                    get: { store.experience.hideWhenSharing },
+                    set: { value in store.updateExperience { $0.hideWhenSharing = value } }))
+        }
+
+        SettingsCard(L10n.t("Advanced", "高级")) {
+            ProxyRow(store: store)
+            SettingToggle(
+                L10n.t("Local API", "本地接口"), caption: L10n.t("Serves http://127.0.0.1:6736/v1/limits to other tools on this Mac. No credentials, no account names.", "在 http://127.0.0.1:6736/v1/limits 提供额度数据给本机其他工具，不含凭据和账号。"),
+                isOn: Binding(
+                    get: { store.experience.localAPI },
+                    set: { value in store.updateExperience { $0.localAPI = value } }))
+            SettingFootnote(L10n.t(
+                "From a terminal: /Applications/QuotaBar.app/Contents/MacOS/QuotaBar --json prints the same limits; add --force to skip the five-minute cache.",
+                "在终端运行 /Applications/QuotaBar.app/Contents/MacOS/QuotaBar --json 可输出同样的额度数据，加 --force 跳过 5 分钟缓存。"))
         }
 
         SettingsCard(L10n.t("System", "系统")) {
@@ -1386,6 +1529,11 @@ struct UpdatesPane: View {
                 }
             }
 
+            SettingToggle(
+                L10n.t("Beta updates", "测试版更新"), caption: L10n.t("Also offers pre-releases.", "同时接收预发布版本。"),
+                isOn: Binding(
+                    get: { store.experience.betaUpdates },
+                    set: { value in store.updateExperience { $0.betaUpdates = value } }))
             if store.updateIsManagedByHomebrew {
                 SettingFootnote(L10n.t("Updated by Homebrew.", "由 Homebrew 更新。"))
             }
@@ -1632,5 +1780,37 @@ struct AboutPane: View {
                 "Spend figures are estimates computed locally from the CLIs' session logs at published list prices. They are not a bill.",
                 "费用为本地会话日志按官方标价估算的结果，仅供参考，不等于实际账单。"))
         }
+    }
+}
+
+
+/// The proxy address, applied on Return or with the button.
+private struct ProxyRow: View {
+    @ObservedObject var store: UsageStore
+    @State private var text: String
+    @State private var invalid = false
+
+    init(store: UsageStore) {
+        self.store = store
+        _text = State(initialValue: store.experience.proxy)
+    }
+
+    var body: some View {
+        SettingRow(L10n.t("Proxy", "代理"), caption: invalid ? L10n.t("Not a proxy address.", "不是有效的代理地址。") : L10n.t("http://, https:// or socks5://; empty is direct.", "支持 http://、https:// 或 socks5://，留空为直连。")) {
+            HStack(spacing: Design.space2) {
+                GlassTextField(placeholder: "socks5://127.0.0.1:7890", text: $text, onSubmit: apply)
+                    .frame(width: 260)
+                Button(L10n.t("Apply", "应用"), action: apply)
+                    .glassAction()
+                Spacer(minLength: 0)
+            }
+        }
+    }
+
+    private func apply() {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        invalid = !trimmed.isEmpty && ProxySpec(trimmed) == nil
+        guard !invalid else { return }
+        store.updateExperience { $0.proxy = trimmed }
     }
 }

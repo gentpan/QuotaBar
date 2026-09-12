@@ -20,6 +20,9 @@ final class StatusItemCoordinator: NSObject {
     /// `onChange` modifiers before.
     var onStoreChange: (() -> Void)?
 
+    /// The item's button, for anchoring the panel when it opens by shortcut.
+    var button: NSStatusBarButton? { item?.isVisible == true ? item?.button : nil }
+
     func start(store: UsageStore) {
         self.store = store
         // One turn after applicationDidFinishLaunching, not inside it. Created

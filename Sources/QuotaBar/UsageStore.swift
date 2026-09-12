@@ -451,7 +451,7 @@ final class UsageStore: ObservableObject {
         let feed = config.updateFeed
         updateStage = .checking
         Task {
-            let release = await Updater.check(feed: feed, currentVersion: current)
+            let release = await Updater.check(feed: feed, currentVersion: current, includePrereleases: self.experience.betaUpdates)
             self.lastUpdateCheck = Date()
             if let release {
                 self.updateStage = .available(release)
