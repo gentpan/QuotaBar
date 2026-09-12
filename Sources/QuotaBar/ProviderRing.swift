@@ -291,8 +291,12 @@ struct ProviderCallout: View {
                 pinChip(L10n.t("Dock", "停靠条"), on: store.dockPin == id) {
                     store.setDockPin(store.dockPin == id ? nil : id)
                 }
-                pinChip(L10n.t("Desktop card", "桌面卡片"), on: store.widgetPin == id && store.widgetScope == .pinned) {
-                    store.setWidgetPin(store.widgetPin == id && store.widgetScope == .pinned ? nil : id)
+                pinChip(L10n.t("Desktop card", "桌面卡片"), on: store.isPinnedToDesktop(id)) {
+                    if store.isPinnedToDesktop(id) {
+                        store.setWidgetPin(nil, unpinning: id)
+                    } else {
+                        store.setWidgetPin(id)
+                    }
                 }
             }
         }

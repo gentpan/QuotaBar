@@ -563,10 +563,8 @@ enum Snapshot {
 
         // Desktop widget at each density.
         for density in WidgetDensity.allCases {
-            ConfigStore.shared.widgetDensity = density
-            let card = DesktopWidgetView(
-                store: makeStore(selected: nil),
-                coordinator: DesktopWidgetCoordinator())
+            let sample = makeStore(selected: nil)
+            let card = DesktopWidgetView(store: sample, density: density, providers: sample.enabled)
                 .padding(24)
             render(card, to: base, name: "widget-\(density.rawValue)",
                    backing: Color(hex: "2E3B4E"))

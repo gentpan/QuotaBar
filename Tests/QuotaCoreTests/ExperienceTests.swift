@@ -194,3 +194,29 @@ final class LimitsAndUpdatesTests: XCTestCase {
         XCTAssertEqual(release?.version, "0.5.0-beta.1")
     }
 }
+
+final class DeskCardTests: XCTestCase {
+    func testCardsDecodeLenientlyOneByOne() throws {
+        let json = #"{"deskCards":[{"id":"a","style":"gauge","size":"large","provider":"claude","x":0.2,"y":0.3},{"id":"b","style":"hologram","size":"giant","provider":"nobody","source":"codexCLI","x":7,"y":-1}]}"#
+        let prefs = try JSONDecoder().decode(ExperiencePrefs.self, from: Data(json.utf8))
+        XCTAssertEqual(prefs.deskCards.count, 2)
+        XCTAssertEqual(prefs.deskCards[0].style, .gauge)
+        XCTAssertEqual(prefs.deskCards[0].size, .large)
+        XCTAssertEqual(prefs.deskCards[0].provider, .claude)
+        XCTAssertEqual(prefs.deskCards[1].style, .focus, "an unknown style falls back rather than dropping the card")
+        XCTAssertEqual(prefs.deskCards[1].size, .medium)
+        XCTAssertNil(prefs.deskCards[1].provider)
+        XCTAssertEqual(prefs.deskCards[1].source, .codexCLI)
+        XCTAssertEqual(prefs.deskCards[1].x, 1)
+        XCTAssertEqual(prefs.deskCards[1].y, 0)
+    }
+
+    func testTheDefaultPairIsTheMainProviderAndSpend() {
+        let pair = DeskCard.defaults(provider: .codex, x: 0.1, y: 0.2)
+        XCTAssertEqual(pair.map(\.style), [.focus, .trend])
+        XCTAssertEqual(pair[0].provider, .codex)
+        XCTAssertGreaterThan(pair[1].y, pair[0].y, "spend sits beneath")
+        XCTAssertTrue(DeskCardStyle.focus.singleProvider)
+        XCTAssertTrue(DeskCardStyle.daily.readsLogs)
+    }
+}

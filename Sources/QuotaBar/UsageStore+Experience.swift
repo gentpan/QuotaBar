@@ -191,3 +191,30 @@ extension UsageStore {
         }
     }
 }
+
+// MARK: - Desktop cards
+
+extension UsageStore {
+    func updateDeskCard(_ id: String, _ body: (inout DeskCard) -> Void) {
+        updateExperience { prefs in
+            guard let index = prefs.deskCards.firstIndex(where: { $0.id == id }) else { return }
+            body(&prefs.deskCards[index])
+        }
+        widgetRevision &+= 1
+    }
+
+    /// A new big-figure card, offset from the one it was asked from.
+    func addDeskCard(style: DeskCardStyle = .focus, near card: DeskCard? = nil) {
+        updateExperience { prefs in
+            let x = card.map { $0.x > 0.5 ? $0.x - 0.22 : $0.x + 0.22 } ?? 0.8
+            prefs.deskCards.append(DeskCard(style: style, size: .medium, x: x, y: card?.y ?? 0.1))
+        }
+        if !widgetEnabled { setWidgetEnabled(true) }
+        widgetRevision &+= 1
+    }
+
+    func removeDeskCard(_ id: String) {
+        updateExperience { $0.deskCards.removeAll { $0.id == id } }
+        widgetRevision &+= 1
+    }
+}

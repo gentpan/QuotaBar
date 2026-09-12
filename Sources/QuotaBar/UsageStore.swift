@@ -618,13 +618,31 @@ final class UsageStore: ObservableObject {
         dockRevision &+= 1
     }
 
-    /// Pinning to the card also puts the card into its pinned scope; there
-    /// is no point pinning one and showing all.
-    func setWidgetPin(_ id: ProviderID?) {
+    /// Pinning a provider to the desktop points the first single-provider
+    /// card at it, or adds one; unpinning lets those cards follow the menu
+    /// bar again.
+    func setWidgetPin(_ id: ProviderID?, unpinning previous: ProviderID? = nil) {
         config.widgetPin = id
         config.widgetScope = id == nil ? .all : .pinned
+        if let id {
+            if let card = experience.deskCards.first(where: { $0.style.singleProvider }) {
+                updateDeskCard(card.id) { $0.provider = id }
+            } else {
+                updateExperience { $0.deskCards.append(DeskCard(style: .focus, provider: id, x: 0.95, y: 0.06)) }
+            }
+            if !widgetEnabled { setWidgetEnabled(true) }
+        } else if let previous {
+            for card in experience.deskCards where card.provider == previous {
+                updateDeskCard(card.id) { $0.provider = nil }
+            }
+        }
         objectWillChange.send()
         widgetRevision &+= 1
+    }
+
+    /// Whether some desktop card shows this provider alone.
+    func isPinnedToDesktop(_ id: ProviderID) -> Bool {
+        widgetEnabled && experience.deskCards.contains { $0.provider == id && $0.style.singleProvider }
     }
 
     func setWidgetScope(_ scope: WidgetScope) {

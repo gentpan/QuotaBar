@@ -1254,35 +1254,36 @@ struct PresentationPane: View {
             screens = NSScreen.screens
         }
 
-        SettingsCard(L10n.t("Desktop widget", "桌面小工具")) {
+        SettingsCard(L10n.t("Desktop cards", "桌面卡片")) {
             SettingToggle(
                 L10n.t("Show on the desktop", "在桌面显示"),
                 isOn: Binding(
                     get: { store.widgetEnabled },
                     set: { store.setWidgetEnabled($0) }))
-            SettingRow(
-                L10n.t("Size", "卡片大小"),
-                caption: L10n.t("Compact is the small card; detailed the large one.", "紧凑是小卡片，详细是大卡片。"))
-            {
-                GlassSegmented(
-                    options: WidgetDensity.allCases.map { (value: $0, label: $0.displayName) },
-                    selection: store.widgetDensity,
-                    onSelect: { store.setWidgetDensity($0) })
-                .frame(maxWidth: 300)
-                .disabled(!store.widgetEnabled)
-                .opacity(store.widgetEnabled ? 1 : 0.45)
+            ForEach(Array(store.experience.deskCards.enumerated()), id: \.element.id) { index, card in
+                DeskCardSettingsRow(store: store, card: card, number: index + 1)
+                    .disabled(!store.widgetEnabled)
+                    .opacity(store.widgetEnabled ? 1 : 0.45)
             }
-            SettingRow(
-                L10n.t("Shows", "显示范围"),
-                caption: L10n.t("Pin one from a ring's full card in the dock.", "在停靠条里点开圆环的完整卡片可钉住一个。"))
-            {
-                GlassSegmented(
-                    options: WidgetScope.allCases.map { (value: $0, label: $0.displayName) },
-                    selection: store.widgetScope,
-                    onSelect: { store.setWidgetScope($0) })
-                .frame(maxWidth: 240)
-                .disabled(!store.widgetEnabled)
-                .opacity(store.widgetEnabled ? 1 : 0.45)
+            SettingRow(L10n.t("Add", "添加")) {
+                HStack(spacing: Design.space2) {
+                    Menu {
+                        ForEach(DeskCardStyle.allCases) { style in
+                            Button(style.displayName) { store.addDeskCard(style: style, near: store.experience.deskCards.last) }
+                        }
+                    } label: {
+                        Label(L10n.t("Add a card", "添加卡片"), systemImage: "plus")
+                    }
+                    .menuStyle(.button)
+                    .fixedSize()
+                    Button(L10n.t("Restore the default pair", "恢复默认两张")) {
+                        store.updateExperience { $0.deskCards = DeskCard.defaults(provider: nil) }
+                        if !store.widgetEnabled { store.setWidgetEnabled(true) }
+                        store.widgetRevision &+= 1
+                    }
+                    .glassAction()
+                    Spacer(minLength: 0)
+                }
             }
             SettingToggle(
                 L10n.t("Keep above other windows", "置于其他窗口之上"),
@@ -1292,13 +1293,73 @@ struct PresentationPane: View {
                 .disabled(!store.widgetEnabled)
                 .opacity(store.widgetEnabled ? 1 : 0.45)
             SettingToggle(
-                L10n.t("Closest to the limit first", "按紧迫度排序"),
+                L10n.t("Classic card: closest to the limit first", "经典样式按紧迫度排序"),
                 isOn: Binding(
                     get: { store.experience.widgetSortsByUrgency },
                     set: { value in store.updateExperience { $0.widgetSortsByUrgency = value } }))
             SettingFootnote(L10n.t(
-                "Sits on the desktop, below your windows, unless kept above. Drag it to move; the position is remembered.",
-                "默认位于桌面、在窗口之下（可改为置顶）。拖动即可移动，位置会被记住。"))
+                "Cards sit on the desktop, below your windows, unless kept above. Drag one to move it, double-click for the menu panel, right-click to change its style, size or provider, or to remove it.",
+                "卡片默认位于桌面、在窗口之下，可改为置顶。拖动移动位置，双击打开下拉面板，右键可更换样式、尺寸、服务商或删除。"))
+        }
+    }
+}
+
+/// One desktop card in Settings: its style, size and subject, and a way to
+/// remove it.
+private struct DeskCardSettingsRow: View {
+    @ObservedObject var store: UsageStore
+    let card: DeskCard
+    let number: Int
+
+    var body: some View {
+        SettingRow(L10n.t("Card \(number)", "卡片 \(number)")) {
+            HStack(spacing: Design.space2) {
+                Picker("", selection: Binding(
+                    get: { card.style },
+                    set: { style in store.updateDeskCard(card.id) { $0.style = style } }))
+                {
+                    ForEach(DeskCardStyle.allCases) { Text($0.displayName).tag($0) }
+                }
+                .labelsHidden()
+                .frame(width: 118)
+
+                GlassSegmented(
+                    options: DeskCardSize.allCases.map { (value: $0, label: $0.displayName) },
+                    selection: card.size,
+                    onSelect: { size in store.updateDeskCard(card.id) { $0.size = size } })
+                .frame(width: 120)
+
+                if card.style.readsLogs {
+                    Picker("", selection: Binding(
+                        get: { card.source?.rawValue ?? "" },
+                        set: { raw in store.updateDeskCard(card.id) { $0.source = CostSource(rawValue: raw) } }))
+                    {
+                        Text(L10n.t("Every CLI", "全部来源")).tag("")
+                        ForEach(CostSource.allCases, id: \.self) { Text($0.displayName).tag($0.rawValue) }
+                    }
+                    .labelsHidden()
+                    .frame(width: 128)
+                } else {
+                    Picker("", selection: Binding(
+                        get: { card.provider?.rawValue ?? "" },
+                        set: { raw in store.updateDeskCard(card.id) { $0.provider = ProviderID(rawValue: raw) } }))
+                    {
+                        Text(card.style.singleProvider ? L10n.t("Follow menu bar", "跟随菜单栏") : L10n.t("Every provider", "全部服务商")).tag("")
+                        ForEach(store.enabled) { Text($0.displayName).tag($0.rawValue) }
+                    }
+                    .labelsHidden()
+                    .frame(width: 128)
+                }
+
+                Button {
+                    store.removeDeskCard(card.id)
+                } label: {
+                    Image(systemName: "trash")
+                }
+                .glassAction(compact: true)
+                .help(L10n.t("Remove this card", "删除这张卡片"))
+                Spacer(minLength: 0)
+            }
         }
     }
 }

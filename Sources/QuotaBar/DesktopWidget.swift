@@ -2,36 +2,60 @@ import AppKit
 import SwiftUI
 import QuotaCore
 
-/// A card that lives on the desktop, independent of the menu bar.
+/// The cards on the desktop, each in its own panel.
 ///
-/// Sits at desktop level by default — above the wallpaper and icons, below
-/// every window. That is what makes it a widget rather than an overlay: it is
-/// there when you clear the screen, and out of the way when you do not.
+/// Desktop level by default — above the wallpaper and icons, below every
+/// window. That is what makes them widgets rather than overlays: there when
+/// you clear the screen, and out of the way when you do not. Each card keeps
+/// its own style, size, subject and place; right-click one to change it.
 @MainActor
 final class DesktopWidgetCoordinator {
-    private var panel: NSPanel?
-    private var lastSize = NSSize(width: 240, height: 160)
+    private var panels: [String: NSPanel] = [:]
+    private weak var store: UsageStore?
 
     func sync(store: UsageStore) {
-        if store.widgetEnabled {
-            show(store: store)
-            applyLevel()
-            // The screen may have changed under it.
-            reposition()
-        } else {
-            hide()
+        self.store = store
+        migrateIfNeeded(store)
+        guard store.widgetEnabled else { return hide() }
+        let cards = store.experience.deskCards
+        for (id, panel) in panels where !cards.contains(where: { $0.id == id }) {
+            panel.orderOut(nil)
+            panels[id] = nil
+        }
+        for card in cards {
+            let panel = panels[card.id] ?? makePanel(card: card, store: store)
+            panels[card.id] = panel
+            if let host = panel.contentView as? NSHostingView<DeskCardHost> {
+                host.rootView = DeskCardHost(store: store, card: card, coordinator: self)
+            }
+            applyLevel(panel)
+            place(panel, card: card)
+            panel.orderFrontRegardless()
         }
     }
 
     func hide() {
-        panel?.orderOut(nil)
-        panel = nil
+        for panel in panels.values { panel.orderOut(nil) }
+        panels.removeAll()
     }
 
-    private func show(store: UsageStore) {
-        guard panel == nil else { return }
+    /// A first 0.5 launch: whoever had the card on keeps a card where it was —
+    /// the recommended pair, the main provider big and spend beneath it.
+    private func migrateIfNeeded(_ store: UsageStore) {
+        guard !store.experience.deskCardsMigrated else { return }
+        let origin = ConfigStore.shared.widgetOrigin
+        let pinned = ConfigStore.shared.widgetScope == .pinned ? ConfigStore.shared.widgetPin : nil
+        store.updateExperience { prefs in
+            if prefs.deskCards.isEmpty {
+                prefs.deskCards = DeskCard.defaults(provider: pinned, x: origin.x, y: min(origin.y, 0.55))
+            }
+            prefs.deskCardsMigrated = true
+        }
+    }
+
+    private func makePanel(card: DeskCard, store: UsageStore) -> NSPanel {
         let panel = NSPanel(
-            contentRect: NSRect(origin: .zero, size: lastSize),
+            contentRect: NSRect(x: 0, y: 0, width: card.size.width, height: card.size.height),
             styleMask: [.borderless, .nonactivatingPanel],
             backing: .buffered,
             defer: false)
@@ -43,74 +67,152 @@ final class DesktopWidgetCoordinator {
         panel.isMovable = false
         // Never take focus from whatever the user is actually working in.
         panel.becomesKeyOnlyIfNeeded = true
-        panel.contentView = NSHostingView(
-            rootView: DesktopWidgetView(store: store, coordinator: self))
-        self.panel = panel
-        applyLevel()
-        reposition()
-        panel.orderFrontRegardless()
+        let host = NSHostingView(rootView: DeskCardHost(store: store, card: card, coordinator: self))
+        host.sizingOptions = [.intrinsicContentSize]
+        panel.contentView = host
+        return panel
     }
 
-    private func applyLevel() {
-        guard let panel else { return }
+    private func applyLevel(_ panel: NSPanel) {
         panel.level = ConfigStore.shared.widgetAlwaysOnTop
             ? .floating
-            // Just above the desktop icons, so the widget is part of the
+            // Just above the desktop icons, so the card is part of the
             // desktop rather than something floating over the work.
             : NSWindow.Level(Int(CGWindowLevelForKey(.desktopIconWindow)) + 1)
     }
 
-    func setContentSize(_ size: CGSize) {
-        guard size.width > 1, size.height > 1 else { return }
-        lastSize = NSSize(width: size.width, height: size.height)
-        reposition()
-    }
-
-    /// Places the card from the stored fractions, keeping it fully on screen.
-    func reposition() {
-        guard let panel, let screen = EdgeDockCoordinator.hostScreen else { return }
+    /// Places a card from its stored fractions, fully on screen.
+    private func place(_ panel: NSPanel, card: DeskCard) {
+        guard let screen = EdgeDockCoordinator.hostScreen else { return }
         let visible = screen.visibleFrame
-        let origin = ConfigStore.shared.widgetOrigin
-        let x = visible.minX + (visible.width - lastSize.width) * CGFloat(origin.x)
-        // Stored top-down; AppKit measures from the bottom.
-        let y = visible.maxY - lastSize.height - (visible.height - lastSize.height) * CGFloat(origin.y)
-        panel.setFrame(NSRect(x: x, y: y, width: lastSize.width, height: lastSize.height),
-                       display: true)
+        let size = panel.contentView?.fittingSize ?? NSSize(width: card.size.width, height: card.size.height)
+        let width = max(size.width, 40), height = max(size.height, 40)
+        let x = visible.minX + (visible.width - width) * CGFloat(card.x)
+        let y = visible.maxY - height - (visible.height - height) * CGFloat(card.y)
+        panel.setFrame(NSRect(x: x, y: y, width: width, height: height), display: true)
     }
 
-    func move(by translation: CGSize) {
-        guard let panel, let screen = EdgeDockCoordinator.hostScreen else { return }
+    func move(_ cardID: String, by translation: CGSize) {
+        guard let panel = panels[cardID], let screen = EdgeDockCoordinator.hostScreen else { return }
         let visible = screen.visibleFrame
         var frame = panel.frame
-        frame.origin.x = min(max(frame.origin.x + translation.width, visible.minX),
-                             visible.maxX - frame.width)
-        frame.origin.y = min(max(frame.origin.y - translation.height, visible.minY),
-                             visible.maxY - frame.height)
+        frame.origin.x = min(max(frame.origin.x + translation.width, visible.minX), visible.maxX - frame.width)
+        frame.origin.y = min(max(frame.origin.y - translation.height, visible.minY), visible.maxY - frame.height)
         panel.setFrame(frame, display: true)
     }
 
-    func persistPosition() {
-        guard let panel, let screen = EdgeDockCoordinator.hostScreen else { return }
+    func persist(_ cardID: String) {
+        guard let panel = panels[cardID], let screen = EdgeDockCoordinator.hostScreen, let store else { return }
         let visible = screen.visibleFrame
-        let travelX = max(1, visible.width - panel.frame.width)
-        let travelY = max(1, visible.height - panel.frame.height)
-        ConfigStore.shared.widgetOrigin = (
-            x: Double((panel.frame.minX - visible.minX) / travelX),
-            y: Double((visible.maxY - panel.frame.maxY) / travelY))
+        let x = Double((panel.frame.minX - visible.minX) / max(1, visible.width - panel.frame.width))
+        let y = Double((visible.maxY - panel.frame.maxY) / max(1, visible.height - panel.frame.height))
+        store.updateDeskCard(cardID) { $0.x = min(max(x, 0), 1); $0.y = min(max(y, 0), 1) }
     }
 }
 
-struct DesktopWidgetView: View {
+/// A card with what makes it a desktop card: drag to move, double-click for
+/// the menu panel, right-click to change it.
+struct DeskCardHost: View {
     @ObservedObject var store: UsageStore
-    var coordinator: DesktopWidgetCoordinator
+    let card: DeskCard
+    let coordinator: DesktopWidgetCoordinator
     @State private var dragging = false
 
-    private var density: WidgetDensity { store.widgetDensity }
+    var body: some View {
+        DeskCardView(store: store, card: card)
+            .scaleEffect(dragging ? 1.02 : 1)
+            .animation(Motion.animation(.easeOut(duration: 0.12)), value: dragging)
+            .fixedSize()
+            .contentShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
+            .onTapGesture(count: 2) { MenuPanelController.shared.open(from: nil) }
+            .gesture(
+                DragGesture(minimumDistance: 2)
+                    .onChanged {
+                        dragging = true
+                        coordinator.move(card.id, by: $0.translation)
+                    }
+                    .onEnded { _ in
+                        dragging = false
+                        coordinator.persist(card.id)
+                    })
+            .contextMenu { DeskCardMenu(store: store, card: card) }
+            .honoursReducedMotion()
+    }
+}
+
+/// Right-click on a card: its style, size and subject; another card; this
+/// one gone.
+struct DeskCardMenu: View {
+    @ObservedObject var store: UsageStore
+    let card: DeskCard
+
+    var body: some View {
+        Menu(L10n.t("Style", "样式")) {
+            ForEach(DeskCardStyle.allCases) { style in
+                Toggle(style.displayName, isOn: Binding(
+                    get: { card.style == style },
+                    set: { if $0 { store.updateDeskCard(card.id) { $0.style = style } } }))
+            }
+        }
+        Menu(L10n.t("Size", "尺寸")) {
+            ForEach(DeskCardSize.allCases) { size in
+                Toggle(size.displayName, isOn: Binding(
+                    get: { card.size == size },
+                    set: { if $0 { store.updateDeskCard(card.id) { $0.size = size } } }))
+            }
+        }
+        if card.style.readsLogs {
+            Menu(L10n.t("Counts", "统计来源")) {
+                Toggle(L10n.t("Every CLI", "全部"), isOn: Binding(
+                    get: { card.source == nil },
+                    set: { if $0 { store.updateDeskCard(card.id) { $0.source = nil } } }))
+                ForEach(CostSource.allCases, id: \.self) { source in
+                    Toggle(source.displayName, isOn: Binding(
+                        get: { card.source == source },
+                        set: { if $0 { store.updateDeskCard(card.id) { $0.source = source } } }))
+                }
+            }
+        } else {
+            Menu(L10n.t("Provider", "服务商")) {
+                Toggle(card.style.singleProvider ? L10n.t("Follow the menu bar", "跟随菜单栏选中的") : L10n.t("Every provider", "全部服务商"), isOn: Binding(
+                    get: { card.provider == nil },
+                    set: { if $0 { store.updateDeskCard(card.id) { $0.provider = nil } } }))
+                ForEach(store.enabled) { id in
+                    Toggle(id.displayName, isOn: Binding(
+                        get: { card.provider == id },
+                        set: { if $0 { store.updateDeskCard(card.id) { $0.provider = id } } }))
+                }
+            }
+        }
+        Divider()
+        Button(L10n.t("Add a Card", "添加卡片")) { store.addDeskCard(near: card) }
+        Toggle(L10n.t("Keep Above Other Windows", "置于其他窗口之上"), isOn: Binding(
+            get: { store.widgetAlwaysOnTop },
+            set: { store.setWidgetAlwaysOnTop($0) }))
+        Button(L10n.t("Refresh Everything", "全部刷新")) { store.forceRefreshAll() }
+        Divider()
+        Button(L10n.t("Remove This Card", "删除这张卡片"), role: .destructive) { store.removeDeskCard(card.id) }
+        Button(L10n.t("Settings…", "设置…")) { SettingsWindow.open() }
+    }
+}
+
+/// The card from before 0.5 — rings, rings with figures, or a row per
+/// provider — now one of the desktop card styles, sized by its card.
+struct DesktopWidgetView: View {
+    @ObservedObject var store: UsageStore
+    var density: WidgetDensity
+    var providerList: [ProviderID]
+
+    init(store: UsageStore, density: WidgetDensity, providers: [ProviderID]) {
+        self.store = store
+        self.density = density
+        self.providerList = providers
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: Design.space3) {
             header
-            if store.widgetProviders.isEmpty {
+            if providerList.isEmpty {
                 Text(L10n.t("No providers enabled.", "尚未启用任何服务商。"))
                     .font(.caption)
                     .foregroundStyle(.white.opacity(0.6))
@@ -127,25 +229,7 @@ struct DesktopWidgetView: View {
             RoundedRectangle(cornerRadius: Design.radiusPanel + 4, style: .continuous)
                 .stroke(Color.white.opacity(0.10), lineWidth: 1))
         .environment(\.colorScheme, .dark)
-        .scaleEffect(dragging ? 1.02 : 1)
-        .animation(.easeOut(duration: 0.12), value: dragging)
         .fixedSize()
-        .background(
-            GeometryReader { proxy in
-                Color.clear.onChange(of: proxy.size, initial: true) { _, size in
-                    coordinator.setContentSize(size)
-                }
-            })
-        .gesture(
-            DragGesture(minimumDistance: 2)
-                .onChanged {
-                    dragging = true
-                    coordinator.move(by: $0.translation)
-                }
-                .onEnded { _ in
-                    dragging = false
-                    coordinator.persistPosition()
-                })
     }
 
     private var header: some View {
@@ -163,7 +247,7 @@ struct DesktopWidgetView: View {
     }
 
     private var latestFetch: Date? {
-        store.widgetProviders.compactMap { store.states[$0]?.snapshot?.fetchedAt }.max()
+        providerList.compactMap { store.states[$0]?.snapshot?.fetchedAt }.max()
     }
 
     @ViewBuilder
@@ -289,8 +373,8 @@ struct DesktopWidgetView: View {
 
     /// In the order enabled, or closest to the limit first when asked.
     private var providers: [ProviderID] {
-        guard store.experience.widgetSortsByUrgency else { return store.widgetProviders }
-        return store.widgetProviders.sorted { (percent($0) ?? -1) > (percent($1) ?? -1) }
+        guard store.experience.widgetSortsByUrgency else { return providerList }
+        return providerList.sorted { (percent($0) ?? -1) > (percent($1) ?? -1) }
     }
 
     private func tint(_ percent: Double) -> Color {

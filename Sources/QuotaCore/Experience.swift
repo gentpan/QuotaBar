@@ -210,6 +210,9 @@ public struct ExperiencePrefs: Codable, Equatable, Sendable {
     public var islandChart: IslandChartStyle = .stepped
     /// The desktop card lists the provider closest to its limit first.
     public var widgetSortsByUrgency: Bool = false
+    /// The cards on the desktop. Empty until the first 0.5 launch fills it.
+    public var deskCards: [DeskCard] = []
+    public var deskCardsMigrated: Bool = false
 
     // Privacy and system
     public var hideWhenSharing: Bool = false
@@ -233,6 +236,7 @@ public struct ExperiencePrefs: Codable, Equatable, Sendable {
         case resetTimeFormat, clockStyle, alwaysShowPace, urgencyStyle, tokenCounting, currency
         case panelDensity, showSpendCard, panelTranslucent, spendMetric, expandedCards, welcomeDismissed, providersDetected
         case reduceMotion, islandGlow, lowPowerGlow, islandAutoPeek, islandChart, widgetSortsByUrgency
+        case deskCards, deskCardsMigrated
         case hideWhenSharing, hotkey, paceAlerts, localAPI, proxy, betaUpdates
         case shareSignature, shareShowsSignature, shareCardShownForVersion
     }
@@ -268,6 +272,8 @@ public struct ExperiencePrefs: Codable, Equatable, Sendable {
         islandAutoPeek = value(.islandAutoPeek, d.islandAutoPeek)
         islandChart = choice(.islandChart, d.islandChart)
         widgetSortsByUrgency = value(.widgetSortsByUrgency, d.widgetSortsByUrgency)
+        deskCards = value(.deskCards, d.deskCards)
+        deskCardsMigrated = value(.deskCardsMigrated, d.deskCardsMigrated)
         hideWhenSharing = value(.hideWhenSharing, d.hideWhenSharing)
         hotkey = try? c.decodeIfPresent(Hotkey.self, forKey: .hotkey)
         paceAlerts = value(.paceAlerts, d.paceAlerts)
