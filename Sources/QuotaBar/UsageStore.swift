@@ -614,10 +614,35 @@ final class UsageStore: ObservableObject {
     var widgetPin: ProviderID? { config.widgetPin }
     var widgetScope: WidgetScope { config.widgetScope }
 
-    var islandProviders: [ProviderID] { config.providers(pinnedTo: islandPin) }
-    var dockProviders: [ProviderID] { config.providers(pinnedTo: dockPin) }
+    /// What each surface shows: its pinned provider alone when it has one,
+    /// otherwise every enabled provider not hidden there.
+    var islandProviders: [ProviderID] { surfaceProviders(.island, pin: islandPin) }
+    var dockProviders: [ProviderID] { surfaceProviders(.dock, pin: dockPin) }
+    var panelProviders: [ProviderID] { experience.visible(enabled, on: .panel) }
     var widgetProviders: [ProviderID] {
-        widgetScope == .pinned ? config.providers(pinnedTo: widgetPin) : enabled
+        widgetScope == .pinned ? config.providers(pinnedTo: widgetPin) : experience.visible(enabled, on: .desktop)
+    }
+
+    private func surfaceProviders(_ surface: DisplaySurface, pin: ProviderID?) -> [ProviderID] {
+        if let pin, enabled.contains(pin) { return [pin] }
+        return experience.visible(enabled, on: surface)
+    }
+
+    /// Hides a provider from one surface or shows it there again. It stays
+    /// enabled either way.
+    func setHidden(_ hidden: Bool, _ id: ProviderID, on surface: DisplaySurface) {
+        updateExperience { $0.setHidden(hidden, id, on: surface) }
+        switch surface {
+        case .dock: dockRevision &+= 1
+        case .island: islandRevision &+= 1
+        case .desktop: widgetRevision &+= 1
+        case .panel: break
+        }
+    }
+
+    /// Enabled providers hidden from a surface.
+    func hiddenProviders(on surface: DisplaySurface) -> [ProviderID] {
+        enabled.filter { experience.isHidden($0, on: surface) }
     }
 
     func setIslandPin(_ id: ProviderID?) {

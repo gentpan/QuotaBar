@@ -50,10 +50,15 @@ English and Simplified Chinese and follows the system language unless you pick o
 <!-- changelog:start -->
 <!-- Generated from CHANGELOG.md by Scripts/sync_changelog.py. Do not edit by hand. -->
 
-Latest release **0.5.0** (2026-09-13) · **5** changes in development · [full changelog](CHANGELOG.md) (kept in Chinese)
+Latest release **0.5.0** (2026-09-13) · **7** changes in development · [full changelog](CHANGELOG.md) (kept in Chinese)
 
 <details open>
-<summary><b>2026-09-13</b> · Unreleased · 4 style · 1 fixed</summary>
+<summary><b>2026-09-13</b> · Unreleased · 2 added · 4 style · 1 fixed</summary>
+
+**Added**
+
+- 服务商可以按位置隐藏，而不必停用：下拉面板、停靠条、刘海岛、桌面卡片各自决定显示哪些服务商。隐藏的服务商仍会读取数据、发提醒、计入花费，停用才会停止读取。设置 → 展示方式新增「各处显示的服务商」，每个服务商一行，点位置标签即可显示或隐藏；也可以右键下拉面板里的卡片选「在下拉面板中隐藏」，右键停靠条图标选「在停靠条中隐藏」。
+- 下拉面板底部在有隐藏的服务商时显示「N 个已在面板隐藏」和它们的图标，点「显示」可逐个恢复或打开设置管理；停靠条右键菜单也列出已隐藏的服务商。
 
 **Style**
 

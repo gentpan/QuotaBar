@@ -140,6 +140,9 @@ struct SettingsView: View {
         .background(chrome)
         .environment(\.glassDisabled, isRendering)
         .tint(Design.accent)
+        .onReceive(NotificationCenter.default.publisher(for: SettingsWindow.showSection)) { note in
+            if let raw = note.object as? String, let wanted = SettingsSection(rawValue: raw) { section = wanted }
+        }
     }
 
     private var backdrop: some View {
@@ -1231,6 +1234,21 @@ struct PresentationPane: View {
             screens = NSScreen.screens
         }
 
+        SettingsCard(L10n.t("What each place shows", "各处显示的服务商")) {
+            if store.enabled.isEmpty {
+                SettingFootnote(L10n.t("No providers are on.", "还没有开启服务商。"))
+            } else {
+                VStack(spacing: Design.space1) {
+                    ForEach(store.enabled) { id in
+                        SurfaceVisibilityRow(store: store, id: id)
+                    }
+                }
+            }
+            SettingFootnote(L10n.t(
+                "Hiding a provider only takes it off that place: it is still read, still alerts, and still counts in spend. Turning it off in Providers stops reading it.",
+                "隐藏只是不在那里显示：该服务商仍会读取数据、发提醒、计入花费。在「服务商」里停用才会停止读取。"))
+        }
+
         SettingsCard(L10n.t("Desktop cards", "桌面卡片")) {
             SettingToggle(
                 L10n.t("Show on the desktop", "在桌面显示"),
@@ -1820,5 +1838,51 @@ private struct ProxyRow: View {
         invalid = !trimmed.isEmpty && ProxySpec(trimmed) == nil
         guard !invalid else { return }
         store.updateExperience { $0.proxy = trimmed }
+    }
+}
+
+/// One enabled provider and the places it is shown: a chip per surface, lit
+/// where it shows, dimmed where it is hidden.
+private struct SurfaceVisibilityRow: View {
+    @ObservedObject var store: UsageStore
+    let id: ProviderID
+
+    var body: some View {
+        HStack(spacing: Design.space2) {
+            ProviderGlyph(id: id, size: 16)
+                .frame(width: 20)
+            Text(id.displayName)
+                .font(.system(size: 13))
+                .lineLimit(1)
+            Spacer(minLength: Design.space2)
+            ForEach(DisplaySurface.allCases) { surface in
+                let shown = !store.experience.isHidden(id, on: surface)
+                Button {
+                    withAnimation(Motion.animation(.easeOut(duration: 0.15))) {
+                        store.setHidden(shown, id, on: surface)
+                    }
+                } label: {
+                    HStack(spacing: 4) {
+                        Image(systemName: shown ? "eye" : "eye.slash")
+                            .font(.system(size: 10, weight: .medium))
+                        Text(surface.displayName)
+                            .font(.system(size: 11, weight: shown ? .medium : .regular))
+                    }
+                    .foregroundStyle(shown ? Design.ink : Color.secondary)
+                    .padding(.horizontal, 8)
+                    .frame(height: 24)
+                    .background(
+                        Capsule().fill(shown ? Design.accent : Design.fieldFill))
+                    .overlay(
+                        Capsule().strokeBorder(shown ? Color.clear : Design.glassEdge, lineWidth: 1))
+                    .contentShape(Capsule())
+                }
+                .buttonStyle(.plain)
+                .help(shown
+                    ? L10n.t("Shown in \(surface.displayName) — click to hide", "显示在\(surface.displayName) · 点击隐藏")
+                    : L10n.t("Hidden from \(surface.displayName) — click to show", "已在\(surface.displayName)隐藏 · 点击显示"))
+            }
+        }
+        .frame(minHeight: 30)
     }
 }

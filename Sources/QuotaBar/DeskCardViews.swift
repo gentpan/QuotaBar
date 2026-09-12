@@ -151,14 +151,15 @@ extension UsageStore {
     /// menu bar follows, else the one closest to its limit.
     func deskProvider(_ card: DeskCard) -> ProviderID? {
         if let provider = card.provider, enabled.contains(provider) { return provider }
-        if let selected, enabled.contains(selected) { return selected }
-        return enabled.max { (headlinePercent(for: $0) ?? -1) < (headlinePercent(for: $1) ?? -1) }
+        let shown = experience.visible(enabled, on: .desktop)
+        if let selected, shown.contains(selected) { return selected }
+        return shown.max { (headlinePercent(for: $0) ?? -1) < (headlinePercent(for: $1) ?? -1) }
     }
 
     /// The providers a multi-provider card shows.
     func deskProviders(_ card: DeskCard) -> [ProviderID] {
         if let provider = card.provider, enabled.contains(provider) { return [provider] }
-        return enabled
+        return experience.visible(enabled, on: .desktop)
     }
 
     func deskWindows(_ id: ProviderID) -> (lead: UsageWindow?, other: UsageWindow?, all: [UsageWindow]) {

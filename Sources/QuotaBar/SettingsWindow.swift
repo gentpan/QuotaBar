@@ -20,6 +20,18 @@ enum SettingsWindow {
         self.store = store
     }
 
+    /// Posted with a `SettingsSection` raw value to turn the open window to it.
+    static let showSection = Notification.Name("bar.quota.settings.showSection")
+
+    /// Opens Settings at one section.
+    static func open(section: SettingsSection) {
+        open()
+        // After the window exists and its view is listening.
+        DispatchQueue.main.async {
+            NotificationCenter.default.post(name: showSection, object: section.rawValue)
+        }
+    }
+
     static func open() {
         guard let store else { return }
         let window = self.window ?? make(store: store)

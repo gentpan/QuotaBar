@@ -41,8 +41,9 @@ final class IslandCoordinator {
     /// that says which, glows green, and folds away after a few seconds.
     /// Nothing happens while the panel is open — its rows say it instead.
     func playReset(_ events: [ResetEvent], store: UsageStore) {
-        guard panel != nil, !expanded, !events.isEmpty else { return }
-        bridge.banner = ResetBanner(events: events)
+        let shown = events.filter { store.islandProviders.contains($0.provider) }
+        guard panel != nil, !expanded, !shown.isEmpty else { return }
+        bridge.banner = ResetBanner(events: shown)
         bannerShown = true
         layout(expanded: false, animated: true)
         bannerTask?.cancel()

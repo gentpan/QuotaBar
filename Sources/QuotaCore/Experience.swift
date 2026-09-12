@@ -157,6 +157,26 @@ public struct PaceAlertPrefs: Codable, Equatable, Sendable {
     }
 }
 
+/// The places a provider's figures are shown. Hiding a provider from one keeps
+/// it enabled — read, alerted on and counted — just not drawn there.
+public enum DisplaySurface: String, Codable, CaseIterable, Sendable, Identifiable {
+    case panel
+    case dock
+    case island
+    case desktop
+
+    public var id: String { rawValue }
+
+    public var displayName: String {
+        switch self {
+        case .panel: L10n.t("Panel", "下拉面板")
+        case .dock: L10n.t("Dock", "停靠条")
+        case .island: L10n.t("Island", "刘海岛")
+        case .desktop: L10n.t("Desktop", "桌面卡片")
+        }
+    }
+}
+
 /// A global shortcut: a Carbon virtual key code and Carbon modifier mask.
 public struct Hotkey: Codable, Equatable, Sendable {
     public var keyCode: UInt32
@@ -223,6 +243,9 @@ public struct ExperiencePrefs: Codable, Equatable, Sendable {
     public var resetEffects: Bool = true
     /// Whether a reset also raises a system notification.
     public var resetNotify: ResetNotifyMode = .afterHeavyUse
+    /// Providers hidden per surface, by raw value: still enabled, still read,
+    /// only not shown there.
+    public var hiddenProviders: [String: [String]] = [:]
     /// Serve 127.0.0.1:6736/v1/limits for other local tools.
     public var localAPI: Bool = false
     /// "http://host:port" or "socks5://host:port"; empty = direct.
@@ -243,7 +266,7 @@ public struct ExperiencePrefs: Codable, Equatable, Sendable {
         case reduceMotion, islandGlow, lowPowerGlow, islandAutoPeek, islandChart, widgetSortsByUrgency
         case deskCards, deskCardsMigrated
         case hideWhenSharing, hotkey, paceAlerts, localAPI, proxy, betaUpdates
-        case resetEffects, resetNotify
+        case resetEffects, resetNotify, hiddenProviders
         case shareSignature, shareShowsSignature, shareCardShownForVersion
     }
 
@@ -285,12 +308,32 @@ public struct ExperiencePrefs: Codable, Equatable, Sendable {
         paceAlerts = value(.paceAlerts, d.paceAlerts)
         resetEffects = value(.resetEffects, d.resetEffects)
         resetNotify = choice(.resetNotify, d.resetNotify)
+        hiddenProviders = value(.hiddenProviders, d.hiddenProviders)
         localAPI = value(.localAPI, d.localAPI)
         proxy = value(.proxy, d.proxy)
         betaUpdates = value(.betaUpdates, d.betaUpdates)
         shareSignature = value(.shareSignature, d.shareSignature)
         shareShowsSignature = value(.shareShowsSignature, d.shareShowsSignature)
         shareCardShownForVersion = value(.shareCardShownForVersion, d.shareCardShownForVersion)
+    }
+}
+
+extension ExperiencePrefs {
+    public func isHidden(_ id: ProviderID, on surface: DisplaySurface) -> Bool {
+        hiddenProviders[surface.rawValue]?.contains(id.rawValue) ?? false
+    }
+
+    public mutating func setHidden(_ hidden: Bool, _ id: ProviderID, on surface: DisplaySurface) {
+        var list = hiddenProviders[surface.rawValue] ?? []
+        list.removeAll { $0 == id.rawValue }
+        if hidden { list.append(id.rawValue) }
+        hiddenProviders[surface.rawValue] = list.isEmpty ? nil : list
+    }
+
+    /// `ids` in order, without the ones hidden from `surface`.
+    public func visible(_ ids: [ProviderID], on surface: DisplaySurface) -> [ProviderID] {
+        let hidden = Set(hiddenProviders[surface.rawValue] ?? [])
+        return ids.filter { !hidden.contains($0.rawValue) }
     }
 }
 

@@ -197,8 +197,12 @@ struct MenuPanelView: View {
                     if store.enabled.isEmpty {
                         emptyState
                     }
-                    ForEach(store.enabled) { id in
+                    ForEach(store.panelProviders) { id in
                         ProviderCardView(store: store, id: id)
+                    }
+                    let hidden = store.hiddenProviders(on: .panel)
+                    if !hidden.isEmpty {
+                        HiddenProvidersNote(store: store, hidden: hidden)
                     }
                 }
                 .padding(10)
@@ -494,4 +498,49 @@ final class ClosureTarget: NSObject {
     let action: () -> Void
     init(_ action: @escaping () -> Void) { self.action = action }
     @MainActor @objc func fire() { action() }
+}
+
+/// Under the cards, when some are hidden from the panel: how many, their
+/// marks, and a way to show them again.
+struct HiddenProvidersNote: View {
+    @ObservedObject var store: UsageStore
+    let hidden: [ProviderID]
+
+    var body: some View {
+        HStack(spacing: 6) {
+            Image(systemName: "eye.slash")
+                .font(.system(size: 10, weight: .medium))
+            Text(L10n.t("\(hidden.count) hidden here", "\(hidden.count) 个已在面板隐藏"))
+                .font(.system(size: 11))
+            HStack(spacing: -3) {
+                ForEach(hidden.prefix(6)) { id in
+                    ProviderGlyph(id: id, size: 12, tint: .white.opacity(0.7))
+                        .frame(width: 16, height: 16)
+                        .background(Circle().fill(Color.white.opacity(0.08)))
+                }
+            }
+            Spacer(minLength: 4)
+            Menu {
+                ForEach(hidden) { id in
+                    Button(L10n.t("Show \(id.displayName)", "显示 \(id.displayName)")) {
+                        withAnimation(Motion.animation(Motion.spring)) { store.setHidden(false, id, on: .panel) }
+                    }
+                }
+                Divider()
+                Button(L10n.t("Manage in Settings…", "在设置中管理…")) {
+                    MenuPanelController.shared.close()
+                    SettingsWindow.open(section: .presentation)
+                }
+            } label: {
+                Text(L10n.t("Show", "显示"))
+                    .font(.system(size: 11, weight: .semibold))
+            }
+            .menuStyle(.borderlessButton)
+            .menuIndicator(.hidden)
+            .fixedSize()
+        }
+        .foregroundStyle(.white.opacity(0.5))
+        .padding(.horizontal, 6)
+        .padding(.top, 2)
+    }
 }

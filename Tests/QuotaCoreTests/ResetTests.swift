@@ -90,3 +90,31 @@ final class ResetDetectorTests: XCTestCase {
         XCTAssertEqual(off.resetNotify, .off)
     }
 }
+
+final class SurfaceVisibilityTests: XCTestCase {
+    func testHidingIsPerSurfaceAndKeepsOrder() {
+        var prefs = ExperiencePrefs()
+        let enabled: [ProviderID] = [.codex, .claude, .cursor, .grok]
+        prefs.setHidden(true, .claude, on: .panel)
+        prefs.setHidden(true, .grok, on: .panel)
+        XCTAssertEqual(prefs.visible(enabled, on: .panel), [.codex, .cursor])
+        XCTAssertEqual(prefs.visible(enabled, on: .dock), enabled)
+        XCTAssertTrue(prefs.isHidden(.claude, on: .panel))
+        XCTAssertFalse(prefs.isHidden(.claude, on: .dock))
+        prefs.setHidden(true, .claude, on: .panel)
+        XCTAssertEqual(prefs.hiddenProviders["panel"], ["grok", "claude"])
+        prefs.setHidden(false, .claude, on: .panel)
+        prefs.setHidden(false, .grok, on: .panel)
+        XCTAssertNil(prefs.hiddenProviders["panel"])
+    }
+
+    func testHiddenProvidersSurviveCoding() throws {
+        var prefs = ExperiencePrefs()
+        prefs.setHidden(true, .cursor, on: .dock)
+        let data = try JSONEncoder().encode(prefs)
+        let back = try JSONDecoder().decode(ExperiencePrefs.self, from: data)
+        XCTAssertTrue(back.isHidden(.cursor, on: .dock))
+        let odd = try JSONDecoder().decode(ExperiencePrefs.self, from: Data(#"{"hiddenProviders":"nonsense"}"#.utf8))
+        XCTAssertTrue(odd.hiddenProviders.isEmpty)
+    }
+}

@@ -14,6 +14,8 @@ import QuotaCore
 @MainActor
 final class EdgeDockCoordinator {
     private var panel: NSPanel?
+    /// For what the strip lists: its height follows the providers shown.
+    private weak var store: UsageStore?
     /// The callout lives in its own panel. Drawing it inside the strip would
     /// need a panel wide enough to hold it, and that panel's empty region
     /// would swallow clicks meant for whatever is underneath.
@@ -304,6 +306,7 @@ final class EdgeDockCoordinator {
     }
 
     private func show(store: UsageStore) {
+        self.store = store
         guard panel == nil else { return }
         let panel = NSPanel(
             contentRect: NSRect(origin: .zero, size: NSSize(width: Self.width, height: 200)),
@@ -378,7 +381,7 @@ final class EdgeDockCoordinator {
         // and reports *that*. Recording it would make the next reveal aim at
         // the handle's height and then correct itself.
         guard expanded || alwaysVisible else { return }
-        let count = ConfigStore.shared.providers(pinnedTo: ConfigStore.shared.dockPin).count
+        let count = store?.dockProviders.count ?? 0
         let measured = max(80, height)
         guard measuredHeights[count] != measured else { return }
         measuredHeights[count] = measured
@@ -416,7 +419,7 @@ final class EdgeDockCoordinator {
         let config = ConfigStore.shared
         let visible = screen.visibleFrame
         let panelWidth = Self.width
-        let panelHeight = stripHeight(providers: config.providers(pinnedTo: config.dockPin).count)
+        let panelHeight = stripHeight(providers: store?.dockProviders.count ?? 0)
         let x = config.dockEdge == .right ? visible.maxX - panelWidth : visible.minX
 
         // dockPosition is a fraction of the handle's travel from the top;
@@ -572,6 +575,14 @@ struct EdgeDockView: View {
                 set: { store.setDockAlwaysVisible($0) }))
             if store.dockPin != nil {
                 Button(L10n.t("Show every provider", "显示全部服务商")) { store.setDockPin(nil) }
+            }
+            let hiddenHere = store.hiddenProviders(on: .dock)
+            if !hiddenHere.isEmpty {
+                Menu(L10n.t("Hidden from the dock (\(hiddenHere.count))", "已隐藏的服务商（\(hiddenHere.count)）")) {
+                    ForEach(hiddenHere) { id in
+                        Button(L10n.t("Show \(id.displayName)", "显示 \(id.displayName)")) { store.setHidden(false, id, on: .dock) }
+                    }
+                }
             }
             Button(L10n.t("Settings…", "设置…")) { SettingsWindow.open() }
             Divider()
@@ -793,6 +804,21 @@ struct EdgeDockView: View {
                     .scaleEffect(playing?.provider == id && !Motion.reduced ? 1.06 : 1, anchor: .top)
                     .animation(Motion.animation(.spring(response: 0.4, dampingFraction: 0.5)), value: playing?.id)
                     .onContinuousHover { phase in ringHover(id, phase) }
+                    .contextMenu {
+                        Button(L10n.t("Refresh \(id.displayName)", "刷新 \(id.displayName)")) { store.refresh(id) }
+                        Button(L10n.t("Hide from the dock", "在停靠条中隐藏")) { store.setHidden(true, id, on: .dock) }
+                        let hiddenHere = store.hiddenProviders(on: .dock)
+                        if !hiddenHere.isEmpty {
+                            Menu(L10n.t("Hidden from the dock (\(hiddenHere.count))", "已隐藏的服务商（\(hiddenHere.count)）")) {
+                                ForEach(hiddenHere) { hidden in
+                                    Button(L10n.t("Show \(hidden.displayName)", "显示 \(hidden.displayName)")) { store.setHidden(false, hidden, on: .dock) }
+                                }
+                            }
+                        }
+                        Divider()
+                        Button(L10n.t("Where each provider shows…", "各处显示的服务商…")) { SettingsWindow.open(section: .presentation) }
+                        Button(L10n.t("Settings…", "设置…")) { SettingsWindow.open() }
+                    }
                     // Declared before the single tap: SwiftUI resolves the
                     // higher count first only if it is attached first.
                     .onTapGesture(count: 2) {
