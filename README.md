@@ -227,4 +227,4 @@ Trademarks belong to their respective owners.
 
 ## License
 
-MIT — see [LICENSE](LICENSE). © 2026 [GiantAccel, LLC](https://giantaccel.com).
+MIT — see [LICENSE](LICENSE).

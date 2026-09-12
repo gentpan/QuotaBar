@@ -66,7 +66,7 @@ struct AboutPane: View {
                 }
                 Spacer(minLength: Design.space2)
                 VStack(alignment: .trailing, spacing: 3) {
-                    TextLink(Self.copyright, url: "https://giantaccel.com")
+                    Text(Self.copyright)
                     TextLink(L10n.t("MIT License", "MIT 开源许可"), url: Self.repository + "/blob/main/LICENSE")
                 }
             }
@@ -194,12 +194,13 @@ struct AboutPane: View {
         return formatter.string(from: date)
     }
 
-    /// The LICENSE file's holder, running to the current year.
+    /// The product's name, running to the current year. The company that
+    /// holds the copyright is named in LICENSE only.
     private static var copyright: String {
         let first = 2026
         let now = Calendar.current.component(.year, from: Date())
         let years = now > first ? "\(first)–\(now)" : "\(first)"
-        return "© \(years) GiantAccel, LLC"
+        return "© \(years) QuotaBar"
     }
 }
 
