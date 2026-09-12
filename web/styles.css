@@ -196,6 +196,23 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
 }
 
 /* 面板：吊在状态栏图标下方 */
+/* 刘海岛面板：从菜单栏正下方吊出来，居中，像真机上从刘海展开的那块 */
+.desktop__island {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  --panel-scale: 1;
+  transform: translateX(-50%) scale(var(--panel-scale));
+  transform-origin: top center;
+  z-index: 15;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.45);
+}
+.reveal .desktop__island { animation: island-drop 640ms cubic-bezier(.2,.8,.25,1) 200ms both; }
+@keyframes island-drop {
+  from { opacity: 0; transform: translateX(-50%) translateY(-18px) scale(var(--panel-scale)); }
+  to { opacity: 1; transform: translateX(-50%) scale(var(--panel-scale)); }
+}
+
 .desktop__panel {
   position: absolute;
   top: 36px;
@@ -252,7 +269,9 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
   align-items: center;
   justify-content: center;
   text-align: center;
-  padding: 30px 24px 150px;
+  /* 顶部让出刘海岛面板的高度（38 + 12 + 128 + 12 + 44 = 234，加落影），
+     否则标题会顶进面板底下 */
+  padding: 260px 24px 150px;
 }
 
 .eyebrow {
@@ -505,6 +524,7 @@ section { position: relative; }
   .desktop .desktop__strip { display: none; }
   /* 窄屏放不下 380px 的面板和 74px 的条子，整体缩一档，并让文案落到面板下面 */
   .desktop .desktop__panel { top: 34px; right: 8px; --panel-scale: .52; }
+  .desktop .desktop__island { --panel-scale: .62; }
   .desktop__copy { justify-content: flex-end; padding: 30px 24px 120px; }
   .menubar { gap: 13px; padding-inline: 11px; font-size: 12px; }
   /* nth-of-type 数的是所有 <a> 兄弟，而第 1 个 <a> 是 wordmark「QuotaBar」。
@@ -518,12 +538,13 @@ section { position: relative; }
    在 780px 高以下叠不下，面板再缩一档，文案也往下压一点。 */
 @media (max-width: 900px) and (max-height: 780px) {
   .desktop .desktop__panel { --panel-scale: .40; }
+  .desktop .desktop__island { --panel-scale: .46; }
   .desktop__copy { padding-bottom: 96px; }
 }
 
 /* 再矮就真排不下了（横过来的手机）：面板也收掉，桌面的意象剩菜单栏和 Dock */
 @media (max-width: 900px) and (max-height: 700px) {
-  .desktop .desktop__panel { display: none; }
+  .desktop .desktop__panel, .desktop .desktop__island { display: none; }
 }
 
 /* ── 进场 ────────────────────────────────────────────────────────────

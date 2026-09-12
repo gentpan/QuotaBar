@@ -84,19 +84,20 @@
    * 作用域名（Fable），否则显示窗口名（周窗口）。
    */
   var CALLOUT = {
-    codex: { name: "Codex", logo: "codex.png", rows: [
+    codex: { name: "Codex", logo: "codex.png", plan: "PRO", acct: "you@example.com", status: "轻微故障", warn: true, rows: [
       { title: "周窗口", used: 36, reset: "5 天 16 小时后重置" },
       { title: "GPT-5.3-Codex-Spark", used: 0, reset: "4 小时 59 分后重置" },
     ]},
-    claude: { name: "Claude", logo: "claude.png", colour: true, rows: [
+    claude: { name: "Claude", logo: "claude.png", colour: true, plan: "MAX 20X", acct: "you@example.com", status: "运行正常", rows: [
       { title: "5 小时窗口", used: 18, reset: "2 小时 41 分后重置" },
       { title: "周窗口", used: 58, reset: "4 天 9 小时后重置" },
       { title: "Fable", used: 10, reset: "4 天 9 小时后重置" },
     ]},
-    cursor: { name: "Cursor", logo: "cursor.png", rows: [
+    cursor: { name: "Cursor", logo: "cursor.png", plan: "PRO PLUS", acct: "you@example.com", status: "运行正常", rows: [
       { title: "月度套餐", used: 86, reset: "9 天 2 小时后重置", detail: "$17.20 / $20.00" },
+      { title: "Grok Bot", used: 2, reset: "6 天 21 小时后重置" },
     ]},
-    "opencode-go": { name: "OpenCode Go", logo: "opencode-go.png", rows: [
+    "opencode-go": { name: "OpenCode Go", logo: "opencode-go.png", plan: "GO", acct: "you@example.com", rows: [
       { title: "周窗口", used: 84, reset: "3 天 4 小时后重置" },
     ]},
   };
@@ -160,8 +161,21 @@
   /* ── 把读数画上去 ───────────────────────────────────────────────── */
   function paint(el, used) {
     var colour = rampHex(used);
-    var fill = el.querySelector(".qb-bar__fill, .qb-tile__fill");
-    if (fill) { fill.style.width = used + "%"; fill.style.background = colour; }
+    var fill = el.querySelector(".qb-bar__fill, .qb-tile__fill, .qb-steps__fill");
+    if (fill) {
+      fill.style.width = used + "%";
+      // 岛面板图块的条是品牌色，不随读数变色；卡片与面板里的走色标。
+      if (fill.classList.contains("is-brand")) { /* 保持品牌色 */ }
+      else if (fill.classList.contains("qb-steps__fill")) {
+        fill.style.background = "repeating-linear-gradient(90deg," + colour + " 0 5px,transparent 5px 7px)";
+      } else { fill.style.background = colour; }
+    }
+    // 岛面板图块的数字：白色，到了提醒档才变琥珀 / 红，和应用里一样
+    var ipct = el.querySelector(".qb-ipct");
+    if (ipct) {
+      ipct.textContent = Math.round(used);
+      ipct.style.color = used >= 85 ? "#E65F5F" : used >= 60 ? "#E8A85A" : "#fff";
+    }
     var arc = el.querySelector(".qb-ring__arc");
     if (arc) {
       var len = arc.getTotalLength ? arc.getTotalLength() : 132;
@@ -275,7 +289,7 @@
         io.disconnect();
       });
     }, { rootMargin: "0px 0px -10% 0px" });
-    io.observe(document.querySelector(".qb-panel") || readings[0].el);
+    io.observe(document.querySelector(".qb-island, .qb-panel") || readings[0].el);
     setTimeout(function () { if (readings.length) settle(); }, 2500);
   } else {
     setTimeout(animateIn, 120);
@@ -308,19 +322,26 @@
     function calloutMarkup(id) {
       var d = CALLOUT[id];
       if (!d) return "";
+      // 头部与应用的 ProviderCallout 一致：名字、套餐芯片，下一行账号与服务状态；
+      // 进度条是阶梯式的（应用默认的 MeterStyle）。
       return '<div class="qb-callout__head">' +
-          '<img class="' + (d.colour ? "is-colour" : "") + '" src="' + LOGO + d.logo + '" alt="">' +
-          "<span>" + esc(d.name) + " 用量</span>" +
+          '<img class="' + (d.colour ? "is-colour" : "") + '" src="' + LOGO + d.logo + LOGOV + '" alt="">' +
+          "<span>" + esc(d.name) + "</span>" +
+          (d.plan ? '<em class="qb-chip">' + esc(d.plan) + "</em>" : "") +
+        "</div>" +
+        '<div class="qb-callout__sub">' +
+          '<span class="qb-callout__acct">' + esc(d.acct || "") + "</span>" +
+          (d.status ? '<span class="qb-status' + (d.warn ? " qb-status--warn" : "") + '"><i></i>' + esc(d.status) + "</span>" : "") +
         "</div>" +
         d.rows.map(function (r) {
           var c = rampHex(r.used);
-          return '<div class="qb-crow">' +
+          return '<div class="qb-crow" data-used="' + r.used + '">' +
             '<div class="qb-crow__top">' +
               '<span class="qb-crow__title">' + esc(r.title) + "</span>" +
               '<span class="qb-crow__reset">' + esc(r.reset) + "</span>" +
             "</div>" +
-            '<span class="qb-crow__meter"><span class="qb-crow__fill" style="width:' +
-              Math.max(3, r.used) + "%;background:" + c + '"></span></span>' +
+            '<span class="qb-steps qb-steps--sm"><span class="qb-steps__fill" style="width:' +
+              Math.max(3, r.used) + "%;background:repeating-linear-gradient(90deg," + c + " 0 5px,transparent 5px 7px)" + '"></span></span>' +
             '<span class="qb-crow__used">' +
               (r.detail ? esc(r.detail) + " · " : "") + "已用 " + r.used + "%</span>" +
           "</div>";
