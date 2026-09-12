@@ -34,7 +34,23 @@ RECENT_DAYS = 3
 SITE_PREVIEW_ITEMS = 5
 WEEKS = 26
 
-KIND_EN = {"新增": "Added", "样式": "Style", "修复": "Fixed"}
+KIND_EN = {"新增": "Added", "样式": "Style", "修复": "Fixed", "删除": "Removed", "移除": "Removed"}
+# Badge colour per kind on the website: added green, style blue, fixed amber,
+# removed red; anything else neutral.
+KIND_CLASS = {"新增": "add", "样式": "style", "修复": "fix", "删除": "remove", "移除": "remove"}
+
+
+def kind_class(kind):
+    return KIND_CLASS.get(kind, "other")
+
+
+def release_commit(version):
+    """(short, full) hash of a release: its tag, else the commit that cut it."""
+    def run(*args):
+        return subprocess.run(["git", *args], cwd=ROOT, capture_output=True, text=True).stdout.strip()
+    full = run("rev-list", "-n", "1", f"v{version}") or run(
+        "log", "-1", "--format=%H", "-E", f"--grep=^(Release|QuotaBar|Bump to) v?{re.escape(version)}$")
+    return (full[:7], full) if full else (None, None)
 
 
 # ── CHANGELOG.md ──────────────────────────────────────────────────────────
@@ -198,7 +214,7 @@ def site_block(releases):
             for item in g["items"]:
                 if shown == SITE_PREVIEW_ITEMS:
                     break
-                lines.append(f'            <li><span class="log__kind">{html.escape(g["kind"])}</span>{inline(item)}</li>')
+                lines.append(f'            <li><span class="badge badge--{kind_class(g["kind"])}">{html.escape(g["kind"])}</span>{inline(item)}</li>')
                 shown += 1
         lines.append("          </ul>")
         rest = item_count(day) - shown
@@ -253,32 +269,46 @@ def site_page(intro, releases, index_html):
         "  </div>",
         "</header>",
         '<main class="shell logdoc">',
-        "  <h1>更新日志</h1>",
-        f"  <p class=\"logdoc__intro\">{html.escape(''.join(intro))}</p>",
-        '  <nav class="logdoc__versions" aria-label="版本">',
+        '  <header class="logdoc__head">',
+        "    <h1>更新日志</h1>",
+        f"    <p class=\"logdoc__intro\">{html.escape(''.join(intro))}</p>",
+        '    <p class="logdoc__legend">' + "".join(
+            f'<span class="badge badge--{c}">{k}</span>' for k, c in (("新增", "add"), ("样式", "style"), ("修复", "fix"), ("删除", "remove"))) + "</p>",
+        "  </header>",
+        '  <ol class="tl">',
     ]
     for release in releases:
         anchor = f"v-{release['version']}" if release["version"] else "unreleased"
-        out.append(f'    <a href="#{anchor}">{html.escape(release["title"])}</a>')
-    out.append("  </nav>")
-    for release in releases:
-        anchor = f"v-{release['version']}" if release["version"] else "unreleased"
-        out.append(f'  <section class="logdoc__release" id="{anchor}">')
+        newest = max((d["date"] for d in release["days"]), default=release["date"] or "")
+        out.append(f'    <li class="tl__release{"" if release["version"] else " is-pending"}" id="{anchor}">')
+        out.append('      <div class="tl__meta">')
         if release["version"]:
-            out.append(f'    <h2>{release["version"]} <time datetime="{release["date"]}">{release["date"]}</time></h2>')
+            out.append(f'        <a class="tl__version" href="#{anchor}">{release["version"]}</a>')
+            out.append(f'        <time datetime="{release["date"]}">{release["date"]}</time>')
+            short, full = release_commit(release["version"])
+            if short:
+                out.append(f'        <a class="tl__hash" href="{REPO}/commit/{full}" title="在 GitHub 上查看这次发布的提交">{short}</a>')
         else:
-            out.append(f'    <h2>{html.escape(release["title"])} <span class="log__tag">开发中</span></h2>')
+            out.append(f'        <a class="tl__version" href="#{anchor}">{html.escape(release["title"])}</a>')
+            out.append(f'        <time datetime="{newest}">{newest}</time>')
+            out.append(f'        <a class="tl__hash is-live" href="{REPO}/commits/main" title="还没发布，看 main 分支上的最新提交">开发中</a>')
+        out.append("      </div>")
+        out.append('      <div class="tl__body">')
         for day in release["days"]:
-            out.append(f'    <div class="logdoc__day" id="d-{day["date"]}">')
+            out.append(f'        <section class="tl__day" id="d-{day["date"]}">')
             if not release["version"] or len(release["days"]) > 1:
-                out.append(f'      <h3><time datetime="{day["date"]}">{day["date"]}</time></h3>')
+                out.append(f'          <h3><time datetime="{day["date"]}">{day["date"]}</time></h3>')
             for g in day["groups"]:
-                out.append(f'      <h4>{html.escape(g["kind"])}</h4>')
-                out.append("      <ul>")
-                out += [f"        <li>{inline(item)}</li>" for item in g["items"]]
-                out.append("      </ul>")
-            out.append("    </div>")
-        out.append("  </section>")
+                out.append(f'          <div class="tl__group">')
+                out.append(f'            <span class="badge badge--{kind_class(g["kind"])}">{html.escape(g["kind"])}</span>')
+                out.append("            <ul>")
+                out += [f"              <li>{inline(item)}</li>" for item in g["items"]]
+                out.append("            </ul>")
+                out.append("          </div>")
+            out.append("        </section>")
+        out.append("      </div>")
+        out.append("    </li>")
+    out.append("  </ol>")
     out += [
         "</main>",
         '<footer class="footer">',

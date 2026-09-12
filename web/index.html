@@ -490,11 +490,11 @@
           <header class="log__head"><time datetime="2026-09-13">2026-09-13</time><span class="log__tag">未发布</span></header>
           <p class="log__counts">新增 2 · 样式 7 · 修复 2</p>
           <ul class="log__list">
-            <li><span class="log__kind">新增</span>服务商可以按位置隐藏，而不必停用：下拉面板、停靠条、刘海岛、桌面卡片各自决定显示哪些服务商。隐藏的服务商仍会读取数据、发提醒、计入花费，停用才会停止读取。设置 → 展示方式新增「各处显示的服务商」，每个服务商一行，点位置标签即可显示或隐藏；也可以右键下拉面板里的卡片选「在下拉面板中隐藏」，右键停靠条图标选「在停靠条中隐藏」。</li>
-            <li><span class="log__kind">新增</span>下拉面板底部在有隐藏的服务商时显示「N 个已在面板隐藏」和它们的图标，点「显示」可逐个恢复或打开设置管理；停靠条右键菜单也列出已隐藏的服务商。</li>
-            <li><span class="log__kind">样式</span>下拉面板页脚的刷新提示：点「全部刷新」或自动刷新完成后的一分钟内显示「刚刚更新」，之后显示「X 分钟后自动刷新」；鼠标悬停显示上次更新和下次自动刷新的具体时间及刷新间隔。以前刷新完立刻显示「5 分钟后刷新」，看起来像按钮没起作用。</li>
-            <li><span class="log__kind">样式</span>节奏提示的文案改为「预计重置时剩 8%」，不再写成含糊的「约 8% 余量」；鼠标悬停时写出算法和用到的数字，例如「这个窗口已过 87%，已用 80%。按这段时间的平均速度，到重置时约用到 92%，剩 8%」。</li>
-            <li><span class="log__kind">样式</span>服务状态的「运行正常」改为「服务正常」；悬停状态点或状态标签时写明来源，例如「来自官方状态页 status.claude.com，按 Claude Code、Claude API 判断，3 分钟前检查」，说明它反映的是服务商官方的服务状态，不是本机登录或额度读数。</li>
+            <li><span class="badge badge--add">新增</span>服务商可以按位置隐藏，而不必停用：下拉面板、停靠条、刘海岛、桌面卡片各自决定显示哪些服务商。隐藏的服务商仍会读取数据、发提醒、计入花费，停用才会停止读取。设置 → 展示方式新增「各处显示的服务商」，每个服务商一行，点位置标签即可显示或隐藏；也可以右键下拉面板里的卡片选「在下拉面板中隐藏」，右键停靠条图标选「在停靠条中隐藏」。</li>
+            <li><span class="badge badge--add">新增</span>下拉面板底部在有隐藏的服务商时显示「N 个已在面板隐藏」和它们的图标，点「显示」可逐个恢复或打开设置管理；停靠条右键菜单也列出已隐藏的服务商。</li>
+            <li><span class="badge badge--style">样式</span>下拉面板页脚的刷新提示：点「全部刷新」或自动刷新完成后的一分钟内显示「刚刚更新」，之后显示「X 分钟后自动刷新」；鼠标悬停显示上次更新和下次自动刷新的具体时间及刷新间隔。以前刷新完立刻显示「5 分钟后刷新」，看起来像按钮没起作用。</li>
+            <li><span class="badge badge--style">样式</span>节奏提示的文案改为「预计重置时剩 8%」，不再写成含糊的「约 8% 余量」；鼠标悬停时写出算法和用到的数字，例如「这个窗口已过 87%，已用 80%。按这段时间的平均速度，到重置时约用到 92%，剩 8%」。</li>
+            <li><span class="badge badge--style">样式</span>服务状态的「运行正常」改为「服务正常」；悬停状态点或状态标签时写明来源，例如「来自官方状态页 status.claude.com，按 Claude Code、Claude API 判断，3 分钟前检查」，说明它反映的是服务商官方的服务状态，不是本机登录或额度读数。</li>
           </ul>
           <a class="log__more" href="changelog.html#d-2026-09-13">还有 6 项 →</a>
         </article>
@@ -502,11 +502,11 @@
           <header class="log__head"><time datetime="2026-09-13">2026-09-13</time><span class="log__tag">0.5.0</span></header>
           <p class="log__counts">新增 40 · 样式 10 · 修复 13</p>
           <ul class="log__list">
-            <li><span class="log__kind">新增</span>下拉面板回归：左键点菜单栏图标打开，右键仍是刷新、设置、退出。面板顶部是花费卡片，下面每个服务商一张卡片，底部显示版本、下次刷新倒计时、设置和选项菜单。按 Esc 关闭，⌘R 刷新，⌘, 打开设置。</li>
-            <li><span class="log__kind">新增</span>花费卡片：可切换花费、Token、每百万 token 花费三种口径，以及今日、昨日、近 30 天。环形图按来源分色，中间数字滚动变化，悬停来源查看按模型的明细。</li>
-            <li><span class="log__kind">新增</span>服务商卡片默认只显示最重要的两个额度窗口，其余窗口、限额重置次数、30 天用量趋势、今日昨日 30 天花费、状态页和控制台链接收在展开箭头里，展开状态会被记住。</li>
-            <li><span class="log__kind">新增</span>进度条加入节奏判断：细竖线标出匀速使用时此刻应在的位置。预计余量很紧时显示约多少余量，预计重置前用完时显示火苗和用完时间，已经用完显示已到上限。悬停进度条查看按当前速度重置时的用量。</li>
-            <li><span class="log__kind">新增</span>点击百分比在已用和剩余之间切换，点击重置时间在倒计时和具体时刻之间切换，所有界面同步生效。</li>
+            <li><span class="badge badge--add">新增</span>下拉面板回归：左键点菜单栏图标打开，右键仍是刷新、设置、退出。面板顶部是花费卡片，下面每个服务商一张卡片，底部显示版本、下次刷新倒计时、设置和选项菜单。按 Esc 关闭，⌘R 刷新，⌘, 打开设置。</li>
+            <li><span class="badge badge--add">新增</span>花费卡片：可切换花费、Token、每百万 token 花费三种口径，以及今日、昨日、近 30 天。环形图按来源分色，中间数字滚动变化，悬停来源查看按模型的明细。</li>
+            <li><span class="badge badge--add">新增</span>服务商卡片默认只显示最重要的两个额度窗口，其余窗口、限额重置次数、30 天用量趋势、今日昨日 30 天花费、状态页和控制台链接收在展开箭头里，展开状态会被记住。</li>
+            <li><span class="badge badge--add">新增</span>进度条加入节奏判断：细竖线标出匀速使用时此刻应在的位置。预计余量很紧时显示约多少余量，预计重置前用完时显示火苗和用完时间，已经用完显示已到上限。悬停进度条查看按当前速度重置时的用量。</li>
+            <li><span class="badge badge--add">新增</span>点击百分比在已用和剩余之间切换，点击重置时间在倒计时和具体时刻之间切换，所有界面同步生效。</li>
           </ul>
           <a class="log__more" href="changelog.html#d-2026-09-13">还有 58 项 →</a>
         </article>
@@ -514,11 +514,11 @@
           <header class="log__head"><time datetime="2026-09-12">2026-09-12</time><span class="log__tag">0.5.0</span></header>
           <p class="log__counts">新增 6 · 样式 1 · 修复 2</p>
           <ul class="log__list">
-            <li><span class="log__kind">新增</span>悬浮卡片里双击某个额度窗口（5 小时、周窗口，或 Fable 这类按模型的额度），圆环、刘海岛、桌面卡片和菜单栏读数都改按这个窗口显示。再双击一次恢复为用得最满的那个。正在跟随的窗口名旁有圆点，手动选中时为品牌色实心点。</li>
-            <li><span class="log__kind">新增</span>展示方式新增「屏幕」选项：接了多块显示器时，可以选择停靠条、刘海岛和桌面卡片显示在哪块屏幕，默认自动。所选屏幕拔掉后自动回到默认，插拔显示器时各窗口会重新定位。</li>
-            <li><span class="log__kind">新增</span>服务状态页的每一行在折叠时就显示主服务最近 30 天的在线率和状态条。Claude 取 Claude Code，Codex 取 CLI，Cursor 取 IDE，Kimi 取 Open API，DeepSeek 取 API 服务。</li>
-            <li><span class="log__kind">新增</span>服务状态标记改为只看写代码相关的服务：Claude 看 Claude Code 和 Claude API，Codex 看 CLI、VS Code 插件、Codex API、Codex Web 和桌面端，Cursor 看 IDE、CLI 和云端 Agent。状态页其他组件的事件（如 Claude Cowork）不再让标记变黄，展开服务状态行时单独列在「其他组件」下。</li>
-            <li><span class="log__kind">新增</span>新增诊断命令 <code>QuotaBar --status</code>，列出各服务商状态标记依据的组件和其他组件的事件。</li>
+            <li><span class="badge badge--add">新增</span>悬浮卡片里双击某个额度窗口（5 小时、周窗口，或 Fable 这类按模型的额度），圆环、刘海岛、桌面卡片和菜单栏读数都改按这个窗口显示。再双击一次恢复为用得最满的那个。正在跟随的窗口名旁有圆点，手动选中时为品牌色实心点。</li>
+            <li><span class="badge badge--add">新增</span>展示方式新增「屏幕」选项：接了多块显示器时，可以选择停靠条、刘海岛和桌面卡片显示在哪块屏幕，默认自动。所选屏幕拔掉后自动回到默认，插拔显示器时各窗口会重新定位。</li>
+            <li><span class="badge badge--add">新增</span>服务状态页的每一行在折叠时就显示主服务最近 30 天的在线率和状态条。Claude 取 Claude Code，Codex 取 CLI，Cursor 取 IDE，Kimi 取 Open API，DeepSeek 取 API 服务。</li>
+            <li><span class="badge badge--add">新增</span>服务状态标记改为只看写代码相关的服务：Claude 看 Claude Code 和 Claude API，Codex 看 CLI、VS Code 插件、Codex API、Codex Web 和桌面端，Cursor 看 IDE、CLI 和云端 Agent。状态页其他组件的事件（如 Claude Cowork）不再让标记变黄，展开服务状态行时单独列在「其他组件」下。</li>
+            <li><span class="badge badge--add">新增</span>新增诊断命令 <code>QuotaBar --status</code>，列出各服务商状态标记依据的组件和其他组件的事件。</li>
           </ul>
           <a class="log__more" href="changelog.html#d-2026-09-12">还有 4 项 →</a>
         </article>
