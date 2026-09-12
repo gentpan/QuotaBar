@@ -77,6 +77,49 @@ final class LocalCredentialsClaudeTests: XCTestCase {
         XCTAssertEqual(lookup.plan, "Max 5x")
     }
 
+    // MARK: The security tool
+
+    /// The tool prints the item and a newline; the plan rides along as it
+    /// does for the direct read.
+    func testTheToolsOutputIsTheItem() {
+        let lookup = LocalCredentials.SecurityTool.classifyToolResult(
+            exitCode: 0,
+            output: json(#"{"claudeAiOauth":{"accessToken":"sk-ant-abc","rateLimitTier":"default_claude_max_20x"}}"# + "\n"))
+        XCTAssertEqual(lookup?.state, .available)
+        XCTAssertEqual(lookup?.token, "sk-ant-abc")
+        XCTAssertEqual(lookup?.plan, "Max 20x")
+        XCTAssertEqual(lookup?.via, .securityTool)
+    }
+
+    func testTheToolFindingNoItemIsMissing() {
+        let lookup = LocalCredentials.SecurityTool.classifyToolResult(exitCode: 44, output: Data())
+        XCTAssertEqual(lookup?.state, .missing)
+        XCTAssertNil(lookup?.token)
+    }
+
+    /// Refusals do not become a verdict of their own: the direct read already
+    /// said "needs the user", and that is what stays on screen.
+    func testTheToolBeingRefusedLeavesTheDirectVerdict() {
+        for code in [36, 51, 128] as [Int32] {
+            XCTAssertNil(LocalCredentials.SecurityTool.classifyToolResult(exitCode: code, output: Data()), "exit \(code)")
+            XCTAssertTrue(LocalCredentials.SecurityTool.refusals.contains(code), "exit \(code)")
+        }
+        XCTAssertNil(LocalCredentials.SecurityTool.classifyToolResult(exitCode: 1, output: Data()))
+    }
+
+    /// Bytes the tool will not print as text come out as hex.
+    func testHexOutputIsDecoded() {
+        let item = #"{"claudeAiOauth":{"accessToken":"sk-ant-hex"}}"#
+        let hex = item.utf8.map { String(format: "%02x", $0) }.joined() + "\n"
+        let lookup = LocalCredentials.SecurityTool.classifyToolResult(exitCode: 0, output: json(hex))
+        XCTAssertEqual(lookup?.state, .available)
+        XCTAssertEqual(lookup?.token, "sk-ant-hex")
+    }
+
+    func testAnItemThatStartsWithABraceIsNotTakenForHex() {
+        XCTAssertEqual(LocalCredentials.SecurityTool.secret(from: json("{}\r\n")), json("{}"))
+    }
+
     // MARK: The process-wide switch
 
     /// The switch is global to the process, so leaving it off would silence

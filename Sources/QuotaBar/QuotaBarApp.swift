@@ -81,6 +81,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             Diagnostics.printLedger()
             NSApp.terminate(nil)
         }
+        if arguments.contains("--credentials") {
+            Diagnostics.printCredentials()
+            NSApp.terminate(nil)
+        }
 
         let store = UsageStore()
         self.store = store

@@ -127,6 +127,19 @@ enum Diagnostics {
         FileHandle.standardOutput.write(Data(out.utf8))
     }
 
+    /// Where each automatic session came from, and for Claude, by which of
+    /// the two reads. Never the secret.
+    static func printCredentials() {
+        var out = ""
+        let claude = LocalCredentials.claudeCredentialState()
+        let route = LocalCredentials.claudeCredentialRoute().rawValue
+        let plan = LocalCredentials.claudePlanName().map { " · \($0)" } ?? ""
+        out += "Claude   \(claude)\(plan)  (via \(route))\n"
+        out += "Codex    \(LocalCredentials.codexAuth() == nil ? "missing" : "available")\n"
+        out += "Gemini   \(LocalCredentials.geminiAccessToken() == nil ? "missing" : "available")\n"
+        FileHandle.standardOutput.write(Data(out.utf8))
+    }
+
     static func printCost() {
         // The panel refreshes this on its own cycle; the CLI has to ask.
         let semaphore = DispatchSemaphore(value: 0)

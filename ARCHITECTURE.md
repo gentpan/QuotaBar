@@ -87,7 +87,12 @@ Manually entered tokens/cookies/API keys go to the **login keychain only**, via
 `ConfigStore.setCredential`. Never write a secret to `config.json`; `QuotaConfig`
 decodes a legacy `credentials` key purely to drain it into the keychain and
 never encodes it back. Automatic providers (Codex, Claude, Gemini) read the
-session the user's CLI already created — never prompt for a password.
+session the user's CLI already created — never prompt for a password. Claude's
+item is read with `SecItemCopyMatching` first (dialog suppressed process-wide), and
+when that would have asked, with `security find-generic-password -w`: Claude Code
+writes the item with the same tool, so the item always trusts it, and the read is
+silent regardless of this build's signature. The dialog is a last resort behind a
+button. `QuotaBar --credentials` prints which read answered.
 
 ### Config decoding is per-field lenient
 

@@ -72,12 +72,25 @@ public enum LocalCredentials {
         case missing
     }
 
+    /// Which of the two reads answered. Shown by `--credentials`, nowhere else.
+    public enum ClaudeLookupRoute: String, Sendable {
+        /// `SecItemCopyMatching` in this process: needs this app in the item's
+        /// access list.
+        case keychainAPI = "keychain API"
+        /// `/usr/bin/security find-generic-password`: needs only what Claude
+        /// Code itself puts in the access list.
+        case securityTool = "security tool"
+    }
+
     struct ClaudeLookup: Sendable, Equatable {
         let state: ClaudeCredentialState
         let token: String?
         /// "Max 20x", "Pro" — from the same item, so no extra keychain read.
         var plan: String? = nil
+        var via: ClaudeLookupRoute = .keychainAPI
     }
+
+    static let claudeService = "Claude Code-credentials"
 
     /// Shown wherever the app is waiting on the user's say-so.
     public static var claudeAuthorizationHint: String {
@@ -104,6 +117,10 @@ public enum LocalCredentials {
     /// usage endpoint itself does not say.
     public static func claudePlanName() -> String? {
         probeClaude().plan
+    }
+
+    public static func claudeCredentialRoute() -> ClaudeLookupRoute {
+        probeClaude().via
     }
 
     /// The one place the keychain dialog is allowed. Call it from a user
@@ -135,10 +152,30 @@ public enum LocalCredentials {
         return lookup
     }
 
+    /// Two reads, in order. The direct one goes through this process and so
+    /// depends on this app's code signature being in the item's access list —
+    /// which is where the dialogs come from: an ad-hoc dev build is a new
+    /// hash every time, and macOS forgets even an identity now and then. When
+    /// that read would have asked, the `security` tool reads instead, with the
+    /// trust Claude Code itself gave it, and nothing asks at all. The dialog
+    /// (and its button) is left for the case where both fail.
     private static func readClaudeOAuthToken(interactive: Bool) -> ClaudeLookup {
+        let direct = readClaudeViaKeychainAPI(interactive: interactive)
+        if interactive {
+            // The user pressed the button: their answer stands, and the tool
+            // gets another go on the next quiet read.
+            SecurityTool.retry()
+            return direct
+        }
+        guard direct.state == .needsAuthorization, let viaTool = SecurityTool.readClaude()
+        else { return direct }
+        return viaTool
+    }
+
+    private static func readClaudeViaKeychainAPI(interactive: Bool) -> ClaudeLookup {
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: "Claude Code-credentials",
+            kSecAttrService as String: claudeService,
             kSecReturnData as String: true,
             kSecMatchLimit as String: kSecMatchLimitOne,
         ]
@@ -147,6 +184,88 @@ public enum LocalCredentials {
             ? SecItemCopyMatching(query as CFDictionary, &result)
             : KeychainUI.withoutPrompts { SecItemCopyMatching(query as CFDictionary, &result) }
         return classify(status: status, data: result as? Data)
+    }
+
+    /// Claude Code writes its item with `security add-generic-password`, and
+    /// an item that tool creates trusts the tool back: `/usr/bin/security` in
+    /// the access list, `apple-tool:` in the partition list. That is how
+    /// Claude Code reads the item on every launch without a dialog, and a
+    /// read through the same tool inherits the same trust — whatever this
+    /// build is signed with, and however often Claude Code rewrites the item.
+    /// Measured on macOS 27 from a process the item had never heard of: the
+    /// item, no dialog.
+    enum SecurityTool {
+        static let path = "/usr/bin/security"
+        private static let lock = NSLock()
+        private static var declined = false
+
+        /// The tool has no "stay quiet" switch. Should it ever be refused —
+        /// an item some other writer created, which does not trust it — that
+        /// is remembered for the life of the process, so a refresh timer
+        /// cannot turn one dialog into one a minute.
+        static func retry() {
+            lock.lock(); declined = false; lock.unlock()
+        }
+
+        static func readClaude() -> ClaudeLookup? {
+            lock.lock(); let skip = declined; lock.unlock()
+            guard !skip, FileManager.default.isExecutableFile(atPath: path) else { return nil }
+            let process = Process()
+            process.executableURL = URL(fileURLWithPath: path)
+            process.arguments = ["find-generic-password", "-s", claudeService, "-w"]
+            let stdout = Pipe()
+            process.standardOutput = stdout
+            process.standardError = FileHandle.nullDevice
+            process.standardInput = FileHandle.nullDevice
+            do { try process.run() } catch { return nil }
+            let output = stdout.fileHandleForReading.readDataToEndOfFile()
+            process.waitUntilExit()
+            let lookup = classifyToolResult(exitCode: process.terminationStatus, output: output)
+            if lookup == nil, refusals.contains(process.terminationStatus) {
+                lock.lock(); declined = true; lock.unlock()
+            }
+            return lookup
+        }
+
+        /// The tool exits with the low byte of the OSStatus: 44 is
+        /// errSecItemNotFound; 36, 51 and 128 are interaction-not-allowed,
+        /// auth-failed and user-cancelled — the three "would ask, or did and
+        /// was told no" answers.
+        static let refusals: Set<Int32> = [36, 51, 128]
+
+        /// Pure. `nil` leaves the direct read's verdict (and its button) in
+        /// place.
+        static func classifyToolResult(exitCode: Int32, output: Data) -> ClaudeLookup? {
+            switch exitCode {
+            case 0:
+                var lookup = classify(status: errSecSuccess, data: secret(from: output))
+                lookup.via = .securityTool
+                return lookup
+            case 44:
+                return ClaudeLookup(state: .missing, token: nil, via: .securityTool)
+            default:
+                return nil
+            }
+        }
+
+        /// `-w` prints the secret and a newline — as hex when it holds bytes
+        /// the tool will not print as text.
+        static func secret(from output: Data) -> Data {
+            var bytes = output
+            while let last = bytes.last, last == 0x0A || last == 0x0D { bytes.removeLast() }
+            guard let text = String(data: bytes, encoding: .utf8), !text.isEmpty,
+                  text.first != "{", text.count % 2 == 0, text.allSatisfy(\.isHexDigit)
+            else { return bytes }
+            var decoded = Data(capacity: text.count / 2)
+            var index = text.startIndex
+            while index < text.endIndex {
+                let next = text.index(index, offsetBy: 2)
+                guard let byte = UInt8(text[index..<next], radix: 16) else { return bytes }
+                decoded.append(byte)
+                index = next
+            }
+            return decoded
+        }
     }
 
     /// Pure, so the status mapping is pinned by tests without a keychain.
