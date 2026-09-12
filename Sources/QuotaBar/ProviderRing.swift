@@ -343,27 +343,42 @@ struct ProviderCallout: View {
 }
 
 /// A 22pt glyph button for the card header: dim until hovered, no chrome.
+///
+/// A tap gesture, not a `Button`: the card and the strip are non-activating
+/// panels that are never the key window, and SwiftUI's `Button` never
+/// fired there — the pointer highlighted it and the click went nowhere —
+/// while the strip's tap gestures always have.
 struct CalloutButton: View {
     let symbol: String
     let help: String
     let action: () -> Void
     @State private var hovering = false
+    @State private var pressed = false
 
     var body: some View {
-        Button(action: action) {
-            Image(systemName: symbol)
-                .font(.system(size: 11, weight: .semibold))
-                .foregroundStyle(.white.opacity(hovering ? 0.92 : 0.5))
-                .frame(width: 22, height: 22)
-                .background(
-                    RoundedRectangle(cornerRadius: 5, style: .continuous)
-                        .fill(Color.white.opacity(hovering ? 0.10 : 0)))
-                .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .onHover { hovering = $0 }
-        .help(help)
-        .animation(.easeOut(duration: 0.12), value: hovering)
+        Image(systemName: symbol)
+            .font(.system(size: 11, weight: .semibold))
+            .foregroundStyle(.white.opacity(hovering ? 0.92 : 0.5))
+            .frame(width: 22, height: 22)
+            .background(
+                RoundedRectangle(cornerRadius: 5, style: .continuous)
+                    .fill(Color.white.opacity(hovering ? 0.10 : 0)))
+            .scaleEffect(pressed ? 0.88 : 1)
+            .contentShape(Rectangle())
+            .onHover { hovering = $0 }
+            .onTapGesture {
+                pressed = true
+                action()
+                Task { @MainActor in
+                    try? await Task.sleep(for: .milliseconds(120))
+                    pressed = false
+                }
+            }
+            .help(help)
+            .accessibilityLabel(help)
+            .accessibilityAddTraits(.isButton)
+            .animation(.easeOut(duration: 0.12), value: hovering)
+            .animation(.easeOut(duration: 0.12), value: pressed)
     }
 }
 

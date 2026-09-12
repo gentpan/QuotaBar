@@ -39,6 +39,21 @@ enum IslandPanelLayout {
 struct IslandPanel: View {
     @ObservedObject var store: UsageStore
     let notch: IslandCoordinator.NotchMetrics?
+    /// 额度 shows the quota tiles; 用量 shows what each provider consumed,
+    /// from the local logs where there are any — the footer chip flips it.
+    @State private var page: Page = .quota
+
+    enum Page {
+        case quota
+        case usage
+
+        var label: String {
+            switch self {
+            case .quota: L10n.t("Quota", "额度")
+            case .usage: L10n.t("Usage", "用量")
+            }
+        }
+    }
 
     /// Left takes the first `slots` enabled providers, right the next.
     private var left: [ProviderID] { Array(store.enabled.prefix(store.islandSlots)) }
@@ -92,7 +107,7 @@ struct IslandPanel: View {
                     .frame(maxWidth: .infinity)
             }
             ForEach(ids) { id in
-                IslandProviderBlock(store: store, id: id)
+                IslandProviderBlock(store: store, id: id, page: page)
                     .frame(height: IslandPanelLayout.rowHeight, alignment: .top)
             }
         }
@@ -110,25 +125,41 @@ struct IslandPanel: View {
                 CalloutButton(symbol: "gearshape", help: L10n.t("Settings", "设置")) {
                     SettingsWindow.open()
                 }
-                Button {
+                // Three quick switches, each a chip that names its current
+                // state: bar style, used-or-remaining, quota-or-usage.
+                chip(store.meterStyle.displayName, help: L10n.t("Switch bar style", "切换进度条样式")) {
                     store.setMeterStyle(store.meterStyle == .stepped ? .continuous : .stepped)
-                } label: {
-                    Text(store.meterStyle.displayName.uppercased())
-                        .font(.system(size: 9, weight: .bold, design: .monospaced))
-                        .tracking(0.8)
-                        .foregroundStyle(.white.opacity(0.6))
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 3)
-                        .background(RoundedRectangle(cornerRadius: 3).fill(.white.opacity(0.06)))
-                        .contentShape(Rectangle())
                 }
-                .buttonStyle(.plain)
-                .help(L10n.t("Switch bar style", "切换进度条样式"))
+                chip(store.meterMode.displayName, help: L10n.t("Show used or remaining", "显示已用还是剩余")) {
+                    store.setMeterMode(store.meterMode == .used ? .remaining : .used)
+                }
+                chip(page.label, help: L10n.t("Quota or consumption", "额度还是用量")) {
+                    if page == .quota { store.wantLedger() }
+                    withAnimation(.easeOut(duration: 0.2)) { page = page == .quota ? .usage : .quota }
+                }
                 Spacer(minLength: 0)
                 IslandSyncStatus(store: store)
             }
             .frame(maxHeight: .infinity)
         }
+    }
+}
+
+private extension IslandPanel {
+    /// A tap gesture rather than a `Button`, for the reason CalloutButton
+    /// gives: this panel is never key, and buttons do not fire in it.
+    func chip(_ label: String, help: String, action: @escaping () -> Void) -> some View {
+        Text(label.uppercased())
+            .font(.system(size: 9, weight: .bold, design: .monospaced))
+            .tracking(0.8)
+            .foregroundStyle(.white.opacity(0.6))
+            .padding(.horizontal, 6)
+            .padding(.vertical, 3)
+            .background(RoundedRectangle(cornerRadius: 3).fill(.white.opacity(0.06)))
+            .contentShape(Rectangle())
+            .onTapGesture(perform: action)
+            .help(help)
+            .accessibilityAddTraits(.isButton)
     }
 }
 
@@ -167,6 +198,17 @@ private struct IslandSyncStatus: View {
 private struct IslandProviderBlock: View {
     @ObservedObject var store: UsageStore
     let id: ProviderID
+    var page: IslandPanel.Page = .quota
+
+    /// The CLI whose local logs this provider's traffic lands in, if any.
+    private var costSource: CostSource? {
+        switch id {
+        case .claude: .claudeCode
+        case .codex: .codexCLI
+        case .opencodeGo: .openCode
+        default: nil
+        }
+    }
 
     private var snapshot: UsageSnapshot? { store.states[id]?.snapshot }
 
@@ -205,17 +247,63 @@ private struct IslandProviderBlock: View {
                 }
                 Spacer(minLength: 0)
             }
-            if horizons.isEmpty {
-                emptyTile
+            switch page {
+            case .quota:
+                if horizons.isEmpty {
+                    emptyTile
+                } else {
+                    HStack(alignment: .top, spacing: 18) {
+                        ForEach(horizons) { window in
+                            IslandTile(window: window, accent: Color(hex: id.accentHex), store: store)
+                                .frame(maxWidth: .infinity)
+                        }
+                    }
+                    .frame(maxWidth: horizons.count == 1 ? 240 : .infinity, alignment: .leading)
+                }
+            case .usage:
+                usageTiles
+            }
+        }
+    }
+
+    /// Today and this month from the local logs: tokens large, the estimate
+    /// under them. Providers without logs say so.
+    @ViewBuilder
+    private var usageTiles: some View {
+        if let source = costSource {
+            if store.ledger.isEmpty {
+                Text(store.isComputingLedger
+                    ? L10n.t("Reading local session logs…", "正在读取本地会话日志…")
+                    : L10n.t("Nothing logged locally yet.", "本地还没有记录。"))
+                    .font(.system(size: 11))
+                    .foregroundStyle(.white.opacity(0.5))
+                    .frame(maxWidth: .infinity, minHeight: IslandPanelLayout.tileHeight, alignment: .topLeading)
             } else {
                 HStack(alignment: .top, spacing: 18) {
-                    ForEach(horizons) { window in
-                        IslandTile(window: window, accent: Color(hex: id.accentHex), store: store)
-                            .frame(maxWidth: .infinity)
+                    ForEach([LedgerPeriod.today, .month]) { period in
+                        let sum = store.ledger.sum(period, source: source)
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text(period.displayName)
+                                .font(.system(size: 11, weight: .medium))
+                                .foregroundStyle(.white.opacity(0.55))
+                            IslandTokenFigure(count: sum.tokens, color: Color(hex: id.accentHex))
+                            Text(L10n.t("≈ \(QuotaFormat.usd(sum.usd))", "≈ \(QuotaFormat.usd(sum.usd))"))
+                                .font(.system(size: 10, design: .monospaced))
+                                .foregroundStyle(.white.opacity(0.45))
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .frame(height: IslandPanelLayout.tileHeight, alignment: .top)
                     }
                 }
-                .frame(maxWidth: horizons.count == 1 ? 240 : .infinity, alignment: .leading)
             }
+        } else {
+            Text(L10n.t(
+                "No local logs for this provider — only the quota readings.",
+                "这个服务商没有本地日志，只有额度读数。"))
+                .font(.system(size: 11))
+                .foregroundStyle(.white.opacity(0.5))
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity, minHeight: IslandPanelLayout.tileHeight, alignment: .topLeading)
         }
     }
 
@@ -231,18 +319,42 @@ private struct IslandProviderBlock: View {
     }
 }
 
-/// Label and figure on top, the bar, the reset under it.
+/// "243.2" and "M": the figure in the brand colour, the unit dimmer.
+private struct IslandTokenFigure: View {
+    let count: Int
+    let color: Color
+
+    var body: some View {
+        let compact = QuotaFormat.compact(count)
+        let unit = compact.last.map { $0.isLetter ? String($0).uppercased() : "" } ?? ""
+        let value = unit.isEmpty ? compact : String(compact.dropLast())
+        HStack(alignment: .firstTextBaseline, spacing: 2) {
+            Text(value)
+                .font(.system(size: 30, weight: .semibold, design: .monospaced))
+                .foregroundStyle(color)
+            Text(unit)
+                .font(.system(size: 14, weight: .semibold, design: .monospaced))
+                .foregroundStyle(color.opacity(0.6))
+        }
+        .lineLimit(1)
+    }
+}
+
+/// Label and figure on top, the bar, the reset under it. Figure and bar
+/// follow the used-or-remaining switch, like the menu-bar glyph.
 private struct IslandTile: View {
     let window: UsageWindow
     let accent: Color
     @ObservedObject var store: UsageStore
 
-    private var percent: Double { window.usedPercent ?? 0 }
+    private var used: Double { window.usedPercent ?? 0 }
+    private var percent: Double { store.meterMode.shownPercent(fromUsed: used) }
 
     /// The alert colour for the figure — white until the warning band —
-    /// so the number, not the bar, says how close this is.
+    /// so the number, not the bar, says how close this is. Judged on what
+    /// is used, whichever way the figure is shown.
     private var figureColor: Color {
-        guard let hex = store.alertSettings.level(for: percent).hex else { return .white }
+        guard let hex = store.alertSettings.level(for: used).hex else { return .white }
         return Color(hex: hex)
     }
 

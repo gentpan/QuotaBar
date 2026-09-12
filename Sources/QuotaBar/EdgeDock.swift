@@ -223,9 +223,9 @@ final class EdgeDockCoordinator {
         panel.becomesKeyOnlyIfNeeded = true
         panel.hidesOnDeactivate = false
         panel.isMovable = false
-        // Purely informational: never take a click that was meant for the
-        // window underneath.
-        panel.ignoresMouseEvents = true
+        // It used to ignore the mouse, as a tooltip would. It holds buttons
+        // now, and the pointer resting on it is what keeps it open.
+        panel.ignoresMouseEvents = false
         return panel
     }
 
