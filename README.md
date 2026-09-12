@@ -50,10 +50,10 @@ English and Simplified Chinese and follows the system language unless you pick o
 <!-- changelog:start -->
 <!-- Generated from CHANGELOG.md by Scripts/sync_changelog.py. Do not edit by hand. -->
 
-Latest release **0.4.0** (2026-09-12) · **66** changes in development · [full changelog](CHANGELOG.md) (kept in Chinese)
+Latest release **0.4.0** (2026-09-12) · **68** changes in development · [full changelog](CHANGELOG.md) (kept in Chinese)
 
 <details open>
-<summary><b>2026-09-13</b> · Unreleased · 34 added · 10 style · 13 fixed</summary>
+<summary><b>2026-09-13</b> · Unreleased · 36 added · 10 style · 13 fixed</summary>
 
 **Added**
 
@@ -91,6 +91,8 @@ Latest release **0.4.0** (2026-09-12) · **66** changes in development · [full 
 - 桌面卡片支持多张：大数字、环形仪表、花费趋势、每日对比、服务商网格、紧迫排行六种新样式，加上原来的经典样式；每张可选小、中、大三种尺寸，可指定服务商或统计来源，位置分别记住。右键卡片可更换样式、尺寸、服务商、添加卡片或删除，双击打开下拉面板。设置里的桌面小工具改为卡片列表，可添加卡片或恢复默认两张。原来开着桌面小工具的，会在原位置换成默认的两张：主服务商大数字，下面是花费趋势。
 - 面板页脚新增"全部刷新"按钮：重新读取所有服务商、服务状态和本地日志，并重新读取登录凭据，刷新期间转圈。⌘R 和选项菜单里的刷新也改为全部刷新。单张卡片右上角的按钮仍只刷新该服务商。
 - 关于页重做：GitHub 和 X 链接换上各自的品牌图标，新增邮件链接 hello@quota.bar；加入一段程序介绍；底部显示更新日期、更新日志入口、系统要求（macOS 14 或更高）、版权 © 2026 QuotaBar 和 MIT 开源许可；"你的数据"里列出 App 会连接的全部地址；新增"开源致谢"，列出 codex-island、OpenUsage、CodexBar、theSVG 和 Sora 字体的作者与许可；页尾加上与各服务商及 GitHub、X 无隶属关系的商标声明；标语改为"每个 AI 编码额度，抬眼就看见"，与官网一致。
+- 额度重置时刻：5 小时、每周等额度窗口重置后，QuotaBar 会在重置时间点自动重新读取该服务商，不用等下一次定时刷新（服务商还没翻篇时每分钟再试，最多 3 次）。刘海岛从刘海下方展开一条横幅，显示「额度已重置」、服务商和窗口名，可用百分比从原来的数字滚动到现在，轮廓发绿光，约 4 秒后收回；菜单栏图标用绿色从剩余很少"回满"，停留片刻后恢复；下拉面板和停靠条卡片里对应的额度行显示「刚刚重置」标签十分钟，桌面卡片右上角的状态也暂时换成「刚刚重置」。
+- 重置通知：可选关闭、用满后（默认，只在该窗口用过 90% 以上时）或每次。应用关闭期间发生的旧重置不会补发提示。设置 → 提醒新增「额度重置」卡片；终端运行 `QuotaBar --simulate-reset claude` 可以预览效果。
 
 **Style**
 
@@ -286,6 +288,9 @@ With two screens, choose which one the island, dock and cards appear on.
   course to finish tight says so; one on course to run out shows a flame and when.
 - **Alerts.** Warning and critical thresholds, plus *almost out*, *cutting it close* and
   *will run out* — each fires once per crossing and once per reset period.
+- **Resets.** QuotaBar reads a provider again the moment a window resets. The island
+  unfolds a green "limit reset" banner, the menu-bar glyph refills, and the row says it
+  just reset; a notification follows if the window had been used past 90%.
 - **Spend.** Estimated locally from Claude Code, Codex CLI and OpenCode session logs, in
   dollars or one of ten other currencies at daily reference rates, counting all tokens or
   input and output only. QuotaBar keeps its own day-by-model archive, so the figures do

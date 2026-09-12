@@ -14,6 +14,8 @@ final class StatusItemCoordinator: NSObject {
     private weak var store: UsageStore?
     private var subscriptions = Set<AnyCancellable>()
     private var lastImageKey = ""
+    /// True while the glyph plays a reset; the store's renders wait.
+    private var celebrating = false
 
     /// Runs after every store change, on the main queue. The presentation
     /// coordinators hang off it, the way they hung off the SwiftUI label's
@@ -76,7 +78,7 @@ final class StatusItemCoordinator: NSObject {
     /// tick, and swapping an identical image every 30 seconds is a flicker
     /// waiting to happen.
     private func render() {
-        guard let store, let item, let button = item.button else { return }
+        guard !celebrating, let store, let item, let button = item.button else { return }
         let stripItems = Self.stripItems(store)
         let key = "\(store.menuBarIconMode.rawValue)|\(stripItems.map { "\($0.id.rawValue)\($0.percent ?? -1)" })|\(store.meterReading)|\(store.menuBarStyle.rawValue)|\(store.alertLevel)|\(store.meterMode.rawValue)|\(store.isPrivacyMasked)"
         guard key != lastImageKey else { return }
@@ -104,6 +106,46 @@ final class StatusItemCoordinator: NSObject {
                 level: store.alertLevel,
                 mode: store.meterMode)
         }
+    }
+
+    /// A window reset: the glyph refills from the reading before it to the
+    /// one now, drawn in green, holds a moment, then goes back to the
+    /// template ink. Only the meter styles have something to refill.
+    func playReset(from before: MeterReading) {
+        guard !celebrating, let store, let button = item?.button, item?.isVisible == true,
+              store.menuBarIconMode == .meter, !store.isPrivacyMasked
+        else { return }
+        let target = store.meterReading
+        let style = store.menuBarStyle
+        let mode = store.meterMode
+        let green = NSColor(srgbRed: 0.13, green: 0.64, blue: 0.30, alpha: 1)
+        celebrating = true
+        Task { @MainActor [weak self] in
+            let frames = Motion.reduced ? 1 : 24
+            for frame in 1...frames {
+                let t = Double(frame) / Double(frames)
+                let eased = 1 - pow(1 - t, 3)
+                button.image = MenuBarIcon.render(
+                    reading: Self.blend(before, target, eased), style: style, level: .none, mode: mode, tint: green)
+                try? await Task.sleep(for: .milliseconds(30))
+            }
+            try? await Task.sleep(for: .milliseconds(Motion.reduced ? 1500 : 1100))
+            guard let self else { return }
+            self.celebrating = false
+            self.lastImageKey = ""
+            self.render()
+        }
+    }
+
+    private static func blend(_ from: MeterReading, _ to: MeterReading, _ t: Double) -> MeterReading {
+        func mix(_ a: Double?, _ b: Double?) -> Double? {
+            guard let b else { return nil }
+            guard let a else { return b }
+            return min(100, max(0, a + (b - a) * t))
+        }
+        var reading = MeterReading(short: mix(from.short, to.short), long: mix(from.long, to.long))
+        if to.preferred != nil { reading.preferred = mix(from.preferred ?? from.headline, to.preferred) }
+        return reading
     }
 
     /// The focused provider, or the first three enabled, with figures in

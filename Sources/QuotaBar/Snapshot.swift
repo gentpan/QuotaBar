@@ -173,6 +173,43 @@ enum Snapshot {
         {
             try? png.write(to: url.appendingPathComponent("menubar-strip.png"))
         }
+        // The reset moment: the strip with its banner, a row saying it just
+        // reset, and the glyph in its refill green.
+        let banner = ResetBanner(provider: .claude, name: L10n.t("5-hour", "5 小时"), others: 1, leftBefore: 4, leftNow: 100)
+        let bannerWidth = max(notch.totalWidth(slots: 2), 400)
+        let resetStrip = ZStack(alignment: .top) {
+            IslandGlow(shape: shape, color: Palette.live, ambient: true, sweeping: false, expanded: false)
+            shape.fill(Color.black)
+            VStack(spacing: 0) {
+                NotchStrip(store: store, metrics: notch, slots: 2)
+                ResetBannerRow(banner: banner, settled: true)
+            }
+        }
+        .frame(width: bannerWidth, height: notch.height + ResetBannerRow.height)
+        .padding(.horizontal, 22)
+        .padding(.bottom, 22)
+        .environment(\.colorScheme, .dark)
+        render(resetStrip, to: url, name: "island-reset-banner", backing: Color(hex: "D8D8D8"))
+        if let window = store.states[.claude]?.snapshot?.windows.first {
+            store.recentResets["\(ProviderID.claude.rawValue)|\(window.id)"] = Date().addingTimeInterval(600)
+            let row = QuotaRowView(store: store, id: .claude, window: window)
+                .frame(width: 320)
+                .padding(16)
+                .background(Color.black)
+                .environment(\.colorScheme, .dark)
+            render(row, to: url, name: "row-just-reset", backing: .black)
+            store.recentResets = [:]
+        }
+        let green = NSColor(srgbRed: 0.13, green: 0.64, blue: 0.30, alpha: 1)
+        for style in [MenuBarStyle.bar, .segments, .dualBar] {
+            let glyph = MenuBarIcon.render(reading: MeterReading(short: 2, long: 30), style: style, level: .none, mode: .remaining, tint: green)
+            if let tiff = glyph.tiffRepresentation, let bitmap = NSBitmapImageRep(data: tiff),
+               let png = bitmap.representation(using: .png, properties: [:])
+            {
+                try? png.write(to: url.appendingPathComponent("menubar-reset-\(style.rawValue).png"))
+            }
+        }
+
         let bridge = IslandCoordinator.Bridge()
         for page in IslandPanel.Page.allCases {
             for chart in page == .quota ? IslandChartStyle.allCases : [IslandChartStyle.stepped] {

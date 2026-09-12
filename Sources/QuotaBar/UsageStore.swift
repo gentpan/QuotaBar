@@ -117,6 +117,16 @@ final class UsageStore: ObservableObject {
     /// Pace notifications already sent, keyed by provider, window and kind,
     /// with the reset they belong to — so one crossing notifies once.
     var paceNotified: [String: Date] = [:]
+    /// Windows that reset a moment ago, by `ResetEvent.id`, and until when
+    /// their rows say so.
+    @Published var recentResets: [String: Date] = [:]
+    /// The read queued for just after the next window resets.
+    var resetCheckTask: Task<Void, Never>?
+    /// Extra reads spent on a reset the provider has not rolled over yet.
+    var resetRetries: [String: Int] = [:]
+    /// The surfaces that play the reset moment, with the glyph's reading from
+    /// before the reset; set by the coordinators.
+    var onResets: (([ResetEvent], MeterReading) -> Void)?
     var paceBaselineTaken = false
 
     private var lastAlertLevel: AlertLevel = .none
@@ -414,7 +424,10 @@ final class UsageStore: ObservableObject {
     private func apply(_ id: ProviderID, _ result: Result<UsageSnapshot, Error>) {
         switch result {
         case let .success(snapshot):
+            let before = meterReading
+            let resets = ResetDetector.events(provider: id, previous: states[id]?.snapshot, current: snapshot)
             states[id] = .loaded(snapshot)
+            if !resets.isEmpty { noteResets(resets, before: before) }
             SnapshotCache.shared.store(snapshot, for: id)
             if let percent = snapshot.headlinePercent {
                 UsageHistoryStore.shared.record(id, percent: percent)
@@ -434,6 +447,7 @@ final class UsageStore: ObservableObject {
         tick &+= 1
         evaluateAlerts()
         evaluatePaceAlerts()
+        scheduleResetCheck()
     }
 
     /// Re-evaluates which providers have usable credentials.

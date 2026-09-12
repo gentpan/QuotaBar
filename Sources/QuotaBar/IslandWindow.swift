@@ -23,6 +23,8 @@ final class IslandCoordinator {
     /// when a window crosses its warning, whether the island can be seen.
     final class Bridge: ObservableObject {
         @Published var peek = 0
+        /// The reset banner on show, if any.
+        @Published var banner: ResetBanner?
         @Published var occluded = false
         @Published var page: IslandPanel.Page = .quota
     }
@@ -32,6 +34,33 @@ final class IslandCoordinator {
     private var occlusionObserver: NSObjectProtocol?
     private var lastSeverity: AlertLevel = .none
     private var severityBaselined = false
+    private var bannerTask: Task<Void, Never>?
+    private var bannerShown = false
+
+    /// Windows that just reset: the silhouette grows a row under the notch
+    /// that says which, glows green, and folds away after a few seconds.
+    /// Nothing happens while the panel is open — its rows say it instead.
+    func playReset(_ events: [ResetEvent], store: UsageStore) {
+        guard panel != nil, !expanded, !events.isEmpty else { return }
+        bridge.banner = ResetBanner(events: events)
+        bannerShown = true
+        layout(expanded: false, animated: true)
+        bannerTask?.cancel()
+        bannerTask = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(4))
+            guard !Task.isCancelled else { return }
+            self?.dismissBanner()
+        }
+    }
+
+    private func dismissBanner() {
+        bannerTask?.cancel()
+        bannerTask = nil
+        guard bannerShown else { return }
+        bannerShown = false
+        bridge.banner = nil
+        if !expanded { layout(expanded: false, animated: true) }
+    }
 
     func sync(store: UsageStore) {
         if store.presentation == .island {
@@ -143,6 +172,11 @@ final class IslandCoordinator {
         collapseTask?.cancel()
         collapseTask = nil
         if value {
+            if bannerShown {
+                bannerTask?.cancel()
+                bannerShown = false
+                bridge.banner = nil
+            }
             expanded = true
             apply(true)
             layout(expanded: true, animated: true)
@@ -162,7 +196,7 @@ final class IslandCoordinator {
     /// thread for the whole animation.
     func layout(expanded: Bool, animated: Bool) {
         guard let panel, let screen = Self.hostScreen, let store else { return }
-        let shape = Self.size(expanded: expanded, store: store)
+        let shape = !expanded && bannerShown ? Self.bannerSize(store: store) : Self.size(expanded: expanded, store: store)
         let margin = Self.glowMargin
         let size = NSSize(width: shape.width + margin * 2, height: shape.height + margin)
         let frame = NSRect(
@@ -209,6 +243,12 @@ final class IslandCoordinator {
             return NSSize(width: notch.totalWidth(slots: slots), height: notch.height)
         }
         return NSSize(width: 220, height: 40)
+    }
+
+    /// The strip with the reset banner hanging under it.
+    static func bannerSize(store: UsageStore) -> NSSize {
+        let collapsed = size(expanded: false, store: store)
+        return NSSize(width: max(collapsed.width, 400), height: collapsed.height + ResetBannerRow.height)
     }
 
     /// Where the notch is, and how much room sits either side of it.
@@ -281,9 +321,19 @@ struct IslandView: View {
                     .offset(y: contentVisible ? 0 : -8)
                     .allowsHitTesting(contentVisible)
             } else if let notch = notchMetrics {
-                NotchStrip(store: store, metrics: notch, slots: store.islandSlots)
+                VStack(spacing: 0) {
+                    NotchStrip(store: store, metrics: notch, slots: store.islandSlots)
+                    if let banner = bridge.banner {
+                        ResetBannerRow(banner: banner).id(banner.id)
+                    }
+                }
             } else {
-                compactPill
+                VStack(spacing: 0) {
+                    compactPill
+                    if let banner = bridge.banner {
+                        ResetBannerRow(banner: banner).id(banner.id)
+                    }
+                }
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
@@ -323,7 +373,7 @@ struct IslandView: View {
 
     /// Under low power the glow shows only while something is happening.
     private var glowEvent: Bool {
-        hovering || store.enabled.contains { store.isLoading($0) } || store.isComputingCost || severity != .none
+        hovering || bridge.banner != nil || store.enabled.contains { store.isLoading($0) } || store.isComputingCost || severity != .none
     }
 
     private var severity: AlertLevel {
@@ -334,10 +384,11 @@ struct IslandView: View {
 
     /// Cobalt at rest; amber or red when a tracked window is past its line.
     private var glowColor: Color {
+        if bridge.banner != nil { return Palette.live }
         switch severity {
-        case .none: Palette.cobalt
-        case .warning: Palette.amber
-        case .critical: Palette.red
+        case .none: return Palette.cobalt
+        case .warning: return Palette.amber
+        case .critical: return Palette.red
         }
     }
 
@@ -389,6 +440,106 @@ struct IslandView: View {
         }
         .padding(.horizontal, Design.space3)
         .frame(height: 40)
+    }
+}
+
+// MARK: - Reset banner
+
+/// What the banner says: the first window that reset, how many others did,
+/// and what is left now against what was left before.
+struct ResetBanner: Equatable {
+    let id = UUID()
+    let provider: ProviderID
+    let name: String
+    let others: Int
+    let leftBefore: Double
+    let leftNow: Double
+
+    init(events: [ResetEvent]) {
+        // The window that had been fullest leads.
+        let lead = events.max { $0.previousUsed < $1.previousUsed } ?? events[0]
+        provider = lead.provider
+        name = lead.name
+        others = events.count - 1
+        leftBefore = max(0, 100 - lead.previousUsed)
+        leftNow = max(0, 100 - lead.usedNow)
+    }
+
+    init(provider: ProviderID, name: String, others: Int, leftBefore: Double, leftNow: Double) {
+        self.provider = provider
+        self.name = name
+        self.others = others
+        self.leftBefore = leftBefore
+        self.leftNow = leftNow
+    }
+}
+
+/// The row under the notch: the provider's mark with a green reset badge,
+/// "Limit reset" and which window, and the figure counting up to what is
+/// left now.
+struct ResetBannerRow: View {
+    static let height: CGFloat = 54
+    let banner: ResetBanner
+    @State private var shown: Double
+    @State private var arrived = false
+
+    /// `settled` starts at the end of the arrival, for off-screen renders.
+    init(banner: ResetBanner, settled: Bool = false) {
+        self.banner = banner
+        _shown = State(initialValue: settled ? banner.leftNow : banner.leftBefore)
+        _arrived = State(initialValue: settled)
+    }
+
+    var body: some View {
+        HStack(spacing: Design.space3) {
+            ZStack(alignment: .bottomTrailing) {
+                Circle()
+                    .fill(Color.white.opacity(0.08))
+                    .frame(width: 32, height: 32)
+                    .overlay(ProviderGlyph(id: banner.provider, size: 17, tint: .white))
+                Circle()
+                    .fill(Palette.live)
+                    .frame(width: 14, height: 14)
+                    .overlay(
+                        Image(systemName: "arrow.counterclockwise")
+                            .font(.system(size: 7, weight: .black))
+                            .foregroundStyle(.black)
+                            .rotationEffect(.degrees(arrived ? -360 : 0)))
+                    .offset(x: 3, y: 3)
+            }
+            VStack(alignment: .leading, spacing: 1) {
+                Text(L10n.t("Limit reset", "额度已重置"))
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(.white)
+                Text(detail)
+                    .font(.system(size: 11))
+                    .foregroundStyle(.white.opacity(0.6))
+                    .lineLimit(1)
+            }
+            Spacer(minLength: Design.space2)
+            HStack(alignment: .firstTextBaseline, spacing: 2) {
+                Text("\(Int(shown.rounded()))")
+                    .font(.system(size: 22, weight: .semibold, design: .monospaced))
+                    .foregroundStyle(Palette.live)
+                    .contentTransition(.numericText(value: shown))
+                Text(L10n.t("% left", "% 可用"))
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(.white.opacity(0.6))
+            }
+        }
+        .padding(.horizontal, Design.space4)
+        .frame(height: Self.height)
+        .opacity(arrived ? 1 : 0)
+        .offset(y: arrived ? 0 : -6)
+        .onAppear {
+            withAnimation(Motion.animation(.easeOut(duration: 0.25).delay(0.12))) { arrived = true }
+            withAnimation(Motion.animation(.easeOut(duration: 0.9).delay(0.3))) { shown = banner.leftNow }
+        }
+    }
+
+    private var detail: String {
+        let base = "\(banner.provider.displayName) · \(banner.name)"
+        return banner.others > 0 ? base + L10n.t(" and \(banner.others) more", "，另有 \(banner.others) 个") : base
     }
 }
 

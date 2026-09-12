@@ -218,6 +218,11 @@ public struct ExperiencePrefs: Codable, Equatable, Sendable {
     public var hideWhenSharing: Bool = false
     public var hotkey: Hotkey?
     public var paceAlerts: PaceAlertPrefs = PaceAlertPrefs()
+    /// The reset moment: the island's banner, the menu-bar glyph refilling,
+    /// "just reset" on the rows.
+    public var resetEffects: Bool = true
+    /// Whether a reset also raises a system notification.
+    public var resetNotify: ResetNotifyMode = .afterHeavyUse
     /// Serve 127.0.0.1:6736/v1/limits for other local tools.
     public var localAPI: Bool = false
     /// "http://host:port" or "socks5://host:port"; empty = direct.
@@ -238,6 +243,7 @@ public struct ExperiencePrefs: Codable, Equatable, Sendable {
         case reduceMotion, islandGlow, lowPowerGlow, islandAutoPeek, islandChart, widgetSortsByUrgency
         case deskCards, deskCardsMigrated
         case hideWhenSharing, hotkey, paceAlerts, localAPI, proxy, betaUpdates
+        case resetEffects, resetNotify
         case shareSignature, shareShowsSignature, shareCardShownForVersion
     }
 
@@ -277,6 +283,8 @@ public struct ExperiencePrefs: Codable, Equatable, Sendable {
         hideWhenSharing = value(.hideWhenSharing, d.hideWhenSharing)
         hotkey = try? c.decodeIfPresent(Hotkey.self, forKey: .hotkey)
         paceAlerts = value(.paceAlerts, d.paceAlerts)
+        resetEffects = value(.resetEffects, d.resetEffects)
+        resetNotify = choice(.resetNotify, d.resetNotify)
         localAPI = value(.localAPI, d.localAPI)
         proxy = value(.proxy, d.proxy)
         betaUpdates = value(.betaUpdates, d.betaUpdates)

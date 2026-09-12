@@ -1401,6 +1401,27 @@ struct AlertsPane: View {
                 "Each fires once per crossing and once per reset period. What is already true when QuotaBar starts sets the baseline without a notification.",
                 "每次越线只提醒一次，每个重置周期也只提醒一次。QuotaBar 启动时已经成立的情况只作为基线，不会提醒。"))
         }
+
+        SettingsCard(L10n.t("Resets", "额度重置")) {
+            SettingToggle(
+                L10n.t("Mark the moment a window resets", "额度重置时播放提示"),
+                caption: L10n.t(
+                    "The island shows a banner, the menu-bar glyph refills, and the row says it just reset for ten minutes.",
+                    "刘海岛弹出横幅，菜单栏图标回满，对应的额度行显示「刚刚重置」十分钟。"),
+                isOn: Binding(
+                    get: { store.experience.resetEffects },
+                    set: { value in store.updateExperience { $0.resetEffects = value } }))
+            SettingRow(L10n.t("Notify", "系统通知"), caption: L10n.t("After heavy use: only when the window had passed 90%.", "用满后：只在该窗口用过 90% 以上时通知。")) {
+                GlassSegmented(
+                    options: ResetNotifyMode.allCases.map { (value: $0, label: $0.displayName) },
+                    selection: store.experience.resetNotify,
+                    onSelect: { mode in store.updateExperience { $0.resetNotify = mode } })
+                .frame(maxWidth: 300)
+            }
+            SettingFootnote(L10n.t(
+                "QuotaBar reads a provider again just after its window resets, so this happens on time rather than at the next refresh.",
+                "QuotaBar 会在窗口重置后立刻重新读取该服务商，不用等下一次定时刷新。"))
+        }
     }
 
     private func paceToggle(_ title: String, _ caption: String, _ key: WritableKeyPath<PaceAlertPrefs, Bool>) -> some View {

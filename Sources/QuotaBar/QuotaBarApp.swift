@@ -130,6 +130,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         SettingsWindow.configure(store: store)
         MenuPanelController.shared.configure(store: store)
         coordinators.start(store: store)
+        if let index = arguments.firstIndex(of: "--simulate-reset"), index + 1 < arguments.count,
+           let id = ProviderID(rawValue: arguments[index + 1])
+        {
+            // Plays the reset moment for that provider a few seconds in.
+            store.simulateReset(id)
+        }
         if arguments.contains("--panel-window") {
             // Opens the menu panel under the top-right of the screen, for
             // looking at it without clicking the item.
@@ -166,6 +172,11 @@ final class Coordinators {
             self.sync(store: store)
         }
         status.start(store: store)
+        store.onResets = { [weak self, weak store] events, before in
+            guard let self, let store else { return }
+            self.status.playReset(from: before)
+            if store.presentation == .island { self.island.playReset(events, store: store) }
+        }
         sync(store: store)
         // A display plugged in or pulled: whatever screen each surface now
         // belongs on, it goes there.

@@ -92,6 +92,34 @@ struct Pressable<Label: View>: View {
     }
 }
 
+// MARK: - Just reset
+
+/// "Just reset" on a row for ten minutes after its window rolled over: a
+/// green chip whose arrow turns once as it arrives.
+struct JustResetChip: View {
+    var compact = false
+    @State private var turned = false
+
+    var body: some View {
+        HStack(spacing: 3) {
+            Image(systemName: "arrow.counterclockwise")
+                .font(.system(size: compact ? 8 : 9, weight: .bold))
+                .rotationEffect(.degrees(turned ? -360 : 0))
+            Text(L10n.t("Just reset", "刚刚重置"))
+                .font(.system(size: compact ? 9 : 10, weight: .semibold))
+        }
+        .foregroundStyle(Palette.live)
+        .padding(.horizontal, 6)
+        .padding(.vertical, 2)
+        .background(Capsule().fill(Palette.live.opacity(0.14)))
+        .transition(.opacity.combined(with: .scale(scale: 0.9)))
+        .onAppear {
+            withAnimation(Motion.animation(.easeInOut(duration: 0.7))) { turned = true }
+        }
+        .help(L10n.t("This window reset a moment ago.", "这个额度窗口刚刚重置。"))
+    }
+}
+
 // MARK: - Colours
 
 enum Palette {
@@ -151,7 +179,11 @@ struct QuotaRowView: View {
                             : L10n.t("The fullest window, which the ring follows", "用得最满的窗口，圆环按它显示"))
                 }
                 Spacer(minLength: Design.space2)
-                paceNote
+                if store.justReset(id, window: window.id) {
+                    JustResetChip()
+                } else {
+                    paceNote
+                }
             }
             meter
             HStack {
