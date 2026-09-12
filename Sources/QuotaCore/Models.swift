@@ -601,9 +601,15 @@ public struct MeterReading: Sendable, Equatable {
         self.long = long
     }
 
-    /// What a single-meter style shows — whichever horizon is closest to its
-    /// limit, since that is the one that will bite first.
+    /// The owner's pick for the one provider on show, when there is one:
+    /// what `headline` answers instead of the fuller horizon, while both
+    /// horizons stay as they are for the two-arc styles.
+    public var preferred: Double? = nil
+
+    /// What a single-meter style shows — the pick, else whichever horizon is
+    /// closest to its limit, since that is the one that will bite first.
     public var headline: Double? {
+        if let preferred { return preferred }
         switch (short, long) {
         case let (s?, l?): return max(s, l)
         case let (s?, nil): return s
@@ -688,6 +694,20 @@ public struct UsageSnapshot: Sendable {
         windows
             .filter { $0.usedPercent != nil }
             .max { ($0.usedPercent ?? 0) < ($1.usedPercent ?? 0) }
+    }
+
+    /// The window a single figure stands for: the one the owner picked for
+    /// this provider, while the provider still reports it with a figure,
+    /// else the fullest — the one that bites first.
+    public func headlineWindow(preferring windowID: String?) -> UsageWindow? {
+        if let windowID, let picked = windows.first(where: { $0.id == windowID && $0.usedPercent != nil }) {
+            return picked
+        }
+        return headlineWindow
+    }
+
+    public func headlinePercent(preferring windowID: String?) -> Double? {
+        headlineWindow(preferring: windowID)?.usedPercent
     }
 }
 

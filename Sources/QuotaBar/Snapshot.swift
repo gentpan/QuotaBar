@@ -467,7 +467,7 @@ enum Snapshot {
                 ForEach(store.enabled) { id in
                     ProviderRing(
                         id: id,
-                        percent: store.states[id]?.snapshot?.headlinePercent,
+                        percent: store.headlinePercent(for: id),
                         alerts: store.alertSettings,
                         // Claude marked: a single click in the dock picks which
                         // provider the menu-bar glyph reports, and the mark is

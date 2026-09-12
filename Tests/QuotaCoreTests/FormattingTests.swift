@@ -610,6 +610,30 @@ final class NotchStripFormattingTests: XCTestCase {
         XCTAssertEqual(snapshot.headlineWindow?.title, "7d")
     }
 
+    /// The owner's pick stands while the provider reports it; a pick that
+    /// is gone, or was never made, means the fullest window.
+    func testHeadlineFollowsThePickedWindowWhileItIsReported() {
+        let snapshot = UsageSnapshot(windows: [
+            UsageWindow(title: "5h", usedPercent: 17),
+            UsageWindow(title: "week", usedPercent: 37),
+            UsageWindow(title: "Fable · week", usedPercent: 68, scope: "Fable"),
+            UsageWindow(title: "credits", detail: "no figure"),
+        ])
+        XCTAssertEqual(snapshot.headlinePercent(preferring: nil), 68)
+        XCTAssertEqual(snapshot.headlinePercent(preferring: "5h"), 17)
+        XCTAssertEqual(snapshot.headlineWindow(preferring: "week")?.title, "week")
+        XCTAssertEqual(snapshot.headlinePercent(preferring: "gone"), 68)
+        XCTAssertEqual(snapshot.headlinePercent(preferring: "credits"), 68, "a window without a figure cannot be the figure")
+    }
+
+    func testAPreferredReadingOverridesTheHeadlineOnly() {
+        var reading = MeterReading(short: 17, long: 68)
+        XCTAssertEqual(reading.headline, 68)
+        reading.preferred = 17
+        XCTAssertEqual(reading.headline, 17)
+        XCTAssertEqual(reading.long, 68, "the two-arc styles keep both horizons")
+    }
+
     func testHeadlineWindowIsNilWithoutAFigure() {
         let snapshot = UsageSnapshot(
             windows: [UsageWindow(title: "cycle", usedPercent: nil)],

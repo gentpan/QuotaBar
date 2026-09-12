@@ -95,7 +95,7 @@ struct MenuContentBody: View {
                     title: id.displayName,
                     logoID: id,
                     accent: Color(hex: id.accentHex),
-                    percent: store.states[id]?.snapshot?.headlinePercent,
+                    percent: store.headlinePercent(for: id),
                     warn: store.states[id]?.errorMessage != nil,
                     isSelected: store.selected == id)
                 {
@@ -357,7 +357,7 @@ struct OverviewRow: View {
                     Spacer()
                     trailing
                 }
-                if let percent = store.states[id]?.snapshot?.headlinePercent {
+                if let percent = store.headlinePercent(for: id) {
                     MiniMeter(percent: percent, accent: Color(hex: id.accentHex))
                 }
             }
@@ -370,7 +370,7 @@ struct OverviewRow: View {
         case .loading, nil:
             ProgressView().controlSize(.small)
         case let .loaded(snapshot), let .stale(snapshot, _):
-            if let percent = snapshot.headlinePercent {
+            if let percent = store.headlinePercent(for: id) ?? snapshot.headlinePercent {
                 Text(QuotaFormat.percent(percent))
                     .font(.callout.weight(.semibold))
                     .monospacedDigit()

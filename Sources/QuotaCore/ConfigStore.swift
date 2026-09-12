@@ -46,6 +46,10 @@ public struct QuotaConfig: Codable, Sendable, Equatable {
     /// nil follows the menu bar (and the notch, for the island); a display
     /// that is not connected right now falls back to the same.
     public var displayScreen: String?
+    /// Per provider, the id of the window its single figure follows — the
+    /// ring, the island, the widget, the menu-bar reading. Absent = the
+    /// fullest window. Picked by clicking a row in the provider's card.
+    public var headlineWindows: [ProviderID: String]
 
     /// Only ever populated by decoding a pre-Keychain config file. `ConfigStore`
     /// drains it into the keychain on load and rewrites the file without it;
@@ -85,6 +89,7 @@ public struct QuotaConfig: Codable, Sendable, Equatable {
         dockPin: ProviderID? = nil,
         widgetPin: ProviderID? = nil,
         displayScreen: String? = nil,
+        headlineWindows: [ProviderID: String] = [:],
         legacyCredentials: [ProviderID: String] = [:])
     {
         self.enabled = enabled
@@ -114,6 +119,7 @@ public struct QuotaConfig: Codable, Sendable, Equatable {
         self.dockPin = dockPin
         self.widgetPin = widgetPin
         self.displayScreen = displayScreen
+        self.headlineWindows = headlineWindows
         self.legacyCredentials = legacyCredentials
     }
 
@@ -122,7 +128,7 @@ public struct QuotaConfig: Codable, Sendable, Equatable {
         case selected, updateFeed, checksForUpdates, updatePolicy
         case dockEdge, dockPosition, dockAlwaysVisible, islandSlots
         case widgetEnabled, widgetDensity, widgetX, widgetY, widgetAlwaysOnTop, widgetScope, islandPin, dockPin, widgetPin
-        case displayScreen
+        case displayScreen, headlineWindows
         case legacyCredentials = "credentials"
     }
 
@@ -180,8 +186,20 @@ public struct QuotaConfig: Codable, Sendable, Equatable {
         widgetPin = QuotaConfig.decodeEnum(from: container, forKey: .widgetPin)
         displayScreen = (try? container.decodeIfPresent(String.self, forKey: .displayScreen))
             .flatMap { $0.isEmpty ? nil : $0 }
+        headlineWindows = QuotaConfig.decodeProviderStrings(from: container, forKey: .headlineWindows)
         legacyCredentials = QuotaConfig.decodeLegacyCredentials(from: container)
         hasLegacyCredentialKey = container.contains(.legacyCredentials)
+    }
+
+    /// A per-provider string map, stored as an object keyed by provider id —
+    /// not the key/value array `Codable` makes of an enum-keyed dictionary.
+    private static func decodeProviderStrings(
+        from container: KeyedDecodingContainer<CodingKeys>, forKey key: CodingKeys) -> [ProviderID: String]
+    {
+        guard let object = try? container.decodeIfPresent([String: String].self, forKey: key) else { return [:] }
+        return object.reduce(into: [:]) { result, pair in
+            if let id = ProviderID(rawValue: pair.key), !pair.value.isEmpty { result[id] = pair.value }
+        }
     }
 
     /// Decodes a string-backed enum, returning nil for a missing key *or* an
@@ -259,6 +277,11 @@ public struct QuotaConfig: Codable, Sendable, Equatable {
         try container.encodeIfPresent(dockPin, forKey: .dockPin)
         try container.encodeIfPresent(widgetPin, forKey: .widgetPin)
         try container.encodeIfPresent(displayScreen, forKey: .displayScreen)
+        if !headlineWindows.isEmpty {
+            try container.encode(
+                Dictionary(uniqueKeysWithValues: headlineWindows.map { ($0.key.rawValue, $0.value) }),
+                forKey: .headlineWindows)
+        }
         // `legacyCredentials` intentionally omitted.
     }
 }
@@ -571,6 +594,15 @@ public final class ConfigStore: @unchecked Sendable {
             return config.displayScreen
         }
         set { mutate { $0.displayScreen = newValue } }
+    }
+
+    public func headlineWindow(for id: ProviderID) -> String? {
+        lock.lock(); defer { lock.unlock() }
+        return config.headlineWindows[id]
+    }
+
+    public func setHeadlineWindow(_ windowID: String?, for id: ProviderID) {
+        mutate { $0.headlineWindows[id] = windowID }
     }
 
     public var widgetPin: ProviderID? {

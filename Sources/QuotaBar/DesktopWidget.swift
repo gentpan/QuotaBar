@@ -259,7 +259,7 @@ struct DesktopWidgetView: View {
     }
 
     private func percent(_ id: ProviderID) -> Double? {
-        store.states[id]?.snapshot?.headlinePercent
+        store.headlinePercent(for: id)
     }
 
     private func tint(_ percent: Double) -> Color {

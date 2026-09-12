@@ -312,37 +312,8 @@ struct ProviderCallout: View {
             .animation(.easeOut(duration: 0.15), value: on)
     }
 
-    /// Title and reset on one line, the meter under it, the figure below —
-    /// the arrangement from the reference: nothing wraps, nothing competes.
     private func row(_ window: UsageWindow) -> some View {
-        VStack(alignment: .leading, spacing: 5) {
-            HStack {
-                Text(window.scope ?? window.title)
-                    .font(.system(size: 11))
-                    .foregroundStyle(.white)
-                    .lineLimit(1)
-                Spacer(minLength: Design.space2)
-                if let resetsAt = window.resetsAt {
-                    Text(QuotaFormat.resetLabel(to: resetsAt))
-                        .font(.system(size: 11))
-                        .foregroundStyle(.white.opacity(0.55))
-                        .lineLimit(1)
-                }
-            }
-            Meter(
-                percent: window.usedPercent,
-                tint: window.usedPercent.map(meterTint) ?? .clear,
-                style: store.meterStyle)
-            Text(window.usedPercent.map {
-                L10n.t("\(QuotaFormat.percent($0)) used", "已用 \(QuotaFormat.percent($0))")
-            } ?? (window.detail ?? "—"))
-                .font(.system(size: 11))
-                .foregroundStyle(.white.opacity(0.55))
-        }
-    }
-
-    private func meterTint(_ percent: Double) -> Color {
-        Color(hex: UsageRamp.hex(used: percent))
+        CalloutWindowRow(store: store, id: id, window: window)
     }
 
     /// "Pro_plus" → "PRO PLUS", "pro" → "PRO". Providers spell their tiers
@@ -545,5 +516,78 @@ struct MiniBars: View {
             }
         }
         .frame(height: height, alignment: .bottom)
+    }
+}
+
+/// One quota window on the card's front: title and reset on one line, the
+/// meter under it, the figure below — the arrangement from the reference:
+/// nothing wraps, nothing competes.
+///
+/// The row is also where the owner picks which window the provider's
+/// single figure follows — on the ring, the island, the widget, the menu.
+/// A double-click picks it; a double-click on the pick goes back to the
+/// fullest window. Double, not single: the card is crossed on the way to
+/// its refresh and flip buttons, and a stray click should not re-point
+/// the ring.
+/// The row currently followed carries a dot: filled in the brand colour
+/// when it is a pick, hollow when it is simply the fullest.
+private struct CalloutWindowRow: View {
+    @ObservedObject var store: UsageStore
+    let id: ProviderID
+    let window: UsageWindow
+    @State private var hovered = false
+
+    var body: some View {
+        let followed = store.headlineWindow(for: id)?.id == window.id
+        let picked = store.pickedHeadlineWindow(for: id) == window.id
+        VStack(alignment: .leading, spacing: 5) {
+            HStack(spacing: 5) {
+                Text(window.scope ?? window.title)
+                    .font(.system(size: 11))
+                    .foregroundStyle(.white)
+                    .lineLimit(1)
+                if followed {
+                    Image(systemName: picked ? "circle.inset.filled" : "circle")
+                        .font(.system(size: 8, weight: .semibold))
+                        .foregroundStyle(picked ? Color(hex: id.accentHex) : .white.opacity(0.4))
+                        .transition(.opacity)
+                }
+                Spacer(minLength: Design.space2)
+                if let resetsAt = window.resetsAt {
+                    Text(QuotaFormat.resetLabel(to: resetsAt))
+                        .font(.system(size: 11))
+                        .foregroundStyle(.white.opacity(0.55))
+                        .lineLimit(1)
+                }
+            }
+            Meter(
+                percent: window.usedPercent,
+                tint: window.usedPercent.map { Color(hex: UsageRamp.hex(used: $0)) } ?? .clear,
+                style: store.meterStyle)
+            Text(window.usedPercent.map {
+                L10n.t("\(QuotaFormat.percent($0)) used", "已用 \(QuotaFormat.percent($0))")
+            } ?? (window.detail ?? "—"))
+                .font(.system(size: 11))
+                .foregroundStyle(.white.opacity(0.55))
+        }
+        .padding(.horizontal, 6)
+        .padding(.vertical, 4)
+        .background(
+            RoundedRectangle(cornerRadius: 6, style: .continuous)
+                .fill(Color.white.opacity(hovered && window.usedPercent != nil ? 0.06 : 0)))
+        .padding(.horizontal, -6)
+        .padding(.vertical, -4)
+        .contentShape(Rectangle())
+        .onHover { hovered = $0 }
+        .onTapGesture(count: 2) {
+            // Only a window with a figure can be the figure.
+            guard window.usedPercent != nil else { return }
+            withAnimation(.easeOut(duration: 0.15)) {
+                store.setHeadlineWindow(picked ? nil : window.id, for: id)
+            }
+        }
+        .help(L10n.t(
+            "Double-click: the ring, island and widget follow this window. Again: back to the fullest one.",
+            "双击后圆环、刘海岛和桌面卡片都按这个窗口显示；再双击一次恢复为最满的那个。"))
     }
 }

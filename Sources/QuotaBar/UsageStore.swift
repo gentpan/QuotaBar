@@ -184,7 +184,36 @@ final class UsageStore: ObservableObject {
     /// menu bar is telling you about.
     var meterReading: MeterReading {
         let sources: [ProviderID] = selected.map { [$0] } ?? enabled
-        return MeterReading.across(sources.compactMap { states[$0]?.snapshot })
+        var reading = MeterReading.across(sources.compactMap { states[$0]?.snapshot })
+        // One provider on show: its single figure is the window the owner
+        // picked for it, here as everywhere else.
+        if let selected, config.headlineWindow(for: selected) != nil {
+            reading.preferred = headlinePercent(for: selected)
+        }
+        return reading
+    }
+
+    // MARK: Headline window
+
+    /// The window a provider's single figure follows — on the ring, the
+    /// island, the widget, the menu — the owner's pick from its card, else
+    /// the fullest window.
+    func headlinePercent(for id: ProviderID) -> Double? {
+        states[id]?.snapshot?.headlinePercent(preferring: config.headlineWindow(for: id))
+    }
+
+    func headlineWindow(for id: ProviderID) -> UsageWindow? {
+        states[id]?.snapshot?.headlineWindow(preferring: config.headlineWindow(for: id))
+    }
+
+    /// The pick itself, whether or not the provider currently reports it.
+    func pickedHeadlineWindow(for id: ProviderID) -> String? {
+        config.headlineWindow(for: id)
+    }
+
+    func setHeadlineWindow(_ windowID: String?, for id: ProviderID) {
+        config.setHeadlineWindow(windowID, for: id)
+        objectWillChange.send()
     }
 
     /// Highest reading overall, for anything that shows a single figure.

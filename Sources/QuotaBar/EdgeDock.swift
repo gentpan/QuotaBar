@@ -106,6 +106,7 @@ final class EdgeDockCoordinator {
         @ViewBuilder content: () -> Content)
     {
         let width = width ?? Self.calloutWidth
+        Self.trace("showCallout(index: \(index.map(String.init) ?? "nil"), expanded: \(expanded))")
         guard let index, expanded, let strip = panel else {
             hideCallout()
             return
@@ -184,6 +185,7 @@ final class EdgeDockCoordinator {
     }
 
     func hideCallout() {
+        Self.trace("hideCallout (panel: \(calloutPanel != nil))")
         calloutPanel?.orderOut(nil)
         calloutPanel = nil
         calloutHovered = false
@@ -194,6 +196,7 @@ final class EdgeDockCoordinator {
     /// again on entry — collapses the strip the same way leaving the strip
     /// would, and takes the card with it.
     func setCalloutHovered(_ inside: Bool) {
+        Self.trace("calloutHovered(\(inside)) mouse=\(NSEvent.mouseLocation) card=\(calloutPanel?.frame ?? .zero)")
         calloutHovered = inside
         if inside {
             collapseTask?.cancel()
@@ -610,7 +613,7 @@ struct EdgeDockView: View {
             ForEach(store.dockProviders) { id in
                 ProviderRing(
                     id: id,
-                    percent: store.states[id]?.snapshot?.headlinePercent,
+                    percent: store.headlinePercent(for: id),
                     alerts: store.alertSettings,
                     showsLabel: false,
                     selected: store.selected == id,

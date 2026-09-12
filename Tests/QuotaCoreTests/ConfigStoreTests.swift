@@ -163,6 +163,7 @@ final class ConfigStoreTests: XCTestCase {
         first.dockPin = .claude
         first.widgetScope = .pinned
         first.displayScreen = "37D8832A-2D66-02CA-B9F7-8F30A301B230"
+        first.setHeadlineWindow("Fable · 周窗口", for: .claude)
         first.presentation = .island
         first.language = .zhHans
         first.setEnabled(.gemini, true)
@@ -178,6 +179,8 @@ final class ConfigStoreTests: XCTestCase {
         XCTAssertNil(second.islandPin)
         XCTAssertEqual(second.widgetScope, .pinned)
         XCTAssertEqual(second.displayScreen, "37D8832A-2D66-02CA-B9F7-8F30A301B230")
+        XCTAssertEqual(second.headlineWindow(for: .claude), "Fable · 周窗口")
+        XCTAssertNil(second.headlineWindow(for: .codex))
         XCTAssertEqual(second.presentation, .island)
         XCTAssertEqual(second.language, .zhHans)
         XCTAssertTrue(second.isEnabled(.gemini))
