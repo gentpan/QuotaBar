@@ -74,6 +74,14 @@ final class UsageStore: ObservableObject {
     private var updatePollTask: Task<Void, Never>?
     /// Staged bundle, verified and waiting for the user to restart.
     private var stagedUpdate: URL?
+    /// The release the last check found, kept for a retry or a manual
+    /// download after a failure, whose stage no longer carries it.
+    private(set) var lastRelease: UpdateRelease?
+    /// The version whose card has been shown this session.
+    private var announcedUpdate: String?
+    /// Install and Relaunch was clicked before the download finished.
+    private var installWhenStaged = false
+    var isInstallRequested: Bool { installWhenStaged }
     /// Recorded headline readings per provider, mirrored here so the detail
     /// sparkline redraws when a refresh lands.
     @Published var history: [ProviderID: [Double]] = [:]
@@ -491,9 +499,16 @@ final class UsageStore: ObservableObject {
     }
 
     /// `manual`: asked for from a menu or the Updates page, which checks even
-    /// with automatic checks turned off.
-    func checkForUpdate(manual: Bool = false) {
+    /// with automatic checks turned off. `presenting`: the update card opens
+    /// straight away and shows the check, its result, or that it is up to date.
+    ///
+    /// A new version always comes to the owner as the update card — what it is,
+    /// when it was released, what changed — and nothing is replaced until they
+    /// click Install and Relaunch. Under the automatic policy the download and
+    /// its verification happen in the background first, so that click is instant.
+    func checkForUpdate(manual: Bool = false, presenting: Bool = false) {
         guard manual || config.checksForUpdates, let current = currentVersion else { return }
+        if presenting { UpdateWindow.show(store: self) }
         // A download or a staged bundle is further along than a check.
         switch updateStage {
         case .downloading, .readyToInstall: return
@@ -504,16 +519,20 @@ final class UsageStore: ObservableObject {
         Task {
             let release = await Updater.check(feed: feed, currentVersion: current, includePrereleases: self.experience.betaUpdates)
             self.lastUpdateCheck = Date()
-            if let release {
-                self.updateStage = .available(release)
-                // Automatic: straight on to the download, and from there to
-                // the install. Not for a Homebrew-owned copy, which brew
-                // upgrades and would otherwise fight over.
-                if self.updatePolicy == .automatic, !self.updateIsManagedByHomebrew {
-                    self.downloadUpdate()
-                }
-            } else {
+            guard let release else {
                 self.updateStage = .idle
+                return
+            }
+            self.lastRelease = release
+            self.updateStage = .available(release)
+            if self.updatePolicy == .automatic, !self.updateIsManagedByHomebrew {
+                self.downloadUpdate()
+            }
+            // Once a session per version: the six-hourly check finding the
+            // same release again is not news.
+            if self.announcedUpdate != release.version {
+                self.announcedUpdate = release.version
+                UpdateWindow.show(store: self)
             }
         }
     }
@@ -531,30 +550,39 @@ final class UsageStore: ObservableObject {
         }
     }
 
-    /// Downloads and verifies, leaving the bundle staged for a restart —
-    /// or, under the automatic policy, installing and relaunching at once.
-    func downloadUpdate() {
+    /// Downloads and verifies, leaving the bundle staged. `thenInstall`: the
+    /// owner already clicked Install and Relaunch, so go straight on.
+    func downloadUpdate(thenInstall: Bool = false) {
         guard case let .available(release) = updateStage else { return }
+        installWhenStaged = installWhenStaged || thenInstall
         updateStage = .downloading(release)
         Task {
             do {
                 let staged = try await Updater.stage(release)
                 self.stagedUpdate = staged
                 self.updateStage = .readyToInstall(release)
-                if self.updatePolicy == .automatic, !self.updateIsManagedByHomebrew {
+                if self.installWhenStaged, !self.updateIsManagedByHomebrew {
                     self.installUpdate()
                 }
             } catch {
+                self.installWhenStaged = false
                 self.updateStage = .failed(error.localizedDescription)
             }
         }
     }
 
-    /// One click from "available" to relaunched, for the manual policy.
+    /// Install and Relaunch, from wherever the update has got to: download
+    /// first if need be, wait for one under way, or swap the staged bundle.
     func installNow() {
         switch updateStage {
-        case .available: downloadUpdate()
+        case .available: downloadUpdate(thenInstall: true)
+        case .downloading: installWhenStaged = true
         case .readyToInstall: installUpdate()
+        case .failed:
+            if let lastRelease {
+                updateStage = .available(lastRelease)
+                downloadUpdate(thenInstall: true)
+            }
         default: break
         }
     }

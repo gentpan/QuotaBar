@@ -414,11 +414,11 @@ private struct UpdateBanner: View {
         case let .readyToInstall(release):
             banner(
                 L10n.t("QuotaBar \(release.version) is ready", "QuotaBar \(release.version) 已下载"),
-                action: L10n.t("Restart to update", "重启安装")) { store.installNow() }
+                action: L10n.t("Update", "更新")) { [store] in UpdateWindow.show(store: store) }
         case let .available(release):
             banner(
                 L10n.t("QuotaBar \(release.version) is available", "发现新版本 \(release.version)"),
-                action: L10n.t("Download", "下载")) { store.downloadUpdate() }
+                action: L10n.t("See What's New", "查看更新")) { [store] in UpdateWindow.show(store: store) }
         default:
             EmptyView()
         }
@@ -590,7 +590,7 @@ private struct OptionsMenuButton: NSViewRepresentable {
             menu.addItem(copy)
             menu.addItem(.separator())
             add(menu, L10n.t("Refresh Everything", "全部刷新"), "r") { [store] in store.forceRefreshAll() }
-            add(menu, L10n.t("Check for Updates…", "检查更新…"), "") { [store] in store.checkForUpdate(manual: true) }
+            add(menu, L10n.t("Check for Updates…", "检查更新…"), "") { [store] in store.checkForUpdate(manual: true, presenting: true) }
             add(menu, L10n.t("About QuotaBar", "关于 QuotaBar"), "") {
                 MenuPanelController.shared.close()
                 SettingsWindow.open()

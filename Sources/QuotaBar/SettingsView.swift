@@ -1641,10 +1641,13 @@ struct UpdatesPane: View {
                     options: UpdatePolicy.allCases.map { (value: $0, label: $0.displayName) },
                     selection: store.updatePolicy,
                     onSelect: { store.setUpdatePolicy($0) })
-                .frame(maxWidth: 260)
+                .frame(maxWidth: 320)
                 .disabled(store.updateIsManagedByHomebrew)
                 .opacity(store.updateIsManagedByHomebrew ? 0.45 : 1)
             }
+            SettingFootnote(L10n.t(
+                "A new version shows what changed first. Nothing is replaced until you click Install and Relaunch; the download is checked for the developer's signature and Apple's notarization.",
+                "发现新版本时先显示更新内容，点「安装并重启」才会替换并重启；下载的安装包会先验证开发者签名和 Apple 公证。"))
 
             SettingRow(L10n.t("Check", "检查")) {
                 HStack(spacing: Design.space3) {
@@ -1691,32 +1694,26 @@ struct UpdatesPane: View {
                 .font(.system(size: 11))
                 .foregroundStyle(.secondary)
         case let .available(release):
-            if store.updatePolicy == .manual || store.updateIsManagedByHomebrew {
-                Text(L10n.t("\(release.version) is available", "有新版本 \(release.version)"))
-                    .font(.system(size: 11, weight: .medium))
-                if !store.updateIsManagedByHomebrew {
-                    Button(L10n.t("Install and relaunch", "安装并重启")) { store.installNow() }
-                        .glassAction()
-                }
-            } else {
-                Text(L10n.t("Found \(release.version), downloading…", "发现 \(release.version)，正在下载…"))
-                    .font(.system(size: 11))
-                    .foregroundStyle(.secondary)
-            }
+            Text(L10n.t("\(release.version) is available", "有新版本 \(release.version)"))
+                .font(.system(size: 11, weight: .medium))
+            Button(L10n.t("See What's New", "查看更新")) { UpdateWindow.show(store: store) }
+                .glassAction()
         case let .downloading(release):
             Text(L10n.t("Downloading \(release.version)…", "正在下载 \(release.version)…"))
                 .font(.system(size: 11))
                 .foregroundStyle(.secondary)
         case let .readyToInstall(release):
-            Text(L10n.t("\(release.version) verified", "\(release.version) 已通过验证"))
+            Text(L10n.t("\(release.version) downloaded and verified", "\(release.version) 已下载并验证"))
                 .font(.system(size: 11, weight: .medium))
-            Button(L10n.t("Install and relaunch", "安装并重启")) { store.installNow() }
+            Button(L10n.t("See What's New", "查看更新")) { UpdateWindow.show(store: store) }
                 .glassAction()
         case let .failed(message):
             Text(message)
                 .font(.system(size: 11))
                 .foregroundStyle(Color(hex: "E5484D"))
                 .lineLimit(2)
+            Button(L10n.t("Details", "查看")) { UpdateWindow.show(store: store) }
+                .glassAction()
         }
     }
 }

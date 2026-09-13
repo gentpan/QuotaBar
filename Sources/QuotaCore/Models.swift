@@ -132,17 +132,19 @@ public enum MenuBarIconMode: String, Codable, CaseIterable, Identifiable, Sendab
 
 /// What happens when a newer build is found.
 public enum UpdatePolicy: String, Codable, CaseIterable, Identifiable, Sendable {
-    /// Download, verify, replace the bundle and relaunch, unprompted.
+    /// Download and verify in the background as soon as a version is found,
+    /// so Install and Relaunch on the update card is instant. Nothing is
+    /// replaced until that click. (Raw value kept: stored configs say "automatic".)
     case automatic
-    /// Say so, and wait for a click.
+    /// Show the card and download only once Install and Relaunch is clicked.
     case manual
 
     public var id: String { rawValue }
 
     public var displayName: String {
         switch self {
-        case .automatic: L10n.t("Automatic", "自动安装")
-        case .manual: L10n.t("Manual", "手动安装")
+        case .automatic: L10n.t("Download in background", "后台下载")
+        case .manual: L10n.t("Download when I install", "安装时再下载")
         }
     }
 }

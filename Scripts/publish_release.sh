@@ -73,9 +73,11 @@ if has_step mirror; then
     "${SSH[@]}" "mv $ROOT/download/$name.part $ROOT/download/$name"
   done
   latest="$(mktemp)"
-  python3 - "$VERSION" "$ZIP_SHA" "$DMG_SHA" "$REPO" > "$latest" <<'PY'
+  notes_file="$(mktemp)"
+  if [ -n "${NOTES:-}" ]; then cp "$NOTES" "$notes_file"; else release_notes > "$notes_file"; fi
+  python3 - "$VERSION" "$ZIP_SHA" "$DMG_SHA" "$REPO" "$notes_file" > "$latest" <<'PY'
 import datetime, json, sys
-version, zip_sha, dmg_sha, repo = sys.argv[1:5]
+version, zip_sha, dmg_sha, repo, notes_file = sys.argv[1:6]
 base = "https://quota.bar/download"
 print(json.dumps({
     "version": version,
@@ -85,6 +87,8 @@ print(json.dumps({
     "dmgSha256": dmg_sha,
     "page": "https://quota.bar/changelog.html",
     "github": f"https://github.com/{repo}/releases/tag/v{version}",
+    # 应用内的更新卡片读这里的摘要：英文一节、---、中文一节，和 GitHub 发布说明相同。
+    "notes": open(notes_file, encoding="utf-8").read(),
     "publishedAt": datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
 }, indent=2))
 PY

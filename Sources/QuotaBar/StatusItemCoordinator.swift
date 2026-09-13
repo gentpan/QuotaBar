@@ -295,9 +295,8 @@ final class StatusItemCoordinator: NSObject {
             : L10n.t("\(figure) used", "已用 \(figure)")
     }
 
-    /// Says where an update has got to. An available update opens the Updates
-    /// page, where installing it is one more click; a checked-for-nothing
-    /// check opens the same page, which says it is up to date.
+    /// Says where an update has got to; every state opens the update card,
+    /// which shows what changed and installs it, or says it is up to date.
     private func updateItem(store: UsageStore) -> NSMenuItem {
         let item: NSMenuItem
         switch store.updateStage {
@@ -305,18 +304,17 @@ final class StatusItemCoordinator: NSObject {
             item = NSMenuItem(title: L10n.t("Checking for Updates…", "正在检查更新…"), action: nil, keyEquivalent: "")
         case let .downloading(release):
             item = NSMenuItem(title: L10n.t("Downloading \(release.version)…", "正在下载 \(release.version)…"), action: nil, keyEquivalent: "")
-        case let .readyToInstall(release):
-            item = makeClosureItem(L10n.t("Restart to Update to \(release.version)", "重新启动以更新到 \(release.version)"), "") { [store] in
-                store.installNow()
+        case let .readyToInstall(release), let .available(release):
+            item = makeClosureItem(L10n.t("Update to \(release.version)…", "更新到 \(release.version)…"), "") { [store] in
+                UpdateWindow.show(store: store)
             }
-        case let .available(release):
-            item = makeClosureItem(L10n.t("Update to \(release.version)…", "更新到 \(release.version)…"), "") {
-                SettingsWindow.open(section: .updates)
+        case .failed:
+            item = makeClosureItem(L10n.t("Update Failed…", "更新失败…"), "") { [store] in
+                UpdateWindow.show(store: store)
             }
-        case .idle, .failed:
+        case .idle:
             item = makeClosureItem(L10n.t("Check for Updates…", "检查更新…"), "") { [store] in
-                store.checkForUpdate(manual: true)
-                SettingsWindow.open(section: .updates)
+                store.checkForUpdate(manual: true, presenting: true)
             }
         }
         return item

@@ -10,13 +10,21 @@ public struct UpdateRelease: Sendable, Equatable {
     public let notes: String?
     /// The same zip on quota.bar, tried when `downloadURL` cannot be reached.
     public var mirrorURL: URL?
+    public var publishedAt: Date?
 
-    public init(version: String, downloadURL: URL, pageURL: URL, notes: String? = nil, mirrorURL: URL? = nil) {
+    public init(version: String, downloadURL: URL, pageURL: URL, notes: String? = nil, mirrorURL: URL? = nil, publishedAt: Date? = nil) {
         self.version = version
         self.downloadURL = downloadURL
         self.pageURL = pageURL
         self.notes = notes
         self.mirrorURL = mirrorURL
+        self.publishedAt = publishedAt
+    }
+
+    /// The disk image to install by hand when installing in place fails — the
+    /// copy on quota.bar, which opens wherever GitHub does not.
+    public var manualDownloadURL: URL {
+        URL(string: "https://quota.bar/download/QuotaBar-\(version).dmg")!
     }
 }
 
@@ -134,7 +142,12 @@ public enum UpdateFeed: Sendable, Equatable {
             version: version,
             downloadURL: download,
             pageURL: (root["html_url"] as? String).flatMap(URL.init(string:)) ?? page,
-            notes: root["body"] as? String)
+            notes: root["body"] as? String,
+            publishedAt: (root["published_at"] as? String).flatMap(Self.date))
+    }
+
+    private static func date(_ text: String) -> Date? {
+        ISO8601DateFormatter().date(from: text)
     }
 
     static func parseCustom(_ data: Data, page: URL) -> UpdateRelease? {
@@ -146,6 +159,7 @@ public enum UpdateFeed: Sendable, Equatable {
             version: version,
             downloadURL: download,
             pageURL: (root["page"] as? String).flatMap(URL.init(string:)) ?? page,
-            notes: root["notes"] as? String)
+            notes: root["notes"] as? String,
+            publishedAt: (root["publishedAt"] as? String).flatMap(Self.date))
     }
 }

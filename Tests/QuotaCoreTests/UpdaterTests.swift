@@ -19,6 +19,16 @@ final class UpdateFeedTests: XCTestCase {
         XCTAssertEqual(release.notes, "notes here")
     }
 
+    func testReadsWhenAReleaseWasPublished() throws {
+        let json = """
+        {"tag_name":"v0.5.3","published_at":"2026-09-13T01:45:33Z",
+         "assets":[{"name":"QuotaBar-0.5.3.zip","browser_download_url":"https://x/a.zip"}]}
+        """
+        let release = try XCTUnwrap(UpdateFeed.parseGitHub(Data(json.utf8), page: page))
+        XCTAssertEqual(release.publishedAt, ISO8601DateFormatter().date(from: "2026-09-13T01:45:33Z"))
+        XCTAssertEqual(release.manualDownloadURL.absoluteString, "https://quota.bar/download/QuotaBar-0.5.3.dmg")
+    }
+
     func testAGitHubReleaseWithNoZipIsUnusable() {
         let json = """
         {"tag_name":"v0.3.0","assets":[{"name":"x.dmg","browser_download_url":"https://x/a.dmg"}]}
