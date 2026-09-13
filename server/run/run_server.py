@@ -7,11 +7,22 @@ JSON）。这里只依赖标准库和 cryptography（主机上已装 43.x），�
 应用只上传读数（snapshot）和每分钟 token 数（activity），成绩全部由服务端算：
 读数进来时只重算受影响的 run，榜单和个人页从 runs 表查询，公开 GET 在内存里缓存 30 秒。
 
-环境变量：
+账号在 quota.run 网页上建：GitHub / Google 登录或邮箱验证码，会话是 qr_session cookie；
+Mac 通过 connect（类似 OAuth 设备流，绑定设备公钥）加入账号，应用里不输入任何账号信息。
+
+环境变量（线上写在 /etc/quotabar-run.env）：
   QUOTA_RUN_PORT         监听端口，默认 8788（只绑 127.0.0.1，由 Caddy 在 quota.run 反代 /api/*）
   QUOTA_RUN_DB           数据库路径，默认 /var/lib/quotabar-run/run.db
-  QUOTA_RUN_SECRET_FILE  账号摘要的 HMAC 密钥，默认 /etc/quotabar-run.secret；
+  QUOTA_RUN_SECRET_FILE  账号摘要和邮箱验证码的 HMAC 密钥，默认 /etc/quotabar-run.secret；
                          不存在时生成 32 字节随机数的 hex（权限 0600）
+  QUOTA_RUN_ORIGIN       站点来源，默认 https://quota.run；OAuth 回调地址、Origin 校验、connect 链接都用它
+  QUOTA_RUN_GITHUB_CLIENT_ID / QUOTA_RUN_GITHUB_CLIENT_SECRET   GitHub 登录（两个都有才启用）
+  QUOTA_RUN_GOOGLE_CLIENT_ID / QUOTA_RUN_GOOGLE_CLIENT_SECRET   Google 登录（两个都有才启用）
+  QUOTA_RUN_SMTP_HOST / _PORT / _USER / _PASSWORD, QUOTA_RUN_MAIL_FROM
+                         邮箱验证码（HOST 和 MAIL_FROM 都有才启用；465 直接 TLS，其他端口 STARTTLS）
+  QUOTA_RUN_INSECURE_COOKIES=1  cookie 去掉 Secure（本机 http 测试）
+  QUOTA_RUN_DEV_LOGIN=1         POST /auth/dev 直接以某个邮箱登录（仅限本机测试）
+  QUOTA_RUN_DEVICE_SIGNUP=1     重新打开 POST /register（仅限本机测试）
 """
 import base64
 import binascii
@@ -22,15 +33,21 @@ import math
 import os
 import re
 import secrets
+import smtplib
 import sqlite3
+import ssl
 import sys
 import threading
 import time
 import traceback
+import urllib.error
+import urllib.request
 from contextlib import contextmanager
 from datetime import datetime, timezone
+from email.message import EmailMessage
+from email.utils import formatdate, make_msgid
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from urllib.parse import parse_qsl, unquote, urlsplit
+from urllib.parse import parse_qsl, unquote, urlencode, urlsplit
 
 from cryptography.exceptions import InvalidSignature
 from cryptography.hazmat.primitives import hashes
@@ -42,21 +59,53 @@ API_PREFIXES = ("/api/v1", "/api/run/v1")
 DEFAULT_PORT = 8788
 DEFAULT_DB = "/var/lib/quotabar-run/run.db"
 DEFAULT_SECRET_FILE = "/etc/quotabar-run.secret"
+DEFAULT_ORIGIN = "https://quota.run"
 
 # —— 请求与签名 ——
 MAX_BODY = 1_000_000          # 契约的 1 MB；Caddy 那边另设 2 MB 兜底，好让这里回 JSON 的 413
 DRAIN_LIMIT = 4_000_000       # 超限的请求体先读掉这么多再回 413，免得对端写一半收到 RST
 CLOCK_SKEW = 300
 NONCE_TTL = 600
-PAIR_CODE_TTL = 600
-PAIR_CODE_LENGTH = 8
-PAIR_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"  # 去掉 I L O 0 1，念给另一台 Mac 时不会看错
 RANKED_COOLDOWN = 7 * 86400
 CACHE_TTL = 30
 
-# 令牌桶：(容量, 每补一个令牌的秒数)。write 是契约里的「每台设备 10 秒一次、突发 5」；
-# register 没有设备号，只能按来源 IP；public 是给公开 GET 的宽松上限，防止换查询串绕开缓存
-DEFAULT_LIMITS = {"write": (5, 10.0), "register": (5, 10.0), "public": (240, 0.25)}
+# —— connect（Mac 加入账号）——
+CONNECT_TTL = 600
+CONNECT_GRACE = 600           # 过期后再留 10 分钟：轮询能看到 expired / approved，而不是直接 404
+CONNECT_INTERVAL = 3
+USER_CODE_LENGTH = 8
+USER_CODE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"  # 去掉 I L O 0 1，对照浏览器里的码时不会看错
+
+# —— 网页会话、OAuth、邮箱验证码 ——
+SESSION_COOKIE = "qr_session"
+SESSION_TTL = 30 * 86400
+SESSION_REFRESH = 86400       # 滑动续期，一天最多续一次，免得每个请求都写库
+OAUTH_COOKIE = "qr_oauth"
+OAUTH_COOKIE_PATH = "/api/v1/auth"
+OAUTH_TTL = 600
+EMAIL_CODE_TTL = 600
+EMAIL_CODE_GRACE = 3600       # 过期的码多留一小时，verify 才能回 code_expired 而不是 code_invalid
+EMAIL_MAX_ATTEMPTS = 5
+# 发码的滑动窗口：(次数, 秒)。同一地址 60 秒一次、每小时 6 次；同一 IP 每小时 20 次
+EMAIL_WINDOWS = {"address_minute": (1, 60), "address_hour": (6, 3600), "ip_hour": (20, 3600)}
+HTTP_TIMEOUT = 10
+SMTP_TIMEOUT = 20
+USER_AGENT = "quota-run/1"
+
+GITHUB_AUTHORIZE_URL = "https://github.com/login/oauth/authorize"
+GITHUB_TOKEN_URL = "https://github.com/login/oauth/access_token"
+GITHUB_USER_URL = "https://api.github.com/user"
+GITHUB_EMAILS_URL = "https://api.github.com/user/emails"
+GOOGLE_AUTHORIZE_URL = "https://accounts.google.com/o/oauth2/v2/auth"
+GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token"
+GOOGLE_USERINFO_URL = "https://openidconnect.googleapis.com/v1/userinfo"
+
+# 令牌桶：(容量, 每补一个令牌的秒数)。write 是契约里的「每台设备 10 秒一次、突发 5」，网页会话按账号同样算；
+# register 没有设备号，只能按来源 IP（connect/start 共用）；poll 是 connect 轮询（应用每 3 秒一次）；
+# auth 管 OAuth 起跳、验证码校验、注册用户名这类登录动作；lookup 管用户名查重和 connect 码查询；
+# public 是给公开 GET 的宽松上限，防止换查询串绕开缓存
+DEFAULT_LIMITS = {"write": (5, 10.0), "register": (5, 10.0), "poll": (20, 2.0), "auth": (20, 6.0),
+                  "lookup": (60, 1.0), "public": (240, 0.25)}
 
 # —— 读数 ——
 MAX_SNAPSHOTS = 500
@@ -79,8 +128,10 @@ EPSILON = 1e-9                # 浮点减法（62.1 - 2.1）不能把恰好 60 �
 
 USERNAME_RE = re.compile(r"[a-z0-9][a-z0-9_-]{2,19}")
 RESERVED_USERNAMES = frozenset(
-    "admin api app about help leaderboard run quota quotabar settings support www zh en "
-    "me user users login logout signup register profile u".split())
+    "account admin api app about auth connect help leaderboard login logout me profile quota quotabar "
+    "register run settings signup support u user users www zh en".split())
+EMAIL_RE = re.compile(
+    r"[a-z0-9.!#$%&'*+/=?^_`{|}~-]{1,64}@[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+")
 REGIONS = ("global", "china")
 PROVIDER_RE = re.compile(r"[a-z0-9_-]{1,32}")
 DIGEST_RE = re.compile(r"[0-9a-f]{64}")
@@ -106,28 +157,39 @@ class ApiError(Exception):
         return {"error": self.code, "message": self.message, **self.extra}
 
 
+class OAuthFailure(Exception):
+    """向 GitHub / Google 换令牌或取用户信息失败；消息里不带令牌和响应内容。"""
+
+
 class Rejected(Exception):
     """单条读数不合格：记进 rejected，不影响同批其他读数。"""
 
 
-class Request:
-    __slots__ = ("method", "path", "query", "headers", "body", "ip")
+MISSING = object()
 
-    def __init__(self, method, path, query, headers, body, ip):
+
+class Request:
+    __slots__ = ("method", "path", "query", "headers", "body", "ip", "cookies", "set_cookies", "session")
+
+    def __init__(self, method, path, query, headers, body, ip, cookies=None):
         self.method = method
         self.path = path
         self.query = query
         self.headers = headers
         self.body = body
         self.ip = ip
+        self.cookies = cookies or {}
+        self.set_cookies = []      # 处理过程中要下发的 Set-Cookie（续期、登录、登出），出口统一加到响应上
+        self.session = MISSING     # current_session 查过一次就缓存在这里
 
 
 class Response:
-    def __init__(self, status, payload=None, public=False, headers=None):
+    def __init__(self, status, payload=None, public=False, headers=None, cookies=None):
         self.status = status
         self.payload = payload
         self.public = public
         self.headers = headers or {}
+        self.cookies = list(cookies or ())  # 每项是一整条 Set-Cookie，可以有多条
         self._encoded = None
 
     def encoded(self):
@@ -137,7 +199,134 @@ class Response:
         return self._encoded
 
 
+class Actor:
+    """共用接口的调用方：设备签名（device_id 有值）或已有账号的网页会话（session 有值）。"""
+    __slots__ = ("user_id", "device_id", "session")
+
+    def __init__(self, user_id, device_id=None, session=None):
+        self.user_id = user_id
+        self.device_id = device_id
+        self.session = session
+
+
+class Settings:
+    """线上配置，来自环境变量。repr 里只说哪些登录方式可用，不带任何密钥。"""
+
+    def __init__(self, origin=DEFAULT_ORIGIN, insecure_cookies=False, github_client_id="", github_client_secret="",
+                 google_client_id="", google_client_secret="", smtp_host="", smtp_port=0, smtp_user="",
+                 smtp_password="", mail_from=""):
+        self.origin = (origin or DEFAULT_ORIGIN).strip().rstrip("/")
+        self.insecure_cookies = bool(insecure_cookies)
+        self.github_client_id = github_client_id or ""
+        self.github_client_secret = github_client_secret or ""
+        self.google_client_id = google_client_id or ""
+        self.google_client_secret = google_client_secret or ""
+        self.smtp_host = smtp_host or ""
+        self.smtp_port = int(smtp_port or 0)
+        self.smtp_user = smtp_user or ""
+        self.smtp_password = smtp_password or ""
+        self.mail_from = mail_from or ""
+
+    @classmethod
+    def from_env(cls, env=None):
+        env = os.environ if env is None else env
+
+        def get(name):
+            return (env.get(name) or "").strip()
+
+        port = get("QUOTA_RUN_SMTP_PORT")
+        return cls(
+            origin=get("QUOTA_RUN_ORIGIN") or DEFAULT_ORIGIN,
+            insecure_cookies=get("QUOTA_RUN_INSECURE_COOKIES") == "1",
+            github_client_id=get("QUOTA_RUN_GITHUB_CLIENT_ID"),
+            github_client_secret=get("QUOTA_RUN_GITHUB_CLIENT_SECRET"),
+            google_client_id=get("QUOTA_RUN_GOOGLE_CLIENT_ID"),
+            google_client_secret=get("QUOTA_RUN_GOOGLE_CLIENT_SECRET"),
+            smtp_host=get("QUOTA_RUN_SMTP_HOST"),
+            smtp_port=int(port) if port.isdigit() else 0,
+            smtp_user=get("QUOTA_RUN_SMTP_USER"),
+            smtp_password=env.get("QUOTA_RUN_SMTP_PASSWORD") or "",
+            mail_from=get("QUOTA_RUN_MAIL_FROM"),
+        )
+
+    @property
+    def github(self):
+        return bool(self.github_client_id and self.github_client_secret)
+
+    @property
+    def google(self):
+        return bool(self.google_client_id and self.google_client_secret)
+
+    @property
+    def email(self):
+        return bool(self.smtp_host and self.mail_from)
+
+    def __repr__(self):
+        return (f"Settings(origin={self.origin!r}, github={self.github}, google={self.google}, "
+                f"email={self.email}, insecure_cookies={self.insecure_cookies})")
+
+
+def urllib_http(method, url, headers=None, body=None):
+    """默认的出站 HTTP，只用来向 GitHub、Google 换令牌和取用户信息。返回 (状态码, 响应体)。
+
+    测试注入假的同签名函数，不连外网。
+    """
+    request = urllib.request.Request(url, data=body, headers=headers or {}, method=method)
+    try:
+        with urllib.request.urlopen(request, timeout=HTTP_TIMEOUT) as response:
+            return response.status, response.read(MAX_BODY)
+    except urllib.error.HTTPError as error:
+        try:
+            return error.code, error.read(MAX_BODY)
+        finally:
+            error.close()
+
+
+class SmtpMailer:
+    """默认发信：465 端口直接 TLS，其他端口 STARTTLS。在后台线程里发，不占服务锁和请求线程。"""
+
+    def __init__(self, settings):
+        self.host = settings.smtp_host
+        self.port = settings.smtp_port or 587
+        self.user = settings.smtp_user
+        self.password = settings.smtp_password
+        self.sender = settings.mail_from
+
+    def __call__(self, to, subject, text):
+        threading.Thread(target=self.send, args=(to, subject, text), daemon=True).start()
+
+    def send(self, to, subject, text):
+        message = EmailMessage()
+        message["From"] = self.sender
+        message["To"] = to
+        message["Subject"] = subject
+        message["Date"] = formatdate(usegmt=True)
+        domain = self.sender.rpartition("@")[2].strip(" >") or None
+        message["Message-ID"] = make_msgid(domain=domain)
+        message.set_content(text)
+        context = ssl.create_default_context()
+        try:
+            if self.port == 465:
+                client = smtplib.SMTP_SSL(self.host, self.port, timeout=SMTP_TIMEOUT, context=context)
+            else:
+                client = smtplib.SMTP(self.host, self.port, timeout=SMTP_TIMEOUT)
+            with client:
+                if self.port != 465:
+                    client.starttls(context=context)
+                if self.user:
+                    client.login(self.user, self.password)
+                client.send_message(message)
+        except Exception as error:  # noqa: BLE001 — 后台线程里的任何失败都只记一行
+            # 不打印收件人、验证码和服务器回显，只留错误类型和 SMTP 状态码
+            code = getattr(error, "smtp_code", "")
+            print(f"mail: sending a code failed: {type(error).__name__} {code}".rstrip(), file=sys.stderr)
+
+
 # —— 纯函数：编码、校验、run 计算 ——
+
+def b64url_encode(data):
+    return base64.urlsafe_b64encode(data).rstrip(b"=").decode("ascii")
+
 
 def b64url_decode(text):
     """契约规定 base64url 不带填充；带 = 或非法字符一律当作无效。"""
@@ -240,6 +429,100 @@ def normalize_username(value):
     if not USERNAME_RE.fullmatch(name) or name in RESERVED_USERNAMES:
         return None
     return name
+
+
+def username_base(text):
+    """把 GitHub 登录名或邮箱 @ 前面那段整理成用户名的样子，只用来给注册页一个建议。"""
+    if not isinstance(text, str):
+        return ""
+    text = text.partition("+")[0].casefold()
+    base = re.sub(r"[^a-z0-9_-]+", "-", text)
+    base = re.sub(r"-{2,}", "-", base).strip("_-")[:20].rstrip("_-")
+    if 0 < len(base) < 3:
+        base += "-run"
+    return base
+
+
+def normalize_email(value):
+    """邮箱身份的 subject：去首尾空白、转小写。只收常见的 ASCII 地址，超过 254 个字符不收。"""
+    if not isinstance(value, str):
+        return None
+    email = value.strip().lower()
+    if len(email) > 254 or not EMAIL_RE.fullmatch(email):
+        return None
+    return email
+
+
+def normalize_user_code(value):
+    """connect 码查找时忽略大小写、空格和连字符。"""
+    if not isinstance(value, str):
+        return None
+    code = re.sub(r"[\s-]", "", unquote(value)).upper()
+    if len(code) != USER_CODE_LENGTH or any(ch not in USER_CODE_ALPHABET for ch in code):
+        return None
+    return code
+
+
+def format_user_code(code):
+    return f"{code[:4]}-{code[4:]}"
+
+
+def safe_next(value):
+    """登录后的去处只能是站内相对路径：以 / 开头、不是 //，也不带反斜杠和空白（有的浏览器把 /\\ 当成 //）。"""
+    if (not isinstance(value, str) or not value.startswith("/") or value.startswith("//") or "\\" in value
+            or len(value) > 512 or any(ch.isspace() or ord(ch) < 32 or ord(ch) == 127 for ch in value)):
+        return "/account"
+    return value
+
+
+def with_query(path, text):
+    """在相对路径上追加查询参数，保留原有的查询串和 # 片段。"""
+    path, hash_mark, fragment = path.partition("#")
+    return path + ("&" if "?" in path else "?") + text + hash_mark + fragment
+
+
+def token_hash(token):
+    return hashlib.sha256(token.encode("utf-8")).hexdigest()
+
+
+def key_scope(public_key):
+    # 还没有设备号的签名请求（register、connect）把 nonce 挂在公钥哈希名下
+    return "key:" + hashlib.sha256(public_key).hexdigest()[:40]
+
+
+def clip_text(value, limit):
+    """外部来的名字（GitHub、Google）：清掉控制字符，超长截断而不是报错。"""
+    if not isinstance(value, str):
+        return None
+    try:
+        text = clean_text(value[: limit * 4], limit * 4)
+    except ValueError:
+        return None
+    return text[:limit].strip() or None
+
+
+def parse_cookies(header):
+    """Cookie 请求头拆成 dict；同名的取第一个（浏览器把路径更具体的放在前面）。"""
+    cookies = {}
+    for part in (header or "").split(";"):
+        name, sep, value = part.partition("=")
+        name = name.strip()
+        if sep and name and name not in cookies:
+            cookies[name] = value.strip().strip('"')
+    return cookies
+
+
+def email_code_message(code, lang):
+    """验证码邮件：纯文本，不带任何链接。"""
+    if lang == "zh":
+        return (f"Quota Run 验证码：{code}",
+                f"你的 Quota Run 登录验证码是：\n\n    {code}\n\n"
+                "验证码 10 分钟内有效。\n\n"
+                "如果不是你本人申请的，忽略这封邮件即可，什么都不会发生。\n")
+    return (f"Your Quota Run code: {code}",
+            f"Your Quota Run sign-in code is:\n\n    {code}\n\n"
+            "It expires in 10 minutes.\n\n"
+            "If you did not ask for this code, you can ignore this email; nothing will happen.\n")
 
 
 def summarize_run(readings, window_start):
@@ -531,7 +814,76 @@ INSERT INTO schema_version(version) VALUES (1);
 COMMIT;
 """
 
-MIGRATIONS = [(1, SCHEMA_V1)]
+SCHEMA_V2 = """
+BEGIN;
+-- 配对码被 connect 取代
+DROP TABLE IF EXISTS pair_codes;
+-- 登录身份：(provider, subject) 唯一；user_id 为空表示还没注册用户名（会话处于 needs signup）
+CREATE TABLE IF NOT EXISTS identities (
+    id TEXT PRIMARY KEY,
+    user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+    provider TEXT NOT NULL,
+    subject TEXT NOT NULL,
+    email TEXT,
+    email_verified INTEGER NOT NULL DEFAULT 0,
+    name TEXT,
+    login TEXT,
+    linked_at INTEGER NOT NULL,
+    last_used_at INTEGER NOT NULL,
+    UNIQUE (provider, subject)
+);
+CREATE INDEX IF NOT EXISTS identities_user ON identities(user_id);
+CREATE INDEX IF NOT EXISTS identities_verified_email ON identities(email) WHERE email_verified = 1;
+-- 会话只存令牌的 SHA-256
+CREATE TABLE IF NOT EXISTS sessions (
+    token_hash TEXT PRIMARY KEY,
+    identity_id TEXT NOT NULL REFERENCES identities(id) ON DELETE CASCADE,
+    created_at INTEGER NOT NULL,
+    expires_at INTEGER NOT NULL,
+    refreshed_at INTEGER NOT NULL
+) WITHOUT ROWID;
+CREATE INDEX IF NOT EXISTS sessions_identity ON sessions(identity_id);
+CREATE INDEX IF NOT EXISTS sessions_expiry ON sessions(expires_at);
+-- 每个地址同时只有一个有效码，存 HMAC-SHA256(密钥, email + code)
+CREATE TABLE IF NOT EXISTS email_codes (
+    email TEXT PRIMARY KEY,
+    code_hmac TEXT NOT NULL,
+    expires_at INTEGER NOT NULL,
+    attempts INTEGER NOT NULL DEFAULT 0,
+    created_at INTEGER NOT NULL,
+    link_user_id INTEGER REFERENCES users(id) ON DELETE CASCADE
+) WITHOUT ROWID;
+-- OAuth 的 state 只存哈希；verifier 是 PKCE 换令牌时要用的，10 分钟后删
+CREATE TABLE IF NOT EXISTS oauth_states (
+    state_hash TEXT PRIMARY KEY,
+    provider TEXT NOT NULL,
+    verifier TEXT NOT NULL,
+    next TEXT NOT NULL,
+    link_user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+    created_at INTEGER NOT NULL
+) WITHOUT ROWID;
+CREATE INDEX IF NOT EXISTS oauth_states_created ON oauth_states(created_at);
+-- connect 请求：码只存 SHA-256；批准时建设备，device_id 记在这里给轮询取
+CREATE TABLE IF NOT EXISTS connect_requests (
+    id TEXT PRIMARY KEY,
+    code_hash TEXT NOT NULL UNIQUE,
+    public_key BLOB NOT NULL,
+    device_name TEXT NOT NULL,
+    platform TEXT NOT NULL,
+    app_version TEXT NOT NULL DEFAULT '',
+    status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'approved', 'denied')),
+    user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+    device_id TEXT,
+    created_at INTEGER NOT NULL,
+    expires_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS connect_requests_key ON connect_requests(public_key);
+CREATE INDEX IF NOT EXISTS connect_requests_expiry ON connect_requests(expires_at);
+INSERT INTO schema_version(version) VALUES (2);
+COMMIT;
+"""
+
+MIGRATIONS = [(1, SCHEMA_V1), (2, SCHEMA_V2)]
 
 RUN_KEY_COLUMNS = "user_id, provider, plan_norm, window_key, resets_bucket"
 RUN_KEY_WHERE = "user_id = ? AND provider = ? AND plan_norm = ? AND window_key = ? AND resets_bucket = ?"
@@ -542,9 +894,11 @@ class RunService:
 
     一条 SQLite 连接加一把锁：流量很小，串行化最省心，也让「读数写入 + run 重算」
     天然处在同一个事务里。clock 可注入，测试用假时钟推进时间。
+    http（向 GitHub、Google 发请求）和 mailer（发验证码）也可注入：测试不连外网、不发信。
     """
 
-    def __init__(self, db_path, secret, clock=time.time, cache_ttl=CACHE_TTL, limits=None):
+    def __init__(self, db_path, secret, clock=time.time, cache_ttl=CACHE_TTL, limits=None, settings=None,
+                 http=None, mailer=None, device_signup=False, dev_login=False):
         directory = os.path.dirname(db_path)
         if directory:
             os.makedirs(directory, exist_ok=True)
@@ -552,6 +906,16 @@ class RunService:
         self.clock = clock
         self.cache_ttl = cache_ttl
         self.limits = dict(DEFAULT_LIMITS, **(limits or {}))
+        self.email_windows = dict(EMAIL_WINDOWS)
+        self.settings = settings or Settings()
+        self.http = http or urllib_http
+        if mailer is None and self.settings.email:
+            mailer = SmtpMailer(self.settings)
+        self.mailer = mailer
+        self.device_signup = device_signup
+        self.dev_login = dev_login
+        self.listen_host = None   # RunHTTPServer 填上；/auth/dev 只在 127.0.0.1 上开
+        self._windows = {}
         self.lock = threading.RLock()
         self.db = sqlite3.connect(db_path, check_same_thread=False, isolation_level=None)
         self.db.row_factory = sqlite3.Row
@@ -593,49 +957,92 @@ class RunService:
 
     def handle(self, request):
         try:
-            with self.lock:
-                return self._route(request)
+            prefix = next((p for p in API_PREFIXES if request.path.startswith(p + "/")), None)
+            if prefix is None:
+                raise ApiError(404, "not_found", "No such endpoint.")
+            route = request.path[len(prefix):]
+            if request.method == "GET" and route in ("/auth/github/callback", "/auth/google/callback"):
+                # 回调要向 GitHub / Google 发请求，不能整段占着锁；它自己分段加锁
+                response = self.oauth_callback(request, route.split("/")[2])
+            else:
+                with self.lock:
+                    response = self._route(request, route)
         except ApiError as error:
             headers = {}
             if error.status == 429 and "retryAfter" in error.extra:
                 headers["Retry-After"] = str(error.extra["retryAfter"])
-            return Response(error.status, error.payload(), headers=headers)
+            response = Response(error.status, error.payload(), headers=headers)
         except Exception:
             traceback.print_exc(file=sys.stderr)
             return Response(500, {"error": "internal", "message": "Something went wrong on the server."})
+        if request.set_cookies:
+            # 公开 GET 的响应对象是缓存共用的，不能原地改；带 cookie 的一律另建一个
+            response = Response(response.status, response.payload, headers=response.headers,
+                                cookies=response.cookies + request.set_cookies)
+        return response
 
-    def _route(self, request):
-        prefix = next((p for p in API_PREFIXES if request.path.startswith(p + "/")), None)
-        if prefix is None:
-            raise ApiError(404, "not_found", "No such endpoint.")
-        route = request.path[len(prefix):]
+    def _route(self, request, route):
         method = request.method
+        self._purge(self.now())
         if method == "GET":
             if route in ("/stats", "/boards", "/leaderboard") or route.startswith("/users/"):
                 return self._public(request, route)
             if route == "/me":
-                return Response(200, self.me(self.authenticate(request)))
+                return Response(200, self.me(self.actor(request)))
+            if route == "/session":
+                return Response(200, self.session_payload(request))
+            if route == "/auth/providers":
+                return Response(200, self.providers())
+            if route in ("/auth/github/start", "/auth/google/start"):
+                return self.oauth_start(request, route.split("/")[2])
+            if route.startswith("/usernames/"):
+                return Response(200, self.username_availability(request, route[len("/usernames/"):]))
+            if route.startswith("/connect/") and route.count("/") == 2:
+                return Response(200, self.connect_info(request, route[len("/connect/"):]))
         elif method == "POST":
-            if route == "/register":
+            if route == "/register" and self.device_signup:
                 return self.register(request)
             if route == "/snapshots":
                 return Response(200, self.post_snapshots(request, self.authenticate_write(request)))
             if route == "/devices/ranked":
-                return Response(200, self.set_ranked(request, self.authenticate_write(request)))
-            if route == "/pair":
-                return Response(200, self.create_pair_code(self.authenticate_write(request)))
+                return Response(200, self.set_ranked(request, self.actor(request, write=True)))
+            if route == "/connect/start":
+                return self.connect_start(request)
+            if route == "/connect/poll":
+                return Response(200, self.connect_poll(request))
+            if route.startswith("/connect/") and route.count("/") == 3:
+                code, _, action = route[len("/connect/"):].partition("/")
+                if action == "approve":
+                    return Response(200, self.connect_approve(request, code))
+                if action == "deny":
+                    return Response(200, self.connect_deny(request, code))
+            if route == "/auth/logout":
+                return self.logout(request)
+            if route == "/auth/email/start":
+                return self.email_start(request)
+            if route == "/auth/email/verify":
+                return self.email_verify(request)
+            if route == "/auth/dev" and self.dev_login_enabled():
+                return Response(200, self.dev_sign_in(request))
+            if route == "/signup":
+                return self.signup(request)
         elif method == "PUT":
             if route == "/profile":
-                return Response(200, self.put_profile(request, self.authenticate_write(request)))
+                return Response(200, self.put_profile(request, self.actor(request, write=True)))
             if route == "/projects":
-                return Response(200, self.put_projects(request, self.authenticate_write(request)))
+                return Response(200, self.put_projects(request, self.actor(request, write=True)))
         elif method == "DELETE":
             if route == "/account":
-                self.delete_account(self.authenticate_write(request))
+                self.delete_account(request, self.actor(request, write=True))
+                return Response(204)
+            if route == "/devices/current":
+                self.delete_current_device(self.authenticate_write(request))
                 return Response(204)
             if route.startswith("/devices/"):
                 device_id = route[len("/devices/"):]
-                return Response(200, self.delete_device(device_id, self.authenticate_write(request)))
+                return Response(200, self.delete_device(device_id, self.actor(request, write=True)))
+            if route.startswith("/identities/"):
+                return Response(200, self.delete_identity(request, route[len("/identities/"):]))
         raise ApiError(404, "not_found", "No such endpoint.")
 
     def _public(self, request, route):
@@ -718,6 +1125,101 @@ class RunService:
         self.take_token("device:" + device["id"], "write")
         return device
 
+    def actor(self, request, write=False):
+        """共用接口：带设备签名头的按设备验签（旧规则不变），否则要已有账号的网页会话。"""
+        if "x-quota-device" in request.headers or "x-quota-signature" in request.headers:
+            device = self.authenticate_write(request) if write else self.authenticate(request)
+            return Actor(device["user_id"], device["id"])
+        session = self.require_session(request)
+        if write:
+            self.take_token(f"user:{session['user_id']}", "write")
+        return Actor(session["user_id"], None, session)
+
+    # —— 网页会话 ——
+
+    def cookie(self, name, value, path, max_age):
+        secure = "" if self.settings.insecure_cookies else " Secure;"
+        return f"{name}={value}; Path={path}; HttpOnly;{secure} SameSite=Lax; Max-Age={max_age}"
+
+    def current_session(self, request):
+        """cookie 对应的有效会话，连同它的身份（i.* 的列，id 是身份 id）；没有则 None。
+
+        滑动续期：距上次续期满一天才顺延 30 天，并重新下发 cookie。无效或过期的 cookie 顺手清掉。
+        """
+        if request.session is not MISSING:
+            return request.session
+        request.session = None
+        token = request.cookies.get(SESSION_COOKIE)
+        if not token:
+            return None
+        now = self.now()
+        row = None
+        raw = b64url_decode(token)
+        if raw is not None and len(raw) == 32:
+            row = self.db.execute(
+                "SELECT s.token_hash, s.expires_at, s.refreshed_at, i.* FROM sessions s"
+                " JOIN identities i ON i.id = s.identity_id WHERE s.token_hash = ?", (token_hash(token),)).fetchone()
+        if row is None or row["expires_at"] <= now:
+            if row is not None:
+                self.db.execute("DELETE FROM sessions WHERE token_hash = ?", (row["token_hash"],))
+            request.set_cookies.append(self.cookie(SESSION_COOKIE, "", "/", 0))
+            return None
+        if now - row["refreshed_at"] >= SESSION_REFRESH:
+            self.db.execute("UPDATE sessions SET expires_at = ?, refreshed_at = ? WHERE token_hash = ?",
+                            (now + SESSION_TTL, now, row["token_hash"]))
+            request.set_cookies.append(self.cookie(SESSION_COOKIE, token, "/", SESSION_TTL))
+        request.session = dict(row)
+        return request.session
+
+    def check_origin(self, request):
+        # 会话靠 cookie，浏览器会自动带上；不是 GET 的请求必须来自 quota.run 自己的页面（防 CSRF）
+        if request.method != "GET" and request.headers.get("origin") != self.settings.origin:
+            raise ApiError(403, "bad_origin", "This request must come from the Quota Run site.")
+
+    def require_session(self, request, account=True):
+        session = self.current_session(request)
+        if session is None:
+            raise ApiError(401, "not_signed_in", "Sign in on quota.run first.")
+        self.check_origin(request)
+        if account and session["user_id"] is None:
+            raise ApiError(403, "needs_signup", "Choose a username to finish signing up.")
+        return session
+
+    def start_session(self, request, identity_id, now):
+        old = request.cookies.get(SESSION_COOKIE)
+        if old:
+            self.db.execute("DELETE FROM sessions WHERE token_hash = ?", (token_hash(old),))
+        token = b64url_encode(secrets.token_bytes(32))
+        self.db.execute(
+            "INSERT INTO sessions(token_hash, identity_id, created_at, expires_at, refreshed_at) VALUES (?, ?, ?, ?, ?)",
+            (token_hash(token), identity_id, now, now + SESSION_TTL, now))
+        request.set_cookies[:] = [c for c in request.set_cookies if not c.startswith(SESSION_COOKIE + "=")]
+        request.set_cookies.append(self.cookie(SESSION_COOKIE, token, "/", SESSION_TTL))
+        request.session = MISSING
+
+    def dev_login_enabled(self):
+        # 仅限本机测试。线上服务同样只监听 127.0.0.1（Caddy 反代），所以还要求站点来源是本机地址，
+        # 误把 QUOTA_RUN_DEV_LOGIN=1 写进线上配置也打不开
+        host = urlsplit(self.settings.origin).hostname
+        return bool(self.dev_login and self.listen_host == "127.0.0.1" and host in ("localhost", "127.0.0.1"))
+
+    def take_windows(self, rules, message):
+        """按次数的滑动窗口（发验证码这种按小时计的限额）。rules 是 [(key, 次数, 秒)]，全部通过才各记一次。"""
+        now = self.clock()
+        wait = 0
+        for key, count, period in rules:
+            stamps = [stamp for stamp in self._windows.get(key, ()) if stamp > now - period]
+            self._windows[key] = stamps
+            if len(stamps) >= count:
+                wait = max(wait, math.ceil(stamps[-count] + period - now))
+        if wait:
+            raise ApiError(429, "rate_limited", message, retryAfter=max(1, wait))
+        for key, _, _ in rules:
+            self._windows[key].append(now)
+        if len(self._windows) > 20000:
+            for stale in [k for k, stamps in self._windows.items() if not stamps or stamps[-1] < now - 3600]:
+                del self._windows[stale]
+
     def take_token(self, key, kind):
         burst, interval = self.limits[kind]
         now = self.clock()
@@ -737,87 +1239,186 @@ class RunService:
             return
         self._last_purge = now
         self.db.execute("DELETE FROM nonces WHERE seen_at < ?", (now - NONCE_TTL,))
-        self.db.execute("DELETE FROM pair_codes WHERE expires_at < ?", (now,))
+        self.db.execute("DELETE FROM sessions WHERE expires_at <= ?", (now,))
+        self.db.execute("DELETE FROM email_codes WHERE expires_at < ?", (now - EMAIL_CODE_GRACE,))
+        self.db.execute("DELETE FROM oauth_states WHERE created_at < ?", (now - OAUTH_TTL,))
+        self.db.execute("DELETE FROM connect_requests WHERE expires_at < ?", (now - CONNECT_GRACE,))
 
     def account_hmac(self, digest):
         # 只存 HMAC：数据库泄露也不能拿常见邮箱去撞出是谁
         return hmac.new(self.secret, digest.encode("ascii"), hashlib.sha256).hexdigest()
 
-    # —— 注册、配对、设备 ——
+    # —— 注册、connect、设备 ——
 
-    def register(self, request):
-        body = parse_json_object(request.body)
+    def body_public_key(self, body):
         public_key = b64url_decode(body.get("publicKey"))
         if public_key is None or len(public_key) != 65 or public_key[0] != 4:
             raise ApiError(400, "invalid_public_key", "publicKey must be a 65-byte X9.63 P-256 point in base64url.")
-        self.verify_signature(request, public_key, "key:" + hashlib.sha256(public_key).hexdigest()[:40])
-        self.take_token("register:" + request.ip, "register")
+        return public_key
+
+    def device_fields(self, body):
         if body.get("platform") != "macos":
             raise ApiError(400, "invalid_platform", "platform must be \"macos\".")
         try:
-            device_name = clean_text(body.get("deviceName"), 60) or "Mac"
-            app_version = clean_text(body.get("appVersion"), 40)
+            return clean_text(body.get("deviceName"), 60) or "Mac", clean_text(body.get("appVersion"), 40)
         except ValueError:
             raise ApiError(400, "invalid_device", "deviceName is at most 60 characters, appVersion at most 40.") from None
+
+    def register(self, request):
+        """用户名直接注册（只在 QUOTA_RUN_DEVICE_SIGNUP=1 时开放，给本机测试用）。"""
+        body = parse_json_object(request.body)
+        public_key = self.body_public_key(body)
+        self.verify_signature(request, public_key, key_scope(public_key))
+        self.take_token("register:" + request.ip, "register")
+        device_name, app_version = self.device_fields(body)
         now = self.now()
         with self.transaction():
             if self.db.execute("SELECT 1 FROM devices WHERE public_key = ?", (public_key,)).fetchone():
                 raise ApiError(409, "key_registered", "This public key is already registered.")
-            pair_code = body.get("pairCode")
-            if pair_code not in (None, ""):
-                code = re.sub(r"[\s-]", "", pair_code).upper() if isinstance(pair_code, str) else ""
-                row = None
-                if len(code) == PAIR_CODE_LENGTH:
-                    row = self.db.execute(
-                        "SELECT user_id FROM pair_codes WHERE code_hash = ? AND expires_at >= ?",
-                        (hashlib.sha256(code.encode()).hexdigest(), now)).fetchone()
-                if row is None:
-                    raise ApiError(404, "pair_code_invalid", "The pairing code is wrong or has expired.")
-                user_id = row["user_id"]
-                self.db.execute("DELETE FROM pair_codes WHERE user_id = ?", (user_id,))
-                ranked = False
-            else:
-                username = normalize_username(body.get("username"))
-                if username is None:
-                    raise ApiError(400, "invalid_username",
-                                   "Usernames are 3–20 characters of a–z, 0–9, _ and -, starting with a letter or digit, and not reserved.")
-                region = body.get("region")
-                if region not in REGIONS:
-                    raise ApiError(400, "invalid_region", "region must be \"global\" or \"china\".")
-                try:
-                    display_name = clean_text(body.get("displayName"), 40) or username
-                except ValueError:
-                    raise ApiError(400, "invalid_display_name", "displayName is at most 40 characters.") from None
-                if self.db.execute("SELECT 1 FROM users WHERE username = ?", (username,)).fetchone():
-                    raise ApiError(409, "username_taken", "That username is taken.")
-                user_id = self.db.execute(
-                    "INSERT INTO users(username, display_name, region, joined_at) VALUES (?, ?, ?, ?)",
-                    (username, display_name, region, now)).lastrowid
-                ranked = True
-            device_id = secrets.token_urlsafe(16)
-            self.db.execute(
-                "INSERT INTO devices(id, user_id, public_key, name, platform, app_version, ranked, created_at, last_seen_at)"
-                " VALUES (?, ?, ?, ?, 'macos', ?, ?, ?, ?)",
-                (device_id, user_id, public_key, device_name, app_version, int(ranked), now, now))
+            username = normalize_username(body.get("username"))
+            if username is None:
+                raise ApiError(400, "invalid_username",
+                               "Usernames are 3–20 characters of a–z, 0–9, _ and -, starting with a letter or digit, and not reserved.")
+            region = body.get("region")
+            if region not in REGIONS:
+                raise ApiError(400, "invalid_region", "region must be \"global\" or \"china\".")
+            try:
+                display_name = clean_text(body.get("displayName"), 40) or username
+            except ValueError:
+                raise ApiError(400, "invalid_display_name", "displayName is at most 40 characters.") from None
+            if self.db.execute("SELECT 1 FROM users WHERE username = ?", (username,)).fetchone():
+                raise ApiError(409, "username_taken", "That username is taken.")
+            user_id = self.db.execute(
+                "INSERT INTO users(username, display_name, region, joined_at) VALUES (?, ?, ?, ?)",
+                (username, display_name, region, now)).lastrowid
+            device_id = self.insert_device(user_id, public_key, device_name, app_version, True, now)
             user = self.user_row(user_id)
         self._cache.clear()
+        return Response(201, {"user": user_brief(user), "deviceId": device_id, "ranked": True})
+
+    def insert_device(self, user_id, public_key, name, app_version, ranked, now):
+        device_id = secrets.token_urlsafe(16)
+        self.db.execute(
+            "INSERT INTO devices(id, user_id, public_key, name, platform, app_version, ranked, created_at, last_seen_at)"
+            " VALUES (?, ?, ?, ?, 'macos', ?, ?, ?, ?)",
+            (device_id, user_id, public_key, name, app_version, int(ranked), now, now))
+        return device_id
+
+    def has_ranked_device(self, user_id):
+        return self.db.execute("SELECT 1 FROM devices WHERE user_id = ? AND ranked = 1", (user_id,)).fetchone() is not None
+
+    def connect_start(self, request):
+        body = parse_json_object(request.body)
+        public_key = self.body_public_key(body)
+        self.verify_signature(request, public_key, key_scope(public_key))
+        self.take_token("register:" + request.ip, "register")
+        device_name, app_version = self.device_fields(body)
+        now = self.now()
+        with self.transaction():
+            if self.db.execute("SELECT 1 FROM devices WHERE public_key = ?", (public_key,)).fetchone():
+                raise ApiError(409, "key_registered", "This public key is already registered.")
+            # 同一把钥匙重新开始时，之前没批的码作废
+            self.db.execute("DELETE FROM connect_requests WHERE public_key = ? AND status = 'pending'", (public_key,))
+            while True:
+                code = "".join(secrets.choice(USER_CODE_ALPHABET) for _ in range(USER_CODE_LENGTH))
+                code_hash = hashlib.sha256(code.encode()).hexdigest()
+                if not self.db.execute("SELECT 1 FROM connect_requests WHERE code_hash = ?", (code_hash,)).fetchone():
+                    break
+            request_id = secrets.token_urlsafe(16)
+            self.db.execute(
+                "INSERT INTO connect_requests(id, code_hash, public_key, device_name, platform, app_version, status,"
+                " created_at, expires_at) VALUES (?, ?, ?, ?, 'macos', ?, 'pending', ?, ?)",
+                (request_id, code_hash, public_key, device_name, app_version, now, now + CONNECT_TTL))
+        user_code = format_user_code(code)
+        language = "/zh" if body.get("lang") == "zh" else ""
         return Response(201, {
-            "user": {"username": user["username"], "displayName": user["display_name"], "region": user["region"]},
-            "deviceId": device_id,
-            "ranked": ranked,
+            "requestId": request_id,
+            "userCode": user_code,
+            "verifyURL": f"{self.settings.origin}{language}/connect?code={user_code}",
+            "expiresAt": now + CONNECT_TTL,
+            "interval": CONNECT_INTERVAL,
         })
 
-    def create_pair_code(self, device):
-        now = self.now()
-        code = "".join(secrets.choice(PAIR_ALPHABET) for _ in range(PAIR_CODE_LENGTH))
-        with self.transaction():
-            # 同一时间只留一个有效码，旧码作废
-            self.db.execute("DELETE FROM pair_codes WHERE user_id = ?", (device["user_id"],))
-            self.db.execute("INSERT INTO pair_codes(code_hash, user_id, expires_at) VALUES (?, ?, ?)",
-                            (hashlib.sha256(code.encode()).hexdigest(), device["user_id"], now + PAIR_CODE_TTL))
-        return {"code": code, "expiresAt": now + PAIR_CODE_TTL}
+    def connect_poll(self, request):
+        body = parse_json_object(request.body)
+        public_key = self.body_public_key(body)
+        self.verify_signature(request, public_key, key_scope(public_key))
+        self.take_token("poll:" + request.ip, "poll")
+        request_id = body.get("requestId")
+        row = None
+        if isinstance(request_id, str) and DEVICE_ID_RE.fullmatch(request_id):
+            row = self.db.execute("SELECT * FROM connect_requests WHERE id = ?", (request_id,)).fetchone()
+        # 请求号属于别的钥匙时和不存在一样回 404：请求号不能被拿去冒领别人批准的设备
+        if row is None or not hmac.compare_digest(bytes(row["public_key"]), public_key):
+            raise ApiError(404, "connect_request_invalid", "No such connect request for this key.")
+        if row["status"] == "denied":
+            return {"status": "denied"}
+        if row["status"] == "approved":
+            device = self.db.execute(
+                "SELECT d.ranked, u.username, u.display_name, u.region FROM devices d JOIN users u ON u.id = d.user_id"
+                " WHERE d.id = ? AND d.public_key = ?", (row["device_id"], public_key)).fetchone()
+            if device is None:  # 批准后还没取到，设备就在网页上被删了
+                return {"status": "expired"}
+            return {"status": "approved", "user": user_brief(device), "deviceId": row["device_id"],
+                    "ranked": bool(device["ranked"])}
+        if row["expires_at"] <= self.now():
+            return {"status": "expired"}
+        return {"status": "pending"}
 
-    def set_ranked(self, request, device):
+    def find_connect(self, raw_code):
+        code = normalize_user_code(raw_code)
+        if code is None:
+            return None
+        return self.db.execute("SELECT * FROM connect_requests WHERE code_hash = ?",
+                               (hashlib.sha256(code.encode()).hexdigest(),)).fetchone()
+
+    def connect_info(self, request, raw_code):
+        self.require_session(request)
+        self.take_token("lookup:" + request.ip, "lookup")
+        row = self.find_connect(raw_code)
+        if row is None:
+            raise ApiError(404, "connect_code_invalid", "The code is wrong or has expired.")
+        status = row["status"]
+        if status == "pending" and row["expires_at"] <= self.now():
+            status = "expired"
+        code = normalize_user_code(raw_code)
+        return {"userCode": format_user_code(code), "deviceName": row["device_name"], "platform": row["platform"],
+                "appVersion": row["app_version"], "createdAt": row["created_at"], "expiresAt": row["expires_at"],
+                "status": status}
+
+    def pending_connect(self, request, raw_code):
+        session = self.require_session(request)
+        self.take_token(f"user:{session['user_id']}", "write")
+        row = self.find_connect(raw_code)
+        if row is None or (row["status"] == "pending" and row["expires_at"] <= self.now()):
+            raise ApiError(404, "connect_code_invalid", "The code is wrong or has expired.")
+        if row["status"] != "pending":
+            raise ApiError(409, "connect_code_used", "This code was already used.")
+        return session, row
+
+    def connect_approve(self, request, raw_code):
+        now = self.now()
+        with self.transaction():
+            session, row = self.pending_connect(request, raw_code)
+            public_key = bytes(row["public_key"])
+            if self.db.execute("SELECT 1 FROM devices WHERE public_key = ?", (public_key,)).fetchone():
+                raise ApiError(409, "connect_code_used", "This Mac is already connected.")
+            user_id = session["user_id"]
+            # 账号当前没有计分设备时，新连上的 Mac 直接成为计分设备（不算一次更换）
+            ranked = not self.has_ranked_device(user_id)
+            device_id = self.insert_device(user_id, public_key, row["device_name"], row["app_version"], ranked, now)
+            self.db.execute("UPDATE connect_requests SET status = 'approved', user_id = ?, device_id = ? WHERE id = ?",
+                            (user_id, device_id, row["id"]))
+        return {"deviceName": row["device_name"], "ranked": ranked}
+
+    def connect_deny(self, request, raw_code):
+        with self.transaction():
+            session, row = self.pending_connect(request, raw_code)
+            self.db.execute("UPDATE connect_requests SET status = 'denied', user_id = ? WHERE id = ?",
+                            (session["user_id"], row["id"]))
+        return {"status": "denied"}
+
+    def set_ranked(self, request, actor):
         body = parse_json_object(request.body)
         target = body.get("deviceId")
         if not isinstance(target, str) or not DEVICE_ID_RE.fullmatch(target):
@@ -825,45 +1426,57 @@ class RunService:
         now = self.now()
         with self.transaction():
             row = self.db.execute("SELECT ranked FROM devices WHERE id = ? AND user_id = ?",
-                                  (target, device["user_id"])).fetchone()
+                                  (target, actor.user_id)).fetchone()
             if row is None:
                 raise ApiError(404, "device_not_found", "No such device on this account.")
             if not row["ranked"]:
-                available = self.ranked_available_at(self.user_row(device["user_id"]))
+                # 冷却期只管「从一台换到另一台」；账号眼下没有计分设备时随时可以指定
+                available = self.ranked_available_at(self.user_row(actor.user_id))
                 if available is not None:
                     raise ApiError(409, "cooldown", "The ranked device can change once every 7 days.",
                                    availableAt=available)
-                self.db.execute("UPDATE devices SET ranked = (id = ?) WHERE user_id = ?", (target, device["user_id"]))
-                self.db.execute("UPDATE users SET ranked_changed_at = ? WHERE id = ?", (now, device["user_id"]))
-        return {"devices": self.devices_payload(device["user_id"], device["id"]),
-                "rankedChangeAvailableAt": self.ranked_available_at(self.user_row(device["user_id"]))}
+                self.db.execute("UPDATE devices SET ranked = (id = ?) WHERE user_id = ?", (target, actor.user_id))
+                self.db.execute("UPDATE users SET ranked_changed_at = ? WHERE id = ?", (now, actor.user_id))
+        return {"devices": self.devices_payload(actor.user_id, actor.device_id),
+                "rankedChangeAvailableAt": self.ranked_available_at(self.user_row(actor.user_id))}
 
-    def delete_device(self, device_id, device):
+    def forget_device(self, device_id):
+        self.db.execute("DELETE FROM devices WHERE id = ?", (device_id,))
+        self.db.execute("DELETE FROM nonces WHERE scope = ?", (device_id,))
+        self._buckets.pop("device:" + device_id, None)
+
+    def delete_device(self, device_id, actor):
         if not DEVICE_ID_RE.fullmatch(device_id):
             raise ApiError(404, "device_not_found", "No such device on this account.")
-        if device_id == device["id"]:
-            raise ApiError(409, "current_device", "A device cannot remove itself; use DELETE /account to leave.")
+        signed = actor.device_id is not None
+        if signed and device_id == actor.device_id:
+            raise ApiError(409, "current_device", "Use DELETE /devices/current to disconnect this Mac.")
         with self.transaction():
             row = self.db.execute("SELECT ranked FROM devices WHERE id = ? AND user_id = ?",
-                                  (device_id, device["user_id"])).fetchone()
+                                  (device_id, actor.user_id)).fetchone()
             if row is None:
                 raise ApiError(404, "device_not_found", "No such device on this account.")
-            if row["ranked"]:
-                # 每个账号必须恰好一台计分设备；先换计分设备（受冷却期约束）再删
+            if row["ranked"] and signed:
+                # 设备签名不能删计分设备（先换，受冷却期约束）；网页会话可以删任何一台
                 raise ApiError(409, "ranked_device", "Make another Mac the ranked device before removing this one.")
-            self.db.execute("DELETE FROM devices WHERE id = ?", (device_id,))
-            self.db.execute("DELETE FROM nonces WHERE scope = ?", (device_id,))
-        self._buckets.pop("device:" + device_id, None)
-        return {"devices": self.devices_payload(device["user_id"], device["id"])}
+            self.forget_device(device_id)
+        return {"devices": self.devices_payload(actor.user_id, actor.device_id)}
 
-    def delete_account(self, device):
-        user_id = device["user_id"]
+    def delete_current_device(self, device):
+        # 这台 Mac 离开账号；它若是计分设备，账号暂时没有计分设备。已上传的读数留在账号上
+        with self.transaction():
+            self.forget_device(device["id"])
+
+    def delete_account(self, request, actor):
+        user_id = actor.user_id
         with self.transaction():
             device_ids = [r[0] for r in self.db.execute("SELECT id FROM devices WHERE user_id = ?", (user_id,))]
             hmacs = [r[0] for r in self.db.execute(
                 "SELECT account_hmac FROM account_bindings WHERE user_id = ?", (user_id,))]
             self.db.executemany("DELETE FROM nonces WHERE scope = ?", [(d,) for d in device_ids])
-            for table in ("snapshots", "activity", "runs", "projects", "pair_codes", "account_bindings", "devices"):
+            # identities 删掉时 sessions 跟着级联删除；email_codes、oauth_states 里的 link_user_id 同样级联
+            for table in ("snapshots", "activity", "runs", "projects", "account_bindings", "devices",
+                          "connect_requests", "identities"):
                 self.db.execute(f"DELETE FROM {table} WHERE user_id = ?", (user_id,))
             self.db.execute("DELETE FROM users WHERE id = ?", (user_id,))
             # 这个人走了，和他共用服务商账号的其他人不再有争议，他们的 run 要重算
@@ -875,7 +1488,388 @@ class RunService:
                 self.recompute_run(key, now)
         for device_id in device_ids:
             self._buckets.pop("device:" + device_id, None)
+        if actor.session is not None:
+            request.set_cookies.append(self.cookie(SESSION_COOKIE, "", "/", 0))
         self._cache.clear()
+
+    # —— 登录：身份、会话、注册用户名 ——
+
+    def providers(self):
+        return {"google": self.settings.google, "github": self.settings.github, "email": self.mailer is not None}
+
+    def identities_payload(self, user_id):
+        rows = self.db.execute(
+            "SELECT id, provider, email, name, linked_at FROM identities WHERE user_id = ? ORDER BY linked_at, rowid",
+            (user_id,))
+        return [{"id": row["id"], "provider": row["provider"], "email": row["email"], "name": row["name"],
+                 "linkedAt": row["linked_at"]} for row in rows]
+
+    def save_identity(self, provider, subject, email, verified, name, login, now):
+        """按 (provider, subject) 新建或更新身份（邮箱、名字以登录时提供方给的为准），返回 dict。"""
+        row = self.db.execute("SELECT id FROM identities WHERE provider = ? AND subject = ?",
+                              (provider, subject)).fetchone()
+        if row is None:
+            identity_id = secrets.token_urlsafe(16)
+            self.db.execute(
+                "INSERT INTO identities(id, user_id, provider, subject, email, email_verified, name, login,"
+                " linked_at, last_used_at) VALUES (?, NULL, ?, ?, ?, ?, ?, ?, ?, ?)",
+                (identity_id, provider, subject, email, int(verified), name, login, now, now))
+        else:
+            identity_id = row["id"]
+            self.db.execute(
+                "UPDATE identities SET email = ?, email_verified = ?, name = ?, login = ?, last_used_at = ? WHERE id = ?",
+                (email, int(verified), name, login, now, identity_id))
+        return dict(self.db.execute("SELECT * FROM identities WHERE id = ?", (identity_id,)).fetchone())
+
+    def verified_email_owner(self, email):
+        """已验证邮箱正好属于一个账号时返回该账号；没有或有多个都不自动关联。"""
+        rows = self.db.execute(
+            "SELECT DISTINCT user_id FROM identities WHERE email = ? AND email_verified = 1 AND user_id IS NOT NULL",
+            (email,)).fetchall()
+        return rows[0][0] if len(rows) == 1 else None
+
+    def sign_in_identity(self, request, provider, subject, email, verified, name, login, now):
+        identity = self.save_identity(provider, subject, email, verified, name, login, now)
+        if identity["user_id"] is None and verified and email:
+            owner = self.verified_email_owner(email)
+            if owner is not None:
+                self.db.execute("UPDATE identities SET user_id = ?, linked_at = ? WHERE id = ?",
+                                (owner, now, identity["id"]))
+                identity["user_id"] = owner
+        self.start_session(request, identity["id"], now)
+        return identity
+
+    def link_identity(self, user_id, provider, subject, email, verified, name, login, now):
+        row = self.db.execute("SELECT id, user_id FROM identities WHERE provider = ? AND subject = ?",
+                              (provider, subject)).fetchone()
+        if row is not None and row["user_id"] not in (None, user_id):
+            raise ApiError(409, "identity_in_use", "That sign-in already belongs to another account.")
+        identity = self.save_identity(provider, subject, email, verified, name, login, now)
+        if identity["user_id"] is None:
+            self.db.execute("UPDATE identities SET user_id = ?, linked_at = ? WHERE id = ?",
+                            (user_id, now, identity["id"]))
+
+    def suggest_username(self, *sources):
+        base = next((b for b in map(username_base, sources) if b), "") or "runner"
+        candidates = [base] + [base[:20 - len(str(n))].rstrip("_-") + str(n) for n in range(2, 100)]
+        for name in candidates:
+            if (USERNAME_RE.fullmatch(name) and name not in RESERVED_USERNAMES and not
+                    self.db.execute("SELECT 1 FROM users WHERE username = ?", (name,)).fetchone()):
+                return name
+        return None
+
+    def session_payload(self, request):
+        session = self.current_session(request)
+        if session is None:
+            return {"signedIn": False, "needsSignup": False, "identity": None, "user": None,
+                    "suggestedUsername": None, "suggestedDisplayName": None}
+        user = self.user_row(session["user_id"]) if session["user_id"] is not None else None
+        payload = {
+            "signedIn": True,
+            "needsSignup": user is None,
+            "identity": {"provider": session["provider"], "email": session["email"], "name": session["name"]},
+            "user": user_brief(user) if user else None,
+            "suggestedUsername": None,
+            "suggestedDisplayName": None,
+        }
+        if user is None:
+            local = (session["email"] or "").partition("@")[0]
+            payload["suggestedUsername"] = self.suggest_username(session["login"], local)
+            payload["suggestedDisplayName"] = clip_text(session["name"] or session["login"] or local, 40)
+        return payload
+
+    def username_availability(self, request, raw):
+        self.take_token("lookup:" + request.ip, "lookup")
+        name = unquote(raw).strip().lstrip("@").casefold()
+        reason = None
+        if not USERNAME_RE.fullmatch(name):
+            reason = "invalid"
+        elif name in RESERVED_USERNAMES:
+            reason = "reserved"
+        elif self.db.execute("SELECT 1 FROM users WHERE username = ?", (name,)).fetchone():
+            reason = "taken"
+        return {"available": reason is None, "reason": reason}
+
+    def signup(self, request):
+        session = self.require_session(request, account=False)
+        self.take_token("auth:" + request.ip, "auth")
+        body = parse_json_object(request.body)
+        if session["user_id"] is not None:
+            raise ApiError(409, "already_signed_up", "This sign-in already has an account.")
+        username = normalize_username(body.get("username"))
+        if username is None:
+            raise ApiError(400, "invalid_username",
+                           "Usernames are 3–20 characters of a–z, 0–9, _ and -, starting with a letter or digit, and not reserved.")
+        region = body.get("region")
+        if region not in REGIONS:
+            raise ApiError(400, "invalid_region", "region must be \"global\" or \"china\".")
+        try:
+            display_name = clean_text(body.get("displayName"), 40) or username
+        except ValueError:
+            raise ApiError(400, "invalid_display_name", "displayName is at most 40 characters.") from None
+        now = self.now()
+        with self.transaction():
+            if self.db.execute("SELECT 1 FROM users WHERE username = ?", (username,)).fetchone():
+                raise ApiError(409, "username_taken", "That username is taken.")
+            user_id = self.db.execute(
+                "INSERT INTO users(username, display_name, region, joined_at) VALUES (?, ?, ?, ?)",
+                (username, display_name, region, now)).lastrowid
+            self.db.execute("UPDATE identities SET user_id = ?, linked_at = ? WHERE id = ?",
+                            (user_id, now, session["id"]))
+        self._cache.clear()
+        return Response(201, {"user": private_user(self.user_row(user_id))})
+
+    def delete_identity(self, request, identity_id):
+        session = self.require_session(request)
+        user_id = session["user_id"]
+        self.take_token(f"user:{user_id}", "write")
+        with self.transaction():
+            ids = [r[0] for r in self.db.execute(
+                "SELECT id FROM identities WHERE user_id = ? ORDER BY linked_at, rowid", (user_id,))]
+            if identity_id not in ids:
+                raise ApiError(404, "identity_not_found", "No such sign-in method on this account.")
+            if len(ids) == 1:
+                raise ApiError(409, "last_identity", "An account needs at least one way to sign in.")
+            if identity_id == session["id"]:
+                # 删的正是这次登录用的方式：当前会话改挂到剩下的身份上，不把人踢出去；
+                # 用它登录的其他会话随身份一起删掉
+                keep = next(i for i in ids if i != identity_id)
+                self.db.execute("UPDATE sessions SET identity_id = ? WHERE token_hash = ?",
+                                (keep, session["token_hash"]))
+            self.db.execute("DELETE FROM identities WHERE id = ?", (identity_id,))
+        return {"identities": self.identities_payload(user_id)}
+
+    def logout(self, request):
+        self.check_origin(request)
+        token = request.cookies.get(SESSION_COOKIE)
+        if token:
+            self.db.execute("DELETE FROM sessions WHERE token_hash = ?", (token_hash(token),))
+        request.set_cookies.append(self.cookie(SESSION_COOKIE, "", "/", 0))
+        return Response(204)
+
+    def dev_sign_in(self, request):
+        self.check_origin(request)
+        body = parse_json_object(request.body)
+        email = normalize_email(body.get("email"))
+        if email is None:
+            raise ApiError(400, "invalid_email", "That email address does not look right.")
+        with self.transaction():
+            identity = self.sign_in_identity(request, "email", email, email, True, None, None, self.now())
+        return {"signedIn": True, "needsSignup": identity["user_id"] is None}
+
+    # —— 邮箱验证码 ——
+
+    def email_code_hmac(self, email, code):
+        return hmac.new(self.secret, (email + code).encode("utf-8"), hashlib.sha256).hexdigest()
+
+    def email_start(self, request):
+        self.check_origin(request)
+        if self.mailer is None:
+            raise ApiError(503, "email_unavailable", "Email sign-in is not available right now.")
+        body = parse_json_object(request.body)
+        email = normalize_email(body.get("email"))
+        if email is None:
+            raise ApiError(400, "invalid_email", "That email address does not look right.")
+        lang = "zh" if body.get("lang") == "zh" else "en"
+        link_user_id = None
+        if body.get("link") is True:
+            link_user_id = self.require_session(request)["user_id"]
+        windows = self.email_windows
+        self.take_windows([
+            ("email-minute:" + email, *windows["address_minute"]),
+            ("email-hour:" + email, *windows["address_hour"]),
+            ("email-ip:" + request.ip, *windows["ip_hour"]),
+        ], "Too many codes requested; try again later.")
+        now = self.now()
+        code = f"{secrets.randbelow(1_000_000):06d}"
+        # 新码替换旧码（连同错误次数和关联模式）
+        self.db.execute(
+            "INSERT OR REPLACE INTO email_codes(email, code_hmac, expires_at, attempts, created_at, link_user_id)"
+            " VALUES (?, ?, ?, 0, ?, ?)",
+            (email, self.email_code_hmac(email, code), now + EMAIL_CODE_TTL, now, link_user_id))
+        subject, text = email_code_message(code, lang)
+        self.mailer(email, subject, text)
+        return Response(202, {"sent": True, "expiresAt": now + EMAIL_CODE_TTL})
+
+    def email_verify(self, request):
+        self.check_origin(request)
+        self.take_token("auth:" + request.ip, "auth")
+        body = parse_json_object(request.body)
+        email = normalize_email(body.get("email"))
+        code = re.sub(r"[\s-]", "", body.get("code")) if isinstance(body.get("code"), str) else ""
+        row = None
+        if email is not None:
+            row = self.db.execute("SELECT * FROM email_codes WHERE email = ?", (email,)).fetchone()
+        if row is None:
+            raise ApiError(400, "code_invalid", "That code is not right.")
+        if row["attempts"] >= EMAIL_MAX_ATTEMPTS:
+            raise ApiError(429, "too_many_attempts", "Too many wrong codes; ask for a new one.")
+        now = self.now()
+        if row["expires_at"] <= now:
+            raise ApiError(400, "code_expired", "That code has expired; ask for a new one.")
+        expected = self.email_code_hmac(email, code if re.fullmatch(r"[0-9]{6}", code) else "")
+        if not hmac.compare_digest(expected, row["code_hmac"]):
+            # 自动提交模式下这条 UPDATE 立即生效，随后抛出的错误不会把它回滚
+            self.db.execute("UPDATE email_codes SET attempts = attempts + 1 WHERE email = ?", (email,))
+            raise ApiError(400, "code_invalid", "That code is not right.")
+        self.db.execute("DELETE FROM email_codes WHERE email = ?", (email,))
+        with self.transaction():
+            link_user = row["link_user_id"]
+            session = self.current_session(request) if link_user is not None else None
+            # 关联模式只对发起关联的那个账号的会话生效；换了浏览器验证就按普通登录处理
+            if session is not None and session["user_id"] == link_user:
+                self.link_identity(link_user, "email", email, email, True, None, None, now)
+                return Response(200, {"linked": True})
+            identity = self.sign_in_identity(request, "email", email, email, True, None, None, now)
+        return Response(200, {"signedIn": True, "needsSignup": identity["user_id"] is None})
+
+    # —— GitHub / Google OAuth ——
+
+    def redirect_uri(self, provider):
+        return f"{self.settings.origin}{API_PREFIX}/auth/{provider}/callback"
+
+    def redirect(self, path):
+        return Response(302, headers={"Location": self.settings.origin + path})
+
+    def login_redirect(self, error, next_path):
+        login = "/zh/login" if next_path.startswith("/zh/") else "/login"
+        params = ({"error": error} if error else {}) | {"next": next_path}
+        return self.redirect(login + "?" + urlencode(params))
+
+    def oauth_start(self, request, provider):
+        self.take_token("auth:" + request.ip, "auth")
+        next_path = safe_next(request.query.get("next"))
+        if not getattr(self.settings, provider):
+            return self.login_redirect("provider_unavailable", next_path)
+        link_user_id = None
+        if request.query.get("link") in ("1", "true"):
+            session = self.current_session(request)
+            if session is not None and session["user_id"] is not None:
+                link_user_id = session["user_id"]
+        state = secrets.token_urlsafe(32)
+        verifier = secrets.token_urlsafe(48)
+        challenge = b64url_encode(hashlib.sha256(verifier.encode("ascii")).digest())
+        self.db.execute(
+            "INSERT INTO oauth_states(state_hash, provider, verifier, next, link_user_id, created_at)"
+            " VALUES (?, ?, ?, ?, ?, ?)", (token_hash(state), provider, verifier, next_path, link_user_id, self.now()))
+        if provider == "github":
+            url = GITHUB_AUTHORIZE_URL + "?" + urlencode({
+                "client_id": self.settings.github_client_id, "redirect_uri": self.redirect_uri(provider),
+                "scope": "read:user user:email", "state": state,
+                "code_challenge": challenge, "code_challenge_method": "S256"})
+        else:
+            url = GOOGLE_AUTHORIZE_URL + "?" + urlencode({
+                "client_id": self.settings.google_client_id, "redirect_uri": self.redirect_uri(provider),
+                "response_type": "code", "scope": "openid email profile", "state": state,
+                "code_challenge": challenge, "code_challenge_method": "S256", "prompt": "select_account"})
+        request.set_cookies.append(self.cookie(OAUTH_COOKIE, state, OAUTH_COOKIE_PATH, OAUTH_TTL))
+        return Response(302, headers={"Location": url})
+
+    def oauth_callback(self, request, provider):
+        request.set_cookies.append(self.cookie(OAUTH_COOKIE, "", OAUTH_COOKIE_PATH, 0))
+        with self.lock:
+            now = self.now()
+            self._purge(now)
+            state = request.query.get("state") or ""
+            cookie_state = request.cookies.get(OAUTH_COOKIE) or ""
+            row = None
+            if state:
+                row = self.db.execute("SELECT * FROM oauth_states WHERE state_hash = ?", (token_hash(state),)).fetchone()
+                if row is not None:
+                    self.db.execute("DELETE FROM oauth_states WHERE state_hash = ?", (row["state_hash"],))
+            valid = (row is not None and row["provider"] == provider and row["created_at"] > now - OAUTH_TTL
+                     and cookie_state and hmac.compare_digest(cookie_state.encode(), state.encode()))
+            next_path = row["next"] if valid else "/account"
+            if request.query.get("error"):
+                return self.login_redirect("oauth_denied", next_path)
+            if not valid:
+                return self.login_redirect("oauth_state", next_path)
+            link_user_id = row["link_user_id"]
+            if link_user_id is not None:
+                session = self.current_session(request)
+                if session is None or session["user_id"] != link_user_id:
+                    return self.login_redirect("oauth_state", next_path)
+            if not getattr(self.settings, provider):
+                return self.login_redirect("provider_unavailable", next_path)
+            code = request.query.get("code") or ""
+            verifier = row["verifier"]
+        if not code:
+            return self.login_redirect("oauth_failed", next_path)
+        try:
+            fetch = self.fetch_github if provider == "github" else self.fetch_google
+            profile = fetch(code, verifier)
+        except Exception as error:  # noqa: BLE001 — 网络、JSON、字段缺失都算 oauth_failed
+            # 只记提供方和错误类型：code、令牌和响应内容都不进日志
+            print(f"oauth {provider}: sign-in failed: {type(error).__name__}", file=sys.stderr)
+            return self.login_redirect("oauth_failed", next_path)
+        with self.lock:
+            now = self.now()
+            with self.transaction():
+                if link_user_id is not None:
+                    if self.user_row(link_user_id) is None:
+                        return self.login_redirect("oauth_state", next_path)
+                    try:
+                        self.link_identity(link_user_id, provider, *profile, now)
+                    except ApiError:
+                        return self.redirect(with_query(next_path, "error=identity_in_use"))
+                    return self.redirect(next_path)
+                identity = self.sign_in_identity(request, provider, *profile, now)
+        if identity["user_id"] is None:
+            return self.login_redirect(None, next_path)
+        return self.redirect(next_path)
+
+    def provider_json(self, method, url, headers, body=None):
+        status, raw = self.http(method, url, dict(headers, **{"Accept": "application/json", "User-Agent": USER_AGENT}), body)
+        if status != 200:
+            raise OAuthFailure(f"HTTP {status}")
+        return json.loads(raw.decode("utf-8"))
+
+    def fetch_github(self, code, verifier):
+        """返回 (subject, email, verified, name, login)。访问令牌只在这个函数里用一次。"""
+        form = urlencode({"client_id": self.settings.github_client_id,
+                          "client_secret": self.settings.github_client_secret,
+                          "code": code, "redirect_uri": self.redirect_uri("github"),
+                          "code_verifier": verifier}).encode("ascii")
+        grant = self.provider_json("POST", GITHUB_TOKEN_URL,
+                                   {"Content-Type": "application/x-www-form-urlencoded"}, form)
+        token = grant.get("access_token") if isinstance(grant, dict) else None
+        if not isinstance(token, str) or not token:
+            raise OAuthFailure("no access token")
+        auth = {"Authorization": f"Bearer {token}", "X-GitHub-Api-Version": "2022-11-28"}
+        user = self.provider_json("GET", GITHUB_USER_URL, auth)
+        subject = user.get("id") if isinstance(user, dict) else None
+        if isinstance(subject, bool) or not isinstance(subject, int):
+            raise OAuthFailure("no user id")
+        login = clip_text(user.get("login"), 39)
+        email = None
+        try:
+            emails = self.provider_json("GET", GITHUB_EMAILS_URL, auth)
+        except (OAuthFailure, ValueError):
+            emails = []
+        for item in emails if isinstance(emails, list) else []:
+            if isinstance(item, dict) and item.get("primary") is True and item.get("verified") is True:
+                email = normalize_email(item.get("email"))
+                break
+        name = clip_text(user.get("name"), 80) or login
+        return str(subject), email, email is not None, name, login
+
+    def fetch_google(self, code, verifier):
+        form = urlencode({"client_id": self.settings.google_client_id,
+                          "client_secret": self.settings.google_client_secret,
+                          "code": code, "redirect_uri": self.redirect_uri("google"),
+                          "grant_type": "authorization_code", "code_verifier": verifier}).encode("ascii")
+        grant = self.provider_json("POST", GOOGLE_TOKEN_URL,
+                                   {"Content-Type": "application/x-www-form-urlencoded"}, form)
+        token = grant.get("access_token") if isinstance(grant, dict) else None
+        if not isinstance(token, str) or not token:
+            raise OAuthFailure("no access token")
+        info = self.provider_json("GET", GOOGLE_USERINFO_URL, {"Authorization": f"Bearer {token}"})
+        subject = info.get("sub") if isinstance(info, dict) else None
+        if not isinstance(subject, str) or not subject or len(subject) > 255:
+            raise OAuthFailure("no subject")
+        email = normalize_email(info.get("email"))
+        verified = email is not None and info.get("email_verified") in (True, "true")
+        return subject, email, verified, clip_text(info.get("name"), 80), None
 
     # —— 读数与 run ——
 
@@ -1033,9 +2027,9 @@ class RunService:
 
     # —— 个人资料与项目 ——
 
-    def put_profile(self, request, device):
+    def put_profile(self, request, actor):
         body = parse_json_object(request.body)
-        user = self.user_row(device["user_id"])
+        user = self.user_row(actor.user_id)
         updates = {}
         # 缺省的字段保持原值；显式传 null 或空串才清空
         if "displayName" in body:
@@ -1065,7 +2059,7 @@ class RunService:
             self._cache.clear()
         return {"user": private_user(self.user_row(user["id"]))}
 
-    def put_projects(self, request, device):
+    def put_projects(self, request, actor):
         body = parse_json_object(request.body)
         projects = body.get("projects")
         if not isinstance(projects, list):
@@ -1074,13 +2068,13 @@ class RunService:
             raise ApiError(400, "too_many_projects", "At most 12 projects.")
         rows = [validate_project(index, item) for index, item in enumerate(projects)]
         with self.transaction():
-            self.db.execute("DELETE FROM projects WHERE user_id = ?", (device["user_id"],))
+            self.db.execute("DELETE FROM projects WHERE user_id = ?", (actor.user_id,))
             self.db.executemany(
                 "INSERT INTO projects(user_id, position, name, url, description, github, built_with)"
                 " VALUES (?, ?, ?, ?, ?, ?, ?)",
-                [(device["user_id"], index, *row) for index, row in enumerate(rows)])
+                [(actor.user_id, index, *row) for index, row in enumerate(rows)])
         self._cache.clear()
-        return {"projects": self.projects_payload(device["user_id"])}
+        return {"projects": self.projects_payload(actor.user_id)}
 
     # —— 查询 ——
 
@@ -1088,17 +2082,21 @@ class RunService:
         return self.db.execute("SELECT * FROM users WHERE id = ?", (user_id,)).fetchone()
 
     def ranked_available_at(self, user):
-        """冷却中返回可以再换的时间；现在就能换则为 null。首台设备自动成为计分设备，不算一次更换。"""
+        """冷却中返回可以再换的时间；现在就能换则为 null。首台设备自动成为计分设备，不算一次更换；
+        账号眼下没有计分设备时（计分设备被删或断开了）随时可以指定，也返回 null。"""
         changed = user["ranked_changed_at"]
-        if changed is None or self.now() >= changed + RANKED_COOLDOWN:
+        if changed is None or self.now() >= changed + RANKED_COOLDOWN or not self.has_ranked_device(user["id"]):
             return None
         return changed + RANKED_COOLDOWN
 
     def devices_payload(self, user_id, current_id):
         rows = self.db.execute(
-            "SELECT id, name, ranked, last_seen_at FROM devices WHERE user_id = ? ORDER BY created_at, rowid", (user_id,))
+            "SELECT id, name, ranked, last_seen_at, app_version FROM devices WHERE user_id = ? ORDER BY created_at, rowid",
+            (user_id,))
+        # 网页会话没有「当前设备」，current_id 为 None，全部是 false
         return [{"deviceId": row["id"], "name": row["name"], "ranked": bool(row["ranked"]),
-                 "lastSeenAt": row["last_seen_at"], "current": row["id"] == current_id} for row in rows]
+                 "lastSeenAt": row["last_seen_at"], "current": current_id is not None and row["id"] == current_id,
+                 "appVersion": row["app_version"]} for row in rows]
 
     def projects_payload(self, user_id):
         rows = self.db.execute(
@@ -1107,14 +2105,15 @@ class RunService:
         return [{"name": row["name"], "url": row["url"], "description": row["description"],
                  "github": row["github"], "builtWith": json.loads(row["built_with"])} for row in rows]
 
-    def me(self, device):
-        user = self.user_row(device["user_id"])
+    def me(self, actor):
+        user = self.user_row(actor.user_id)
         return {
             "user": private_user(user),
-            "devices": self.devices_payload(user["id"], device["id"]),
+            "devices": self.devices_payload(user["id"], actor.device_id),
             "rankedChangeAvailableAt": self.ranked_available_at(user),
             "lastUploadAt": user["last_upload_at"],
             "projects": self.projects_payload(user["id"]),
+            "identities": self.identities_payload(user["id"]),
         }
 
     def stats(self):
@@ -1303,6 +2302,10 @@ def links_payload(user):
     return {"website": user["website"], "github": user["github"], "x": user["x"]}
 
 
+def user_brief(user):
+    return {"username": user["username"], "displayName": user["display_name"], "region": user["region"]}
+
+
 def private_user(user):
     return {"username": user["username"], "displayName": user["display_name"], "bio": user["bio"],
             "region": user["region"], "links": links_payload(user), "joinedAt": user["joined_at"]}
@@ -1415,11 +2418,13 @@ class BodyTooLarge(Exception):
 
 
 def client_ip(handler):
-    # Caddy 会把真实来源追加到 X-Forwarded-For 末尾；取最后一个，客户端自己伪造的前缀不起作用
+    # Caddy 会把真实来源追加到 X-Forwarded-For 末尾；取最后一个，客户端自己伪造的前缀不起作用。
+    # 只信本机反代转来的这个头：直接连进来的请求自己带的 X-Forwarded-For 不算数
+    peer = handler.client_address[0]
     forwarded = handler.headers.get("X-Forwarded-For", "")
-    if forwarded:
-        return forwarded.split(",")[-1].strip()
-    return handler.client_address[0]
+    if forwarded and peer in ("127.0.0.1", "::1"):
+        return forwarded.split(",")[-1].strip() or peer
+    return peer
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -1430,6 +2435,11 @@ class Handler(BaseHTTPRequestHandler):
     def log_message(self, fmt, *args):  # 只记来源 IP、请求行和状态码，不记请求头和请求体
         if not getattr(self.server, "quiet", False):
             sys.stderr.write("%s %s\n" % (client_ip(self), fmt % args))
+
+    def log_request(self, code="-", size="-"):
+        # 请求行里的查询串可能带 OAuth 回调的 code 和 state，日志只记方法和不带查询串的路径
+        path = (getattr(self, "path", "") or "").partition("?")[0]
+        self.log_message('"%s %s" %s', getattr(self, "command", "") or "-", path, getattr(code, "value", code))
 
     def do_GET(self):
         self._dispatch()
@@ -1457,7 +2467,8 @@ class Handler(BaseHTTPRequestHandler):
         for name, value in parse_qsl(query, keep_blank_values=True):
             params.setdefault(name, value)
         headers = {name.lower(): value for name, value in self.headers.items()}
-        request = Request(self.command, path, params, headers, body, client_ip(self))
+        cookies = parse_cookies("; ".join(self.headers.get_all("Cookie") or ()))
+        request = Request(self.command, path, params, headers, body, client_ip(self), cookies)
         self._send(self.server.service.handle(request))
 
     def _read_body(self):
@@ -1502,13 +2513,16 @@ class Handler(BaseHTTPRequestHandler):
     def _send(self, response):
         data = response.encoded() if response.status != 204 else b""
         self.send_response(response.status)
-        if response.status != 204:
+        if data:
             self.send_header("Content-Type", "application/json; charset=utf-8")
+        if response.status != 204:
             self.send_header("Content-Length", str(len(data)))
         self.send_header("Cache-Control", f"public, max-age={CACHE_TTL}" if response.public else "no-store")
         self.send_header("X-Content-Type-Options", "nosniff")
         for name, value in response.headers.items():
             self.send_header(name, value)
+        for cookie in response.cookies:
+            self.send_header("Set-Cookie", cookie)
         if self.close_connection:
             self.send_header("Connection", "close")
         self.end_headers()
@@ -1522,16 +2536,35 @@ class RunHTTPServer(ThreadingHTTPServer):
     def __init__(self, address, service, quiet=False):
         self.service = service
         self.quiet = quiet
+        service.listen_host = address[0]
         super().__init__(address, Handler)
 
 
 def main():
-    port = int(os.environ.get("QUOTA_RUN_PORT") or DEFAULT_PORT)
-    db_path = os.environ.get("QUOTA_RUN_DB") or DEFAULT_DB
-    secret_file = os.environ.get("QUOTA_RUN_SECRET_FILE") or DEFAULT_SECRET_FILE
-    service = RunService(db_path, load_secret(secret_file))
+    env = os.environ
+    port = int(env.get("QUOTA_RUN_PORT") or DEFAULT_PORT)
+    db_path = env.get("QUOTA_RUN_DB") or DEFAULT_DB
+    secret_file = env.get("QUOTA_RUN_SECRET_FILE") or DEFAULT_SECRET_FILE
+    settings = Settings.from_env(env)
+
+    def flag(name):
+        return (env.get(name) or "").strip() == "1"
+
+    service = RunService(db_path, load_secret(secret_file), settings=settings,
+                         device_signup=flag("QUOTA_RUN_DEVICE_SIGNUP"), dev_login=flag("QUOTA_RUN_DEV_LOGIN"))
     server = RunHTTPServer(("127.0.0.1", port), service)
-    print(f"quota run on 127.0.0.1:{port}, db={db_path}", file=sys.stderr)
+    # 只打印哪些登录方式可用，不打印任何 client id、密钥或 SMTP 账号
+    print(f"quota run on 127.0.0.1:{port}, db={db_path}, origin={settings.origin}, "
+          f"github={settings.github}, google={settings.google}, email={service.mailer is not None}", file=sys.stderr)
+    if service.dev_login and not service.dev_login_enabled():
+        print("QUOTA_RUN_DEV_LOGIN=1 ignored: it needs a local QUOTA_RUN_ORIGIN (http://localhost:… or http://127.0.0.1:…)",
+              file=sys.stderr)
+    elif service.dev_login_enabled():
+        print("local testing: POST /auth/dev is on", file=sys.stderr)
+    if service.device_signup:
+        print("local testing: POST /register is on", file=sys.stderr)
+    if settings.insecure_cookies:
+        print("local testing: cookies are sent without Secure", file=sys.stderr)
     try:
         server.serve_forever()
     except KeyboardInterrupt:

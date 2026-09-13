@@ -5,6 +5,11 @@ token 数到 `https://quota.run/api/v1/`；这里是接收端：一个标准库 
 Python 服务，数据放 SQLite（WAL）。验签、存读数、算 run 和 tier、出榜单和个人页都在服务端，
 应用从不上传成绩。
 
+账号在 quota.run 网页上建（GitHub、Google 或邮箱验证码登录，没有密码），网页会话是
+`qr_session` cookie；Mac 通过 **connect** 加入账号：应用生成设备密钥、调 `connect/start` 拿到
+一个 8 位码并打开浏览器，用户在网页上登录后批准，应用轮询 `connect/poll` 拿到设备号。
+应用里不输入用户名、密码或 OAuth 令牌。
+
 线上契约（签名规范串、数据模型、run/tier 规则、每个接口的 JSON）以
 [`docs/quota-run.md`](../../docs/quota-run.md) 为准，本文只做摘要和补充。
 
@@ -26,8 +31,23 @@ Python 服务，数据放 SQLite（WAL）。验签、存读数、算 run 和 tie
 - `GET /leaderboard?provider=&plan=&window=&metric=speed|peak&season=current|2026-W37|all&region=&tier=all|verified&limit=`
 - `GET /users/<username>`：资料、链接、项目、各榜最好成绩（名次、人数、前百分之几）、最近 20 条 run、统计
 
-签名（`Cache-Control: no-store`）：`POST /register`、`GET /me`、`POST /snapshots`、`PUT /profile`、
-`PUT /projects`、`POST /devices/ranked`、`POST /pair`、`DELETE /devices/<id>`、`DELETE /account`。
+以下全部 `Cache-Control: no-store`。
+
+设备签名：
+
+- `POST /connect/start`、`POST /connect/poll`（没有设备号，按请求体里的 `publicKey` 验签；start 可带
+  `lang: "zh"`，`verifyURL` 就指向 `/zh/connect`）
+- `POST /snapshots`、`DELETE /devices/current`（这台 Mac 离开账号）
+- `POST /register`：只在 `QUOTA_RUN_DEVICE_SIGNUP=1` 时存在（本机测试），否则 404；配对码（`/pair`）已删除
+
+设备签名或网页会话（有 `X-Quota-Device` / `X-Quota-Signature` 头就按签名验，否则看 cookie）：
+`GET /me`（多了 `identities`，设备多了 `appVersion`）、`PUT /profile`、`PUT /projects`、
+`POST /devices/ranked`、`DELETE /devices/<id>`、`DELETE /account`。
+
+网页会话：`GET /auth/providers`、`GET /session`、`POST /auth/logout`、`GET /auth/github|google/start`、
+`GET /auth/github|google/callback`、`POST /auth/email/start`、`POST /auth/email/verify`、
+`GET /usernames/<name>`、`POST /signup`、`DELETE /identities/<id>`、`GET /connect/<userCode>`、
+`POST /connect/<userCode>/approve|deny`；本机测试另有 `POST /auth/dev`。
 
 错误统一是 `{"error": "<code>", "message": "<英文句子>"}`。
 
@@ -61,9 +81,37 @@ Python 服务，数据放 SQLite（WAL）。验签、存读数、算 run 和 tie
 - **PUT /profile** 是部分更新：没传的字段保持原值，传 `null` 或空串才清空。
 - **计分设备**：第一台自动成为计分设备，不算一次更换；之后每次更换开始 7 天冷却。
   `rankedChangeAvailableAt` 冷却中给时间，能换时为 `null`；`POST /devices/ranked` 的响应也带它。
-  不能删除当前设备（`409 current_device`），也不能直接删除计分设备（`409 ranked_device`，先换）。
-- **配对码**：8 位，去掉易混字符，输入不分大小写、可带空格或连字符；一次有效，生成新码时旧码作废；
-  库里只存 SHA-256。
+  设备签名不能删除当前设备（`409 current_device`，用 `DELETE /devices/current`），也不能直接删除计分设备
+  （`409 ranked_device`，先换）；网页会话可以删任何一台，包括计分设备。账号没有计分设备时
+  （计分设备被删或断开了），`POST /devices/ranked` 不受冷却期限制，`rankedChangeAvailableAt` 为 `null`；
+  这样指定也记一次更换，下一次换仍要等 7 天。connect 批准时账号没有计分设备，新 Mac 直接计分，不记更换。
+- **connect**：码 8 位（去掉易混字符），显示成 `ABCD-EFGH`，查找时忽略大小写、空格和连字符，库里只存
+  SHA-256；10 分钟有效。同一把钥匙重新 `start` 时旧码作废。批准后轮询一直返回 `approved`
+  （直到行被清理）；过期后的请求再留 10 分钟，这期间轮询回 `expired`，之后回 `404 connect_request_invalid`。
+  批准后设备在网页上被删、应用还没取到时，轮询回 `expired`。`GET /connect/<code>` 和批准、拒绝都要已有账号的
+  会话；过期未批的码 `GET` 时 `status` 是 `expired`，批准、拒绝回 `404 connect_code_invalid`。
+  `start` 和 `register` 共用按 IP 的令牌桶；`poll` 另有一个桶（容量 20、每 2 秒补 1 个），
+  因为应用每 3 秒轮询一次，套用注册的桶会很快 429。
+- **会话**：`qr_session` 是 32 字节随机数的 base64url，库里只存 SHA-256；距上次续期满一天的请求才把
+  过期时间顺延 30 天并重新下发 cookie。cookie 无效或过期时顺手下发一个 `Max-Age=0` 清掉。
+  `GET /session` 没登录时回 `200 {signedIn: false, …}`，不回 401。
+- **Origin**：所有网页端的非 GET 请求（包括不需要会话的 `auth/email/*`、`auth/dev`、`auth/logout`）都要带
+  与 `QUOTA_RUN_ORIGIN` 完全相同的 `Origin`，否则 `403 bad_origin`；设备签名请求不看 Origin。
+- **用户名查重** `GET /usernames/<name>` 不要求登录（用户名本来就公开），按 IP 限流。
+  `suggestedUsername` 取 GitHub 登录名或邮箱 @ 前面那段，转小写、非法字符换成 `-`，被占用或保留时
+  依次加 2、3、…；只是建议，注册时照常校验。
+- **身份关联**：新的（或还没注册的）身份带着已验证邮箱登录时，若这个邮箱正好属于一个账号上某个已验证的身份，
+  自动挂到那个账号（邮箱验证码身份也适用）；属于多个账号时不自动挂。关联模式（`link`）只对发起关联的那个账号的
+  会话生效：邮箱验证码换了浏览器去验证就是普通登录；OAuth 回调时会话已不是那个账号就回 `oauth_state`。
+  删除当前会话所用的身份时，当前会话改挂到剩下的身份上，用被删身份登录的其他会话失效。
+- **邮箱验证码**：库里存 `HMAC-SHA256(密钥, email + code)`，比对用 `hmac.compare_digest`。错满 5 次后
+  回 `429 too_many_attempts`（包括第 6 次输对），要重新发码。过期的码多留一小时，好回 `code_expired`。
+  发码的限额按内存里的滑动窗口计（重启清零）：同一地址 60 秒一次、每小时 6 次，同一 IP 每小时 20 次。
+- **OAuth**：state 只存哈希，回调时无论成败都删掉，并清掉 `qr_oauth` cookie。先看 `error` 参数
+  （`oauth_denied`），再校验 state 与 cookie（`oauth_state`），换令牌或取用户信息失败是 `oauth_failed`。
+  回调里向 GitHub / Google 发请求时不占服务锁。访问令牌只在内存里用一次；日志只记方法和不带查询串的路径，
+  回调里的 `code`、`state` 不进日志。GitHub 只取「主邮箱且已验证」，没有就当作无邮箱。
+  重定向地址一律是 `QUOTA_RUN_ORIGIN` + 路径。
 - **活动分钟**格式不对的直接丢掉（契约的 `rejected` 只报读数）。
 - **防重放**：nonce 在签名验过之后才登记，保留 10 分钟。注册请求还没有设备号，nonce 挂在公钥哈希
   名下；删号时这部分不删（不含用户数据，10 分钟后自然清理），免得截获的注册请求在删号后被重放。
@@ -71,11 +119,16 @@ Python 服务，数据放 SQLite（WAL）。验签、存读数、算 run 和 tie
   按 IP 容量 240、每秒补 4 个。429 带 `retryAfter` 和 `Retry-After` 头。`timestamp_skew` 的 401 带
   `serverTime`，方便应用校正时钟。
 - **请求体**：上限 1,000,000 字节，超出回 JSON 的 413；支持 `Transfer-Encoding: chunked`。
-- 来源 IP 取 `X-Forwarded-For` 的最后一项（Caddy 追加的那一项，客户端伪造的前缀无效）。
+- 来源 IP 取 `X-Forwarded-For` 的最后一项（Caddy 追加的那一项，客户端伪造的前缀无效），且只在连接来自本机
+  （Caddy）时才看这个头。注意 quota.run 在 Cloudflare 后面：最后一项是 Cloudflare 边缘节点的地址，
+  按 IP 的限额实际是按边缘节点算的。
+- **限流一览**：`register`（注册、connect/start，按 IP）、`poll`（connect/poll，按 IP）、`auth`（OAuth 起跳、
+  验证码校验、注册用户名、dev 登录，按 IP，容量 20、每 6 秒补 1 个）、`lookup`（用户名查重、connect 码查询，
+  按 IP，容量 60、每秒补 1 个）、`write`（签名写按设备，会话写按账号）。
 
 ## 配置
 
-环境变量（写在 `/etc/quotabar-run.env` 可覆盖单元里的默认值）：
+systemd 单元里写了默认值：
 
 ```
 QUOTA_RUN_PORT=8788
@@ -83,7 +136,38 @@ QUOTA_RUN_DB=/var/lib/quotabar-run/run.db
 QUOTA_RUN_SECRET_FILE=/etc/quotabar-run.secret
 ```
 
-`QUOTA_RUN_SECRET_FILE` 是账号摘要的 HMAC 密钥（库里只存 `HMAC-SHA256(密钥, accountDigest)`）。
+登录相关的配置写在 `/etc/quotabar-run.env`（systemd `EnvironmentFile`，`640 root:quotabar-run`，
+每行 `KEY=value`，不加引号、不加 `export`），同名变量也会覆盖上面的默认值：
+
+| 变量 | 用途 |
+|---|---|
+| `QUOTA_RUN_ORIGIN` | 站点来源，默认 `https://quota.run`；Origin 校验、OAuth 回调地址、connect 链接、登录后的跳转都用它 |
+| `QUOTA_RUN_GITHUB_CLIENT_ID`、`QUOTA_RUN_GITHUB_CLIENT_SECRET` | GitHub 登录，两个都有才启用 |
+| `QUOTA_RUN_GOOGLE_CLIENT_ID`、`QUOTA_RUN_GOOGLE_CLIENT_SECRET` | Google 登录，两个都有才启用 |
+| `QUOTA_RUN_SMTP_HOST`、`QUOTA_RUN_SMTP_PORT`、`QUOTA_RUN_SMTP_USER`、`QUOTA_RUN_SMTP_PASSWORD`、`QUOTA_RUN_MAIL_FROM` | 邮箱验证码；`HOST` 和 `MAIL_FROM` 都有才启用。端口 465 直接 TLS，其他端口（默认 587）STARTTLS；没有 `USER` 就不登录 |
+
+没配置的登录方式在 `GET /auth/providers` 里是 `false`：GitHub / Google 的起跳直接跳回
+`/login?error=provider_unavailable`，邮箱发码回 `503 email_unavailable`。启动日志只打印哪几种登录可用，
+不打印任何 id、密钥或 SMTP 账号。部署脚本只在这个文件不存在时放一个只有变量名的空模板，已存在就不动。
+
+### 配置登录方式
+
+最省事的是用 `Scripts/configure_run_login.sh`（`google <json>`、`github`、`smtp` 三个子命令）写进
+`/etc/quotabar-run.env`；手工改也行，改完 `systemctl restart quotabar-run`。密钥不要写进仓库、
+systemd 单元或命令行历史。
+
+- **GitHub**：GitHub → Settings → Developer settings → OAuth Apps → New OAuth App。Homepage URL 填
+  `https://quota.run`，Authorization callback URL 填 `https://quota.run/api/v1/auth/github/callback`。
+  建好后复制 Client ID，生成一个 Client secret。只申请 `read:user user:email`。
+- **Google**：Google Cloud Console → APIs & Services → Credentials → Create credentials → OAuth client ID，
+  类型 Web application。Authorized JavaScript origins 填 `https://quota.run`，Authorized redirect URIs 填
+  `https://quota.run/api/v1/auth/google/callback`。OAuth consent screen 里的范围只要 `openid`、`email`、`profile`。
+  下载的 JSON 里有 `client_id` 和 `client_secret`。
+- **SMTP**：任意支持 SMTP 的发信服务。`QUOTA_RUN_MAIL_FROM` 填发件地址（可以是 `Quota Run <codes@quota.run>`），
+  发件域名要配好 SPF / DKIM，否则验证码容易进垃圾箱。发信在后台线程里做，失败只在日志里记一行错误类型和
+  SMTP 状态码（不含收件人和验证码）。
+
+`QUOTA_RUN_SECRET_FILE` 是账号摘要和邮箱验证码的 HMAC 密钥（库里只存 `HMAC-SHA256(密钥, accountDigest)`）。
 文件不存在时服务会自己生成（32 字节随机数的 hex，权限 0600），但线上 `/etc` 对服务只读，
 所以由部署脚本在服务器上生成。**不要更换或丢失这个密钥**：换了之后所有已有的账号绑定都对不上，
 争议检测会失效。备份数据库时一并备份它。
@@ -97,6 +181,23 @@ python3 -m unittest server/run/test_run_server.py     # 仓库根目录
 cd server/run && python3 -m unittest                  # 或本目录
 ```
 
+测试里 GitHub、Google 和发信都是假的（`RunService(http=…, mailer=…)` 注入），不连外网。
+
+### 本机联调网页
+
+```
+QUOTA_RUN_PORT=8788 QUOTA_RUN_DB=/tmp/qr/run.db QUOTA_RUN_SECRET_FILE=/tmp/qr/secret \
+QUOTA_RUN_ORIGIN=http://localhost:8080 QUOTA_RUN_INSECURE_COOKIES=1 QUOTA_RUN_DEV_LOGIN=1 \
+python3 server/run/run_server.py
+```
+
+- `QUOTA_RUN_INSECURE_COOKIES=1`：cookie 去掉 `Secure`，本机 http 才存得住。
+- `QUOTA_RUN_DEV_LOGIN=1`：多出 `POST /auth/dev {email}`，直接以这个邮箱身份登录（新地址会进入注册用户名）。
+  只在服务监听 127.0.0.1 **且** `QUOTA_RUN_ORIGIN` 是 `http://localhost:…` 或 `http://127.0.0.1:…` 时生效——
+  线上服务同样只监听 127.0.0.1，靠第二个条件防止误开。
+- `QUOTA_RUN_DEVICE_SIGNUP=1`：重新打开 `POST /register`（用户名直接注册设备），给应用侧本机测试用。
+- 页面和 API 要同源（例如本地起一个把 `/api/*` 反代到 8788 的静态服务器），`Origin` 才对得上、cookie 才带得上。
+
 本机没有 `cryptography` 时可以临时建个 venv：
 `python3 -m venv /tmp/qr-venv && /tmp/qr-venv/bin/pip install cryptography`，再用
 `/tmp/qr-venv/bin/python -m unittest …` 跑；venv 不要放进仓库。
@@ -105,10 +206,11 @@ cd server/run && python3 -m unittest                  # 或本目录
 
 `Scripts/deploy_run.sh`：本地先跑测试，rsync 到 `/opt/quotabar-run`（不含测试文件），在服务器上
 建 `quotabar-run` 系统用户和 `/var/lib/quotabar-run`，没有密钥时生成 `/etc/quotabar-run.secret`
-（不回显），装 systemd 单元并重启；`caddy-snippet.caddy` 的第二段整份写成
+（不回显），没有 `/etc/quotabar-run.env` 时放一个空模板（已存在绝不覆盖、不回显），装 systemd 单元并重启；`caddy-snippet.caddy` 的第二段整份写成
 `/etc/caddy/sites/quota.run.caddy`，第一段放进 `/etc/caddy/sites/quota.bar.caddy` 站点块里的
 `# >>> quota-run`、`# <<< quota-run` 之间（重跑时整段替换，早先无标记的 `/api/run/` 反代一并删掉）；
-`caddy validate` 通过才 reload，失败则恢复原配置；最后 `curl https://quota.run/api/v1/stats` 验证。
+`caddy validate` 通过才 reload，失败则恢复原配置；最后 `curl` 验证 `stats`、`auth/providers`
+（只有 true/false）和 `POST /register` 是 404。
 页面本身（`web-run/`）由 `Scripts/deploy_site.sh` 同步到 `/var/www/quota.run`。
 
 服务端同时认 `/api/v1` 和早先的 `/api/run/v1` 两个前缀，签名按实际收到的路径校验。
@@ -120,6 +222,9 @@ cd server/run && python3 -m unittest                  # 或本目录
 
 - 日志：`journalctl -u quotabar-run`，只记来源 IP、请求行和状态码，不记请求头和请求体。
 - 备份：`sqlite3 /var/lib/quotabar-run/run.db ".backup /root/run-$(date +%F).db"`（WAL 下在线备份安全），
-  连同 `/etc/quotabar-run.secret`。
+  连同 `/etc/quotabar-run.secret`（`/etc/quotabar-run.env` 里的密钥可以在 GitHub / Google 后台重新生成）。
+- 过期的会话、验证码、OAuth state、connect 请求在请求处理时顺带清理（最多每分钟一次）。
+- 让某个人所有网页会话下线：
+  `sqlite3 /var/lib/quotabar-run/run.db "DELETE FROM sessions WHERE identity_id IN (SELECT i.id FROM identities i JOIN users u ON u.id = i.user_id WHERE u.username = '…')"`
 - 查看被标记的 run：
   `sqlite3 /var/lib/quotabar-run/run.db "SELECT u.username, r.provider, r.season, r.flag_reason FROM runs r JOIN users u ON u.id = r.user_id WHERE r.tier = 'flagged'"`

@@ -2,6 +2,7 @@
 # Installs the Quota Run API on the quota.bar host and wires Caddy: quota.run serves
 # the pages (synced by deploy_site.sh) and /api/*; quota.bar only redirects old addresses.
 # Idempotent: re-running updates the code and restarts the service; the database,
+# the login settings in /etc/quotabar-run.env (created empty once, never overwritten)
 # and the HMAC secret are left as they are; the Caddy blocks are replaced.
 set -euo pipefail
 cd "$(dirname "$0")/.."
@@ -35,6 +36,30 @@ if [ ! -s /etc/quotabar-run.secret ]; then
 fi
 chown quotabar-run:quotabar-run /etc/quotabar-run.secret
 chmod 600 /etc/quotabar-run.secret
+
+# 登录配置（GitHub / Google / SMTP 的密钥）放在 /etc/quotabar-run.env，由 Scripts/configure_run_login.sh
+# 写入。这里只在文件不存在时放一个只有变量名的空模板；已存在就绝不覆盖，也从不回显它的内容。
+if [ ! -e /etc/quotabar-run.env ]; then
+  (umask 027; cat > /etc/quotabar-run.env <<'ENVTEMPLATE'
+# Quota Run 线上配置：systemd EnvironmentFile，由 quotabar-run.service 读取。
+# 每行 KEY=value，不加引号、不加 export；去掉行首的 # 再填值，改完 systemctl restart quotabar-run。
+# 没填的登录方式在 GET /api/v1/auth/providers 里是 false。可以用 Scripts/configure_run_login.sh 写入。
+# QUOTA_RUN_ORIGIN=
+# QUOTA_RUN_GITHUB_CLIENT_ID=
+# QUOTA_RUN_GITHUB_CLIENT_SECRET=
+# QUOTA_RUN_GOOGLE_CLIENT_ID=
+# QUOTA_RUN_GOOGLE_CLIENT_SECRET=
+# QUOTA_RUN_SMTP_HOST=
+# QUOTA_RUN_SMTP_PORT=
+# QUOTA_RUN_SMTP_USER=
+# QUOTA_RUN_SMTP_PASSWORD=
+# QUOTA_RUN_MAIL_FROM=
+ENVTEMPLATE
+  )
+  echo "已生成 /etc/quotabar-run.env（空模板）"
+fi
+chown root:quotabar-run /etc/quotabar-run.env
+chmod 640 /etc/quotabar-run.env
 
 install -m 644 /opt/quotabar-run/quotabar-run.service /etc/systemd/system/quotabar-run.service
 systemctl daemon-reload
@@ -92,8 +117,12 @@ rm -f "$backup" "$run_backup"
 sleep 1
 systemctl is-active quotabar-run
 curl -s -o /dev/null -w 'GET 本机 %{http_code}\n' http://127.0.0.1:8788/api/v1/stats
+# 只显示哪些登录方式已配置（true/false），不含任何密钥
+echo "登录方式：$(curl -s http://127.0.0.1:8788/api/v1/auth/providers)"
 REMOTE
 echo "== 公网验证 =="
 curl -s --max-time 20 https://quota.run/api/v1/stats; echo
+curl -s --max-time 20 https://quota.run/api/v1/auth/providers; echo
+curl -s -o /dev/null --max-time 20 -w 'POST /register → %{http_code}（应为 404）\n' -X POST https://quota.run/api/v1/register
 curl -s -o /dev/null --max-time 20 -w 'quota.bar/leaderboard → %{http_code} %{redirect_url}\n' https://quota.bar/leaderboard
 curl -s -o /dev/null --max-time 20 -w 'quota.bar/api/run/v1/stats → %{http_code}\n' https://quota.bar/api/run/v1/stats
