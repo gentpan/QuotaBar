@@ -1600,7 +1600,7 @@ struct UpdatesPane: View {
 
             SettingRow(L10n.t("Check", "检查")) {
                 HStack(spacing: Design.space3) {
-                    Button(L10n.t("Check now", "立即检查")) { store.checkForUpdate() }
+                    Button(L10n.t("Check now", "立即检查")) { store.checkForUpdate(manual: true) }
                         .glassAction(prominent: true)
                         .disabled(checking)
                     stage

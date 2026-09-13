@@ -590,7 +590,7 @@ private struct OptionsMenuButton: NSViewRepresentable {
             menu.addItem(copy)
             menu.addItem(.separator())
             add(menu, L10n.t("Refresh Everything", "全部刷新"), "r") { [store] in store.forceRefreshAll() }
-            add(menu, L10n.t("Check for Updates…", "检查更新…"), "") { [store] in store.checkForUpdate() }
+            add(menu, L10n.t("Check for Updates…", "检查更新…"), "") { [store] in store.checkForUpdate(manual: true) }
             add(menu, L10n.t("About QuotaBar", "关于 QuotaBar"), "") {
                 MenuPanelController.shared.close()
                 SettingsWindow.open()

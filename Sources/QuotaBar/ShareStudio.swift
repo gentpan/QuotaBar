@@ -184,19 +184,18 @@ struct UsageShareCard: View {
 
             Rectangle().fill(fg.opacity(0.18)).frame(height: 1)
             HStack(alignment: .firstTextBaseline) {
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(footerFacts)
-                        .font(.system(size: 12, weight: .medium))
-                        .foregroundStyle(fg.opacity(0.7))
-                    if let signature, !signature.isEmpty {
-                        Text(signature)
-                            .font(.system(size: 13, weight: .semibold))
-                    }
-                }
-                Spacer()
-                Text("quota.bar")
+                Text(footerFacts)
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(fg.opacity(0.7))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+                Spacer(minLength: 12)
+                // The signature reads as a profile address, quota.bar/name — the
+                // shape it keeps once accounts exist.
+                (Text("quota.bar").foregroundStyle(fg.opacity(0.6))
+                    + Text(handle.map { "/\($0)" } ?? "").foregroundStyle(fg))
                     .font(.system(size: 12, weight: .semibold, design: .monospaced))
-                    .foregroundStyle(fg.opacity(0.6))
+                    .lineLimit(1)
             }
             .padding(.top, 12)
         }
@@ -205,6 +204,15 @@ struct UsageShareCard: View {
         .frame(width: format.size.width, height: format.size.height, alignment: .topLeading)
         .background(tier.background)
         .environment(\.colorScheme, tier == .white ? .light : .dark)
+    }
+
+    /// The signature as the last path segment: trimmed, no leading "@" or "/", spaces as dashes.
+    private var handle: String? {
+        guard let signature else { return nil }
+        let trimmed = signature.trimmingCharacters(in: .whitespacesAndNewlines)
+            .trimmingCharacters(in: CharacterSet(charactersIn: "@/"))
+            .replacingOccurrences(of: " ", with: "-")
+        return trimmed.isEmpty ? nil : trimmed
     }
 
     private var heroText: String {

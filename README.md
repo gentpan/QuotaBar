@@ -50,9 +50,22 @@ English and Simplified Chinese and follows the system language unless you pick o
 <!-- changelog:start -->
 <!-- Generated from CHANGELOG.en.md by Scripts/sync_changelog.py. Do not edit by hand. -->
 
-Latest release **0.5.2** (2026-09-13) · [full changelog](CHANGELOG.en.md)
+Latest release **0.5.2** (2026-09-13) · **2** changes in development · [full changelog](CHANGELOG.en.md)
 
 <details open>
+<summary><b>2026-09-13</b> · Unreleased · 1 added · 1 fixed</summary>
+
+**Added**
+
+- The menu bar icon's right-click menu is redone. A new "Show in Menu Bar" submenu offers "Automatic (fullest limit)" or any enabled provider, each with its mark and the figure the icon would show (left or used), the current choice ticked; the choice is the menu bar's own, and the dock, notch island and desktop cards keep theirs. The menu also gains "Check for Updates…" (which reads "Update to x.y.z…" when one is available and "Restart to Update to x.y.z" once downloaded), "Feedback…" and "About QuotaBar", alongside Refresh Now (⌘R), Settings (⌘,) and Quit (⌘Q).
+
+**Fixed**
+
+- With automatic update checks turned off, "Check now" on the Updates page and "Check for Updates…" in the panel's options menu did nothing; a check you ask for now runs regardless of that switch.
+
+</details>
+
+<details>
 <summary><b>2026-09-13</b> · 0.5.2 · 2 added · 1 style</summary>
 
 **Added**
@@ -90,83 +103,6 @@ Latest release **0.5.2** (2026-09-13) · [full changelog](CHANGELOG.en.md)
 - In English, the "Keychain" tag in Settings → Providers broke over two lines ("Keychai" / "n"): the tag's slot is wider and the text stays on one line.
 - Pacing gave wild estimates right after a window began — 3% used three minutes into a 5-hour window was projected to run out. It now waits until at least 5% of the window, and no less than 15 minutes, has passed before saying how much will be left, that it will run out, or when; a window already used up still shows at once.
 - The edge dock jumped off the screen edge for an instant when it opened on hover, leaving a gap. The window no longer changes size as the dock opens and closes; only the black shape grows inside it, flush to the edge throughout, and the undrawn transparent area lets the pointer through.
-
-</details>
-
-<details>
-<summary><b>2026-09-13</b> · 0.5.0 · 40 added · 10 style · 13 fixed</summary>
-
-**Added**
-
-- The panel is back: left-click the menu bar icon to open it, right-click for Refresh, Settings and Quit. A spend card sits at the top, a card per provider below, and the footer shows the version, the countdown to the next refresh, Settings and an options menu. Esc closes it, ⌘R refreshes, ⌘, opens Settings.
-- Spend card: switch between spend, tokens and spend per million tokens, and between today, yesterday and the last 30 days. The ring is coloured by source, the figure in the middle rolls to its new value, and hovering a source shows the breakdown by model.
-- Provider cards show the two most important windows by default. The other windows, limit reset counts, the 30-day usage trend, today's, yesterday's and 30-day spend, and links to the status page and console fold away under a disclosure arrow, which remembers whether it was open.
-- Bars show pacing: a thin tick marks where steady use would put you right now. When it will be tight the bar says roughly how much will be left; when the window will run out before it resets it shows a flame and when; a window already used up says "Limit reached". Hover a bar to see what the usage will be at reset at the current rate.
-- Click a percentage to switch between used and left, click a reset time to switch between a countdown and the exact time; every view follows.
-- Right-click a provider card or the spend card to copy it as an image, at 4× resolution, with a "Copied" confirmation.
-- Weekly usage share card: API value or token count over the last 7 days, 30 days, 3 months, this year or all time. Past $1,000 the card turns black, past $10,000 blue. Choose 4:5, 1:1 or 9:16 and a byline; share through the system, save a 1080 px PNG, or copy the image and the text.
-- Usage archive: QuotaBar keeps its own record of tokens and spend per model per day, so totals don't shrink when Claude Code clears old logs.
-- At launch the last saved readings show first while fresh ones load in the background.
-- On first install QuotaBar detects the tools you're already signed in to, turns on just those providers, and shows a welcome card you can dismiss.
-- Usage can hide while the screen is shared or recorded: the menu bar shows only the mark, and the dock, notch island and desktop cards step aside.
-- Three pacing notifications — almost out, cutting it close, will run out before the reset — each at most once per window.
-- Spend can be shown in yuan, Hong Kong dollars, yen, euros and more, with exchange rates updated daily.
-- Token counts can include cache or count only input and output.
-- Provider requests can go through an HTTP or SOCKS5 proxy.
-- Notch island glow: a soft cobalt halo around the black outline that shades to amber or red near the warning line, with a light that travels around the edge. Low power mode glows only on refresh, hover or a warning; the animation pauses while a full-screen app covers the island. The glow doesn't block clicks.
-- The notch island pops open when a limit first crosses the warning line, for about 4 seconds.
-- The notch island panel has three pages — limits, usage, overview — turned with a two-finger swipe or the dots at the bottom. The overview shows today's and 30-day spend, each source's share, and opens the share card.
-- The notch island's limit charts come in five styles — bars, rings, steps, figures, trend line — switched from the tabs at the bottom or with ⌘-click on the panel.
-- The sync dot breathes slowly and gives a small hop whenever new data arrives.
-- Desktop card: in detailed mode the bars gain pacing ticks and reset countdowns, with today's and 30-day spend at the bottom; standard mode shows the reset countdown under each ring; cards can sort by what runs out first.
-- Global shortcut: record a key combination in Settings to open the panel from anywhere.
-- Local API: once on, other tools on this Mac can read limits from http://127.0.0.1:6736/v1/limits, without credentials or account names; `QuotaBar --json` prints the same data in a terminal.
-- Beta updates: once on, pre-releases arrive too.
-- New in Settings: bar colour, reset time format, 12- or 24-hour clock, always show pacing, reduce animations, panel density, show the spend card, notch island glow and low power, pop open past the warning line, notch island chart style, sort the desktop card by urgency, the three pacing notifications, currency, token counting, hide usage while the screen is shared, proxy, and the local API.
-- The Usage page and the panel both open the usage share card, and after an update it opens once by itself if there has been usage this week.
-- New "Marks and figures" menu bar mode: the selected provider alone if one is selected, otherwise the logos and percentages of the first three enabled providers.
-- Right-click a provider card to move it up or down; the dock, notch island, desktop cards and panel all follow the same order.
-- The panel can be translucent, letting the desktop show through.
-- 10 new providers, 23 in all: Alibaba Coding Plan, Volcengine Ark, Zhipu GLM (China), Moonshot API balance, GitHub Copilot, OpenRouter, Xiaomi MiMo, Qoder, Windsurf and Kiro. Copilot uses the GitHub CLI's sign-in; Volcengine Ark reads arkcli; Windsurf and Kiro read their signed-in desktop apps; Alibaba Coding Plan and Xiaomi MiMo can sign in through the in-app browser. All but Copilot are marked "Experimental" until verified with real accounts. Copilot, Windsurf and Moonshot API have public status pages wired up.
-- New diagnostic command `QuotaBar --provider <provider>` fetches one provider's reading on its own.
-- Desktop cards, several at once: six new styles — big figure, gauge, spend trend, day by day, provider grid, closest first — plus the original classic style. Each card can be small, medium or large, show a chosen provider or spend source, and remembers its own position. Right-click a card to change its style, size or provider, add a card or remove it; double-click to open the panel. The desktop widget section in Settings becomes a list of cards, with "Add a card" and "Restore the default pair". If the desktop widget was on, it is replaced in place by the default pair: a big figure for the main provider with a spend trend below.
-- "Refresh Everything" in the panel footer rereads every provider, service status and local logs, and reloads sign-in credentials, with a spinner while it runs. ⌘R and Refresh in the options menu do the same; the button at the top right of a single card still refreshes just that provider.
-- The About page is redone: GitHub and X links with their own brand marks, a mail link to hello@quota.bar, a short description of the app, and at the bottom the update date, a link to the changelog, the requirement (macOS 14 or later), © 2026 QuotaBar and the MIT licence. "Your data" lists every address the app connects to; new "Acknowledgements" credit the authors and licences of codex-island, OpenUsage, CodexBar, theSVG and the Sora font; a closing trademark note says QuotaBar isn't affiliated with any provider, GitHub or X. The tagline matches the website: "Every AI coding limit, at a glance".
-- Reset moments: when a window such as the 5-hour or weekly one resets, QuotaBar rereads that provider right at the reset time instead of waiting for the next scheduled refresh (if the provider hasn't rolled over yet it retries each minute, up to 3 times). Colours always follow the provider — Claude orange, Codex blue — while the menu bar stays black and white.
-- Reset moments · menu bar icon: the meter refills smoothly, the button glows briefly underneath, and a highlight sweeps across the icon from left to right.
-- Reset moments · edge dock: the dock slides out, a light arc in the provider's colour sweeps that ring full and sends two ripples outward, and the ring swells slightly. A "Just reset" card slides out beside it, the percentage left rolling to its new value and the bar filling, noting how little was left before. It closes after about 3 seconds, or stays while the pointer is over it.
-- Reset moments · notch island: a row springs open like the Dynamic Island, a mini ring draws full, and it shows "Limit reset" with the provider and window name, the figure rolling and the glow in the provider's colour, closing after about 4 seconds.
-- Reset moments · panel and cards: the window's row flashes in the provider's colour and fades back, a "Just reset" tag pops in with its arrow turning once, and stays for ten minutes; the desktop card's status corner also reads "Just reset" for a while.
-- Reset notifications: off, after heavy use (the default, only when the window had passed 90%) or always. Resets that happened while the app was closed don't send a late notification. Settings → Alerts has a new "Resets" card; `QuotaBar --simulate-reset claude` previews the effect from a terminal.
-
-**Style**
-
-- The rows in the dock's hover card use the new shared limit row, with pacing and click-to-switch.
-- "Menu bar" in Presentation is renamed "Menu bar only"; dates on share cards and exact reset times follow the interface language.
-- The panel footer is one line: the version followed by when it next refreshes.
-- The footer of copied images shows the QuotaBar app icon on its green tile with the name on the left and the address quota.bar alone on the right, instead of "QuotaBar · quota.bar".
-- The spend card header is rebuilt: on the left a pull-down title chooses between spend, tokens and spend per million tokens; on the right, info, share and copy are three buttons of one size in a row, and info shows where the data comes from. The three icons are scaled into the same box, share a height, and sit on the pull-down title's centre line.
-- Buttons shrink slightly when pressed, with one animation curve throughout; charts switch with a light blur. "Reduce animations" is supported and the system's Reduce motion setting is followed.
-- In English the desktop card size switch in Settings reads S / M / L instead of truncating Medium to "Med..."; the multi-provider desktop card footer reads "4 providers · % left", the big figure card has a space between the window name and "left", and the English wording of the "Screen" explanation is rewritten.
-- The Settings window's controls share one style: pop-up menus, segmented controls, buttons and text fields are all 30 pt tall with the same corner radius, fill and hairline border, and line up in a row. The desktop card style, provider and currency choices use the new pop-up control, which opens with the current item over the control and ticked, its text aligned with the control; "Add a card" becomes a matching button with a chevron.
-- Switches in Settings are green when on instead of dark grey. Switch rows with a single-line title are as tall as field rows, row spacing inside a card is consistent, and labels on the left sit centred against the controls on the right.
-- The usage share card window's pop-ups, byline field, switches and Share, Save and Copy buttons use the same control style.
-
-**Fixed**
-
-- Flipping a card to its usage side, the notch island's usage page and the Usage page each took ten-odd seconds the first time after every launch; they're now worked out from the local archive and show at once.
-- The spend card took about 8 seconds to show a figure after launch; it now reads the local archive at launch in about 2 ms, and in the background rereads only logs changed in the last two days, about 30 ms each time after.
-- Flipping a card soon after launch could wrongly say "Nothing logged locally yet."
-- Memory grew during long runs: a session log still being written was cached again on every refresh. Each file is now cached once, and files no longer scanned are released.
-- The dock no longer recomputes the card size each time the card moves between rings, so switching is smoother.
-- Codex's plan chip couldn't tell the two Pro plans apart; it now shows PRO 5X or PRO 20X from the plan identifier the API returns.
-- The shortest refresh interval is now 5 minutes, to stay under the Anthropic usage API's rate limit; 1- and 2-minute settings in older configs become 5 minutes.
-- After switching the interface language, window names, plan descriptions and error messages stayed in the old language until the next automatic refresh; switching language now rereads every provider and service status straight away.
-- Saved readings record the language they were fetched in, so launching in a different language no longer shows old text in the other one (the first launch after upgrading reads fresh instead of using the old cache).
-- Service status in the Chinese interface no longer shows the status page's English headline (such as All Systems Operational) but a Chinese status level; incident names keep the status page's own wording.
-- The source list in the English spend explanation used Chinese enumeration commas; it now uses commas or enumeration commas by language.
-- Before any reading, desktop cards drew the gauge ring, provider grid and ranking bars full and green, with pacing "OK"; they now draw empty, with dashes for the figures and pacing.
-- The About page's network note missed one address: the model price list also comes from GitHub (LiteLLM's price list). It's now listed.
 
 </details>
 

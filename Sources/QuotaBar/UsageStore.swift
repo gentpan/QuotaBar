@@ -490,8 +490,10 @@ final class UsageStore: ObservableObject {
         Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String
     }
 
-    func checkForUpdate() {
-        guard config.checksForUpdates, let current = currentVersion else { return }
+    /// `manual`: asked for from a menu or the Updates page, which checks even
+    /// with automatic checks turned off.
+    func checkForUpdate(manual: Bool = false) {
+        guard manual || config.checksForUpdates, let current = currentVersion else { return }
         // A download or a staged bundle is further along than a check.
         switch updateStage {
         case .downloading, .readyToInstall: return

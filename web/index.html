@@ -537,6 +537,14 @@
       </div>
       <div class="log">
         <article class="log__day">
+          <header class="log__head"><time datetime="2026-09-13">2026-09-13</time><span class="log__tag">Unreleased</span></header>
+          <p class="log__counts">1 added · 1 fixed</p>
+          <ul class="log__list">
+            <li><span class="badge badge--add">Added</span>The menu bar icon's right-click menu is redone. A new "Show in Menu Bar" submenu offers "Automatic (fullest limit)" or any enabled provider, each with its mark and the figure the icon would show (left or used), the current choice ticked; the choice is the menu bar's own, and the dock, notch island and desktop cards keep theirs. The menu also gains "Check for Updates…" (which reads "Update to x.y.z…" when one is available and "Restart to Update to x.y.z" once downloaded), "Feedback…" and "About QuotaBar", alongside Refresh Now (⌘R), Settings (⌘,) and Quit (⌘Q).</li>
+            <li><span class="badge badge--fix">Fixed</span>With automatic update checks turned off, "Check now" on the Updates page and "Check for Updates…" in the panel's options menu did nothing; a check you ask for now runs regardless of that switch.</li>
+          </ul>
+        </article>
+        <article class="log__day">
           <header class="log__head"><time datetime="2026-09-13">2026-09-13</time><span class="log__tag">0.5.2</span></header>
           <p class="log__counts">2 added · 1 style</p>
           <ul class="log__list">
@@ -556,18 +564,6 @@
             <li><span class="badge badge--style">Style</span>The pacing note now reads "~8% left at reset" instead of the vaguer "about 8% to spare". Hovering spells out the working, for example "87% of this window has passed and 80% is used. At this rate it reaches about 92% by the reset, leaving 8%."</li>
           </ul>
           <a class="log__more" href="changelog.html#d-2026-09-13">8 more →</a>
-        </article>
-        <article class="log__day">
-          <header class="log__head"><time datetime="2026-09-13">2026-09-13</time><span class="log__tag">0.5.0</span></header>
-          <p class="log__counts">40 added · 10 style · 13 fixed</p>
-          <ul class="log__list">
-            <li><span class="badge badge--add">Added</span>The panel is back: left-click the menu bar icon to open it, right-click for Refresh, Settings and Quit. A spend card sits at the top, a card per provider below, and the footer shows the version, the countdown to the next refresh, Settings and an options menu. Esc closes it, ⌘R refreshes, ⌘, opens Settings.</li>
-            <li><span class="badge badge--add">Added</span>Spend card: switch between spend, tokens and spend per million tokens, and between today, yesterday and the last 30 days. The ring is coloured by source, the figure in the middle rolls to its new value, and hovering a source shows the breakdown by model.</li>
-            <li><span class="badge badge--add">Added</span>Provider cards show the two most important windows by default. The other windows, limit reset counts, the 30-day usage trend, today's, yesterday's and 30-day spend, and links to the status page and console fold away under a disclosure arrow, which remembers whether it was open.</li>
-            <li><span class="badge badge--add">Added</span>Bars show pacing: a thin tick marks where steady use would put you right now. When it will be tight the bar says roughly how much will be left; when the window will run out before it resets it shows a flame and when; a window already used up says "Limit reached". Hover a bar to see what the usage will be at reset at the current rate.</li>
-            <li><span class="badge badge--add">Added</span>Click a percentage to switch between used and left, click a reset time to switch between a countdown and the exact time; every view follows.</li>
-          </ul>
-          <a class="log__more" href="changelog.html#d-2026-09-13">58 more →</a>
         </article>
       </div>
       <p class="log__all"><a href="changelog.html">Full changelog →</a></p>

@@ -235,13 +235,28 @@ final class StatusItemCoordinator: NSObject {
         }
     }
 
+    /// The secondary-click menu: which provider the icon reports, then the
+    /// app's own commands. The icon's choice is its own — the dock, island and
+    /// desktop cards keep their pins — so the menu bar can report Cursor while
+    /// the dock shows every ring.
     private func showMenu() {
-        guard let item else { return }
+        guard let item, let store else { return }
+        menuActions = []
         let menu = NSMenu()
-        menu.addItem(makeItem(L10n.t("Refresh now", "立即刷新"), #selector(refresh), ""))
-        menu.addItem(makeItem(L10n.t("Settings…", "设置…"), #selector(openSettings), ","))
+
+        let shown = NSMenuItem(title: L10n.t("Show in Menu Bar", "显示在菜单栏"), action: nil, keyEquivalent: "")
+        shown.submenu = providerMenu(store: store)
+        menu.addItem(shown)
         menu.addItem(.separator())
-        menu.addItem(makeItem(L10n.t("Quit QuotaBar", "退出 QuotaBar"), #selector(quit), "q"))
+
+        add(menu, L10n.t("Refresh Now", "立即刷新"), "r") { [store] in store.refreshAll() }
+        menu.addItem(updateItem(store: store))
+        add(menu, L10n.t("Feedback…", "反馈…"), "") { SettingsWindow.open(section: .feedback) }
+        add(menu, L10n.t("Settings…", "设置…"), ",") { SettingsWindow.open() }
+        menu.addItem(.separator())
+        add(menu, L10n.t("About QuotaBar", "关于 QuotaBar"), "") { SettingsWindow.open(section: .about) }
+        add(menu, L10n.t("Quit QuotaBar", "退出 QuotaBar"), "q") { NSApp.terminate(nil) }
+
         // Attached for this click only: a menu left on the item would also
         // take over the primary click.
         item.menu = menu
@@ -249,13 +264,98 @@ final class StatusItemCoordinator: NSObject {
         item.menu = nil
     }
 
-    private func makeItem(_ title: String, _ action: Selector, _ key: String) -> NSMenuItem {
-        let menuItem = NSMenuItem(title: title, action: action, keyEquivalent: key)
-        menuItem.target = self
-        return menuItem
+    /// Automatic, then every enabled provider with its mark and the figure
+    /// the icon would show for it; the current choice is ticked.
+    private func providerMenu(store: UsageStore) -> NSMenu {
+        let menu = NSMenu()
+        let automatic = add(menu, L10n.t("Automatic (fullest limit)", "自动（用得最满的额度）"),
+                            detail: store.hottestProvider?.id.displayName) { [store] in store.selected = nil }
+        automatic.state = store.selected == nil ? .on : .off
+        menu.addItem(.separator())
+        for id in store.enabled {
+            let row = add(menu, id.displayName, detail: reading(for: id, store: store)) { [store] in store.selected = id }
+            row.state = store.selected == id ? .on : .off
+            if let logo = ProviderGlyph.logo(for: id), let image = logo.image.copy() as? NSImage {
+                image.size = NSSize(width: 16, height: 16)
+                // Single-colour marks follow the menu's text colour in light
+                // and dark menus; brand-coloured ones keep their colour.
+                image.isTemplate = logo.isMonochrome
+                row.image = image
+            }
+        }
+        return menu
     }
 
-    @objc private func refresh() { store?.refreshAll() }
-    @objc private func openSettings() { SettingsWindow.open() }
+    /// "81% left" or "19% used", as the icon counts; a dash before a reading.
+    private func reading(for id: ProviderID, store: UsageStore) -> String {
+        guard let used = store.headlinePercent(for: id) else { return "—" }
+        let figure = QuotaFormat.percent(store.meterMode.shownPercent(fromUsed: used))
+        return store.meterMode == .remaining
+            ? L10n.t("\(figure) left", "剩余 \(figure)")
+            : L10n.t("\(figure) used", "已用 \(figure)")
+    }
+
+    /// Says where an update has got to. An available update opens the Updates
+    /// page, where installing it is one more click; a checked-for-nothing
+    /// check opens the same page, which says it is up to date.
+    private func updateItem(store: UsageStore) -> NSMenuItem {
+        let item: NSMenuItem
+        switch store.updateStage {
+        case .checking:
+            item = NSMenuItem(title: L10n.t("Checking for Updates…", "正在检查更新…"), action: nil, keyEquivalent: "")
+        case let .downloading(release):
+            item = NSMenuItem(title: L10n.t("Downloading \(release.version)…", "正在下载 \(release.version)…"), action: nil, keyEquivalent: "")
+        case let .readyToInstall(release):
+            item = makeClosureItem(L10n.t("Restart to Update to \(release.version)", "重新启动以更新到 \(release.version)"), "") { [store] in
+                store.installNow()
+            }
+        case let .available(release):
+            item = makeClosureItem(L10n.t("Update to \(release.version)…", "更新到 \(release.version)…"), "") {
+                SettingsWindow.open(section: .updates)
+            }
+        case .idle, .failed:
+            item = makeClosureItem(L10n.t("Check for Updates…", "检查更新…"), "") { [store] in
+                store.checkForUpdate(manual: true)
+                SettingsWindow.open(section: .updates)
+            }
+        }
+        return item
+    }
+
+    private var menuActions: [ClosureTarget] = []
+
+    @discardableResult
+    private func add(_ menu: NSMenu, _ title: String, _ key: String, _ action: @escaping () -> Void) -> NSMenuItem {
+        let item = makeClosureItem(title, key, action)
+        menu.addItem(item)
+        return item
+    }
+
+    /// A row with a secondary figure set against the menu's right edge.
+    @discardableResult
+    private func add(_ menu: NSMenu, _ title: String, detail: String?, _ action: @escaping () -> Void) -> NSMenuItem {
+        let item = add(menu, title, "", action)
+        if let detail {
+            let style = NSMutableParagraphStyle()
+            style.tabStops = [NSTextTab(textAlignment: .right, location: 230)]
+            let text = NSMutableAttributedString(
+                string: title,
+                attributes: [.font: NSFont.menuFont(ofSize: 0), .paragraphStyle: style])
+            text.append(NSAttributedString(
+                string: "\t" + detail,
+                attributes: [.font: NSFont.menuFont(ofSize: 0), .foregroundColor: NSColor.secondaryLabelColor, .paragraphStyle: style]))
+            item.attributedTitle = text
+        }
+        return item
+    }
+
+    private func makeClosureItem(_ title: String, _ key: String, _ action: @escaping () -> Void) -> NSMenuItem {
+        let target = ClosureTarget(action)
+        menuActions.append(target)
+        let item = NSMenuItem(title: title, action: #selector(ClosureTarget.fire), keyEquivalent: key)
+        item.target = target
+        return item
+    }
+
     @objc private func quit() { NSApp.terminate(nil) }
 }
