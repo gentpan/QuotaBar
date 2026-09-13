@@ -1,6 +1,6 @@
 /* Quota Run（quota.run）：登录（login.html）、我的账号（account.html）、连接 Mac（connect.html）。
  *
- * 排在 run.js 后面加载，借用它挂在 window.QuotaRun 上的格式、链接、会话和示例开关。
+ * 排在 common.js 后面加载，借用它挂在 window.QuotaRun 上的格式、链接、会话和示例开关。
  * 接口是同源的 /api/v1，靠 qr_session 这枚 HttpOnly Cookie 认人（契约见 docs/quota-run.md 的
  * 「Web session」）：所有请求带 same-origin 凭据，写请求发 JSON，浏览器自己带 Origin。
  * ?demo=1 走本文件末尾的示例服务端，不发任何请求：
@@ -494,7 +494,7 @@
   /* ── 我的账号 ──────────────────────────────────────────────────────── */
 
   function accountPage() {
-    var main = $("account");
+    var main = $("main");
     var app = $("accApp");
     var problem = $("accProblem");
     var accountPath = ZH ? "/zh/account" : "/account";
@@ -522,7 +522,7 @@
     // ── 顶部 ──
     function renderHead() {
       var user = me.user;
-      $("accAvatar").innerHTML = Q.avatar(user, "run-avatar--xl");
+      $("accAvatar").innerHTML = Q.avatar(user, "av--xl");
       $("accName").textContent = user.displayName || user.username;
       var meta = ["@" + esc(user.username)];
       if (Q.regionLabel(user.region)) meta.push(esc(Q.regionLabel(user.region)));
@@ -801,7 +801,7 @@
           '<span class="acc-row__icon">' + ICON.mac + "</span>" +
           '<div class="acc-row__main">' +
             '<p class="acc-row__title"><span class="acc-row__name">' + name + "</span>" +
-              (d.ranked ? '<span class="badge acc-badge-ranked">' + ICON.check + t("Ranked", "计分") + "</span>" : "") + "</p>" +
+              (d.ranked ? '<span class="tag tag--ok">' + ICON.check + t("Ranked", "计分") + "</span>" : "") + "</p>" +
             '<p class="acc-row__meta">' + meta.join(" · ") + "</p>" +
             (!d.ranked && until ? '<p class="acc-row__note" id="cool-' + id + '">' + cooldownText(until) + "</p>" : "") +
           "</div>" +
@@ -871,10 +871,10 @@
         var elsewhere = a.status === "elsewhere";
         var verified = !elsewhere && a.verifiedByEmail;
         var badge = elsewhere
-          ? '<span class="badge acc-badge-elsewhere">' + t("Owned by another Quota account", "归另一个 Quota 账号") + "</span>"
+          ? '<span class="tag tag--warn">' + t("Owned by another Quota account", "归另一个 Quota 账号") + "</span>"
           : verified
-            ? '<span class="badge run-acctbadge" title="' + esc(Q.accountVerifiedText()) + '">' + Q.ACCOUNT_ICON + t("Account verified", "账号已核实") + "</span>"
-            : '<span class="badge acc-badge-bound">' + t("Bound", "已绑定") + "</span>";
+            ? '<span class="tag tag--ok tag--acct" title="' + esc(Q.accountVerifiedText()) + '">' + Q.ACCOUNT_ICON + t("Account verified", "账号已核实") + "</span>"
+            : '<span class="tag">' + t("Bound", "已绑定") + "</span>";
         var meta = [];
         var since = dayOf(a.firstSeenAt);
         if (since) meta.push(ZH ? esc(since) + " 绑定" : "Bound since " + esc(since));
@@ -1170,9 +1170,9 @@
         problem.innerHTML = Q.stateBox("done", t("Account deleted", "账号已删除"),
           esc(ZH ? "@" + username + " 在 quota.run 上的主页、项目、成绩、Mac 和登录方式都已删除。Mac 上的 QuotaBar 会停止上传，本地纪录还在。"
             : "Everything about @" + username + " is gone from quota.run: profile, projects, runs, Macs and sign-in methods. QuotaBar on your Macs stops uploading and keeps its local records."),
-          '<a class="run-btn" href="' + esc(Q.homeHref() + (DEMO ? "&session=out" : "")) + '">' + t("Back to the leaderboard", "回到排行榜") + "</a>");
-        problem.querySelector(".run-state__title").setAttribute("tabindex", "-1");
-        problem.querySelector(".run-state__title").focus();
+          '<a class="btn" href="' + esc(Q.homeHref() + (DEMO ? "&session=out" : "")) + '">' + t("Back to the leaderboard", "回到排行榜") + "</a>");
+        problem.querySelector(".state__title").setAttribute("tabindex", "-1");
+        problem.querySelector(".state__title").focus();
         window.scrollTo(0, 0);
       }, function (error) {
         busy(button, false);
@@ -1221,7 +1221,7 @@
         main.setAttribute("aria-busy", "false");
         problem.hidden = false;
         problem.innerHTML = Q.stateBox("error", t("Couldn't load your account.", "账号没加载出来。"), esc(explain(error)),
-          '<button type="button" class="run-btn" data-retry>' + t("Try again", "重试") + "</button>");
+          '<button type="button" class="btn" data-retry>' + t("Try again", "重试") + "</button>");
       });
     }
 
@@ -1248,7 +1248,7 @@
     var loadingHTML = card.innerHTML;
     var user = null;
     var ticker = 0;
-    var eyebrow = '<p class="run-eyebrow"><i aria-hidden="true"></i>Quota Run</p>';
+    var eyebrow = '<p class="eyebrow"><span class="eyebrow__dot" aria-hidden="true"></span>Quota Run</p>';
 
     function done() { card.setAttribute("aria-busy", "false"); }
 
@@ -1425,7 +1425,7 @@
         }
         done();
         card.innerHTML = Q.stateBox("error", t("Couldn't load this request.", "连接请求没加载出来。"), esc(explain(error)),
-          '<button type="button" class="run-btn" data-act="retry">' + t("Try again", "重试") + "</button>");
+          '<button type="button" class="btn" data-act="retry">' + t("Try again", "重试") + "</button>");
       });
     }
 
@@ -1454,7 +1454,7 @@
       if (error && error.status === 401) { toLogin(); return; }
       done();
       card.innerHTML = Q.stateBox("error", t("Couldn't check whether you're signed in.", "没能确认登录状态。"), esc(explain(error)),
-        '<button type="button" class="run-btn" onclick="location.reload()">' + t("Try again", "重试") + "</button>");
+        '<button type="button" class="btn" onclick="location.reload()">' + t("Try again", "重试") + "</button>");
     });
   }
 

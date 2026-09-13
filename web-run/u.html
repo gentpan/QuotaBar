@@ -6,10 +6,10 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Quota Run profile · QuotaBar</title>
 <meta name="description" content="A builder's Quota Run profile: personal bests on each quota board, recent runs and the projects they build.">
-<meta name="theme-color" content="#101112">
+<meta name="theme-color" content="#ffffff">
 <!-- /@username 由 Caddy 改写到这个文件。英文在根目录；浏览器语言是中文、或者之前选过中文的，去 /zh/@username。 -->
 <script>try{var l=localStorage.getItem("qb-lang"),n=navigator.languages&&navigator.languages[0]?navigator.languages[0]:navigator.language;if(l==="zh"?true:!l&&/^zh\b/i.test(String(n)))location.replace("zh/"+location.pathname.split("/").pop()+location.search+location.hash)}catch(e){}</script>
-<!-- 同一个文件服务所有用户：canonical 与 hreflang 由 run.js 按用户名补上 -->
+<!-- 同一个文件服务所有用户：canonical 与 hreflang 由 profile.js 按用户名补上 -->
 <meta property="og:title" content="Quota Run profile">
 <meta property="og:description" content="Personal bests, recent runs and projects on Quota Run, QuotaBar's opt-in leaderboard.">
 <meta property="og:type" content="profile">
@@ -24,53 +24,62 @@
 <link rel="icon" type="image/png" sizes="256x256" href="assets/icon.png?v=9adbf67e">
 <link rel="icon" sizes="48x48" href="/favicon.ico?v=9adbf67e">
 <link rel="apple-touch-icon" sizes="180x180" href="assets/apple-touch-icon.png?v=9adbf67e">
-<link rel="stylesheet" href="styles.css?v=9adbf67e">
-<link rel="stylesheet" href="run.css?v=9adbf67e">
+<link rel="stylesheet" href="base.css?v=9adbf67e">
+<link rel="stylesheet" href="profile.css?v=9adbf67e">
 <!-- 自建统计。defer，不阻塞渲染；跨域脚本不参与本站的 ?v= 指纹。 -->
 <script defer src="https://tongji.giantaccel.com/script.js" data-website-id="8085631e-cc5d-4563-819f-ddd04c1bdcfa"></script>
 </head>
-<body class="logpage runpage" data-run-page="profile">
-<a class="run-skip" href="#profile">Skip to the profile</a>
-<header class="logbar">
-  <div class="shell logbar__inner">
-    <a class="logbar__brand wordmark" href="https://quota.bar/"><img src="assets/icon.png?v=9adbf67e" alt="" width="22" height="22">QuotaBar</a>
-    <nav class="logbar__links" aria-label="Site">
-      <a href="https://quota.bar/">Home</a>
-      <a href="https://quota.run/">Leaderboard</a>
-      <a href="https://quota.bar/download/QuotaBar-0.5.3.dmg" download>Download</a>
-      <a class="run-lang" href="zh/u.html" hreflang="zh-CN" lang="zh-CN" data-lang="zh">中文</a>
-      <a class="run-account" id="runAccount" href="/login" data-state="out">Sign in</a>
+<body data-run-page="profile">
+<header class="nav">
+  <a class="skip" href="#main">Skip to content</a>
+  <div class="nav__inner">
+    <a class="nav__brand" href="./" data-local="index.html"><img src="assets/icon.png?v=9adbf67e" alt="" width="24" height="24">Quota Run</a>
+    <nav class="nav__links" aria-label="Site">
+      <a href="./" data-local="index.html">Leaderboard</a>
+      <a href="rules" data-local="rules.html">Rules</a>
+      <a href="https://quota.bar/download/QuotaBar-0.5.3.dmg" download>Download QuotaBar</a>
     </nav>
+    <div class="nav__right">
+      <a class="btn run-lang" href="zh/u.html" hreflang="zh-CN" lang="zh-CN" data-lang="zh" title="Read this page in Chinese">中文</a>
+      <a class="btn nav__account" id="runAccount" href="login" data-state="out">Sign in</a>
+    </div>
   </div>
 </header>
 
-<main class="shell run-profile" id="profile" aria-live="polite" aria-busy="true">
-  <!-- run.js 按 /@username（或 ?user=）读 /api/v1/users/<username>，把整页画在这里。
+
+<main class="shell profile" id="main" aria-live="polite" aria-busy="true">
+  <!-- profile.js 按 /@username（或 ?user=）读 /api/v1/users/<username>，把整页画在这里。
        没跑 JS 时留下这一段加载骨架和下面的说明。 -->
-  <div class="run-loading run-loading--profile" role="status">
-    <span class="sr-only">Loading the profile…</span>
-    <span class="run-skel run-skel--avatar"></span>
-    <span class="run-skel run-skel--title"></span>
-    <span class="run-skel"></span>
-    <span class="run-skel"></span>
+  <div class="phead" aria-hidden="true">
+    <span class="skel av--xl skel--round"></span>
+    <div class="phead__text"><span class="skel skel--title"></span><span class="skel skel--line"></span></div>
   </div>
-  <noscript><p class="run-note">This profile is drawn from Quota Run's public API and needs JavaScript.</p></noscript>
+  <div class="kpis kpis--4 psec" aria-hidden="true">
+    <div class="kpi"><span class="skel skel--short"></span><span class="kpi__v"><span class="skel skel--value"></span></span></div>
+    <div class="kpi"><span class="skel skel--short"></span><span class="kpi__v"><span class="skel skel--value"></span></span></div>
+    <div class="kpi"><span class="skel skel--short"></span><span class="kpi__v"><span class="skel skel--value"></span></span></div>
+    <div class="kpi"><span class="skel skel--short"></span><span class="kpi__v"><span class="skel skel--value"></span></span></div>
+  </div>
+  <p class="sr-only" role="status">Loading the profile…</p>
+  <noscript><p class="note">This profile is drawn from Quota Run's public API and needs JavaScript.</p></noscript>
 </main>
 
-<footer class="footer">
-  <div class="shell">
-    <div class="footer__links">
-      <a href="https://quota.bar/">Home</a>
-      <a href="https://quota.run/">Leaderboard</a>
-      <a href="https://quota.bar/download/QuotaBar-0.5.3.dmg" download>Download</a>
-      <a href="https://github.com/gentpan/QuotaBar">Source</a>
-    </div>
-    <p class="footer__fine">© 2026 QuotaBar · <a href="https://github.com/gentpan/QuotaBar/blob/main/LICENSE">MIT License</a> · Profiles are written by their owners; Quota Run is independent of every provider shown.</p>
+<footer class="foot">
+  <div class="foot__inner">
+    <span class="foot__brand"><img src="assets/icon.png?v=9adbf67e" alt="" width="16" height="16">Quota Run</span>
+    <nav class="foot__links" aria-label="More">
+      <a href="https://quota.bar/">QuotaBar home</a>
+      <a href="https://github.com/gentpan/QuotaBar">Source code</a>
+      <a href="https://quota.bar/changelog.html">Changelog</a>
+      <a href="https://github.com/gentpan/QuotaBar/blob/main/LICENSE">MIT License</a>
+    </nav>
+    <p class="foot__fine">Quota Run is independent of every provider shown; logos belong to their owners.</p>
   </div>
 </footer>
 
-<script type="application/json" id="run-providers">{"codex":{"en":"Codex","zh":"Codex","tone":"mono"},"claude":{"en":"Claude","zh":"Claude","tone":""},"cursor":{"en":"Cursor","zh":"Cursor","tone":"mono"},"kimi":{"en":"Kimi Code","zh":"Kimi Code","tone":""},"zai":{"en":"z.ai","zh":"z.ai","tone":"mono"},"opencode-go":{"en":"OpenCode Go","zh":"OpenCode Go","tone":"mono"},"minimax":{"en":"MiniMax","zh":"MiniMax","tone":""},"gemini":{"en":"Gemini","zh":"Gemini","tone":""},"manus":{"en":"Manus","zh":"Manus","tone":"mono"},"deepseek":{"en":"DeepSeek","zh":"DeepSeek","tone":""},"grok":{"en":"Grok","zh":"Grok","tone":"mono"},"antigravity":{"en":"Antigravity","zh":"Antigravity","tone":""},"qwen":{"en":"Qwen Cloud","zh":"Qwen Cloud","tone":"mono"},"alibaba":{"en":"Alibaba Coding Plan","zh":"阿里云百炼","tone":""},"volcengine":{"en":"Volcengine Ark","zh":"火山方舟","tone":""},"zhipu":{"en":"Zhipu GLM","zh":"智谱 GLM","tone":""},"moonshot":{"en":"Moonshot API","zh":"Kimi 开放平台","tone":"mono"},"copilot":{"en":"GitHub Copilot","zh":"GitHub Copilot","tone":"mono"},"openrouter":{"en":"OpenRouter","zh":"OpenRouter","tone":"mono"},"mimo":{"en":"Xiaomi MiMo","zh":"小米 MiMo","tone":""},"qoder":{"en":"Qoder","zh":"Qoder","tone":"dark"},"windsurf":{"en":"Windsurf","zh":"Windsurf","tone":"mono"},"kiro":{"en":"Kiro","zh":"Kiro","tone":""}}</script>
-<script src="app.js?v=9adbf67e"></script>
-<script src="run.js?v=9adbf67e"></script>
+
+<script type="application/json" id="run-providers">{"codex":{"en":"Codex","zh":"Codex","tone":""},"claude":{"en":"Claude","zh":"Claude","tone":""},"cursor":{"en":"Cursor","zh":"Cursor","tone":"light"},"kimi":{"en":"Kimi Code","zh":"Kimi Code","tone":""},"zai":{"en":"z.ai","zh":"z.ai","tone":""},"opencode-go":{"en":"OpenCode Go","zh":"OpenCode Go","tone":""},"minimax":{"en":"MiniMax","zh":"MiniMax","tone":""},"gemini":{"en":"Gemini","zh":"Gemini","tone":""},"manus":{"en":"Manus","zh":"Manus","tone":"light"},"deepseek":{"en":"DeepSeek","zh":"DeepSeek","tone":""},"grok":{"en":"Grok","zh":"Grok","tone":"light"},"antigravity":{"en":"Antigravity","zh":"Antigravity","tone":""},"qwen":{"en":"Qwen Cloud","zh":"Qwen Cloud","tone":""},"alibaba":{"en":"Alibaba Coding Plan","zh":"阿里云百炼","tone":""},"volcengine":{"en":"Volcengine Ark","zh":"火山方舟","tone":""},"zhipu":{"en":"Zhipu GLM","zh":"智谱 GLM","tone":""},"moonshot":{"en":"Moonshot API","zh":"Kimi 开放平台","tone":""},"copilot":{"en":"GitHub Copilot","zh":"GitHub Copilot","tone":""},"openrouter":{"en":"OpenRouter","zh":"OpenRouter","tone":""},"mimo":{"en":"Xiaomi MiMo","zh":"小米 MiMo","tone":""},"qoder":{"en":"Qoder","zh":"Qoder","tone":""},"windsurf":{"en":"Windsurf","zh":"Windsurf","tone":""},"kiro":{"en":"Kiro","zh":"Kiro","tone":""}}</script>
+<script src="common.js?v=9adbf67e"></script>
+<script src="profile.js?v=9adbf67e"></script>
 </body>
 </html>

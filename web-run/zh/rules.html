@@ -1,0 +1,187 @@
+<!doctype html>
+<!-- 由 Scripts/sync_changelog.py 从 site/rules.html 生成：改模板，不要改这个文件。 -->
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>规则 · Quota Run</title>
+<meta name="description" content="Quota Run 怎么玩：QuotaBar 会上传什么、绝不上传什么，服务商账号怎么绑定和认领，成绩级别、赛季和隐私。">
+<meta name="theme-color" content="#ffffff">
+<link rel="canonical" href="https://quota.run/zh/rules">
+<link rel="alternate" hreflang="en" href="https://quota.run/rules">
+<link rel="alternate" hreflang="zh-CN" href="https://quota.run/zh/rules">
+<link rel="alternate" hreflang="x-default" href="https://quota.run/rules">
+<meta property="og:title" content="规则 · Quota Run">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="QuotaBar">
+<meta property="og:image" content="https://quota.run/assets/og-zh.jpg?v=9adbf67e">
+<link rel="icon" type="image/png" sizes="256x256" href="../assets/icon.png?v=9adbf67e">
+<link rel="icon" sizes="48x48" href="/favicon.ico?v=9adbf67e">
+<link rel="apple-touch-icon" sizes="180x180" href="../assets/apple-touch-icon.png?v=9adbf67e">
+<link rel="stylesheet" href="../base.css?v=9adbf67e">
+<link rel="stylesheet" href="../rules.css?v=9adbf67e">
+</head>
+<body data-run-page="rules">
+<header class="nav">
+  <a class="skip" href="#main">跳到正文</a>
+  <div class="nav__inner">
+    <a class="nav__brand" href="./" data-local="index.html"><img src="../assets/icon.png?v=9adbf67e" alt="" width="24" height="24">Quota Run</a>
+    <nav class="nav__links" aria-label="站点">
+      <a href="./" data-local="index.html">排行榜</a>
+      <a href="rules" data-local="rules.html" aria-current="page">规则</a>
+      <a href="https://quota.bar/download/QuotaBar-0.5.3.dmg" download>下载 QuotaBar</a>
+    </nav>
+    <div class="nav__right">
+      <a class="btn run-lang" href="../rules" hreflang="en" lang="en" data-lang="en" title="切换到英文">EN</a>
+      <a class="btn nav__account" id="runAccount" href="login" data-state="out">登录</a>
+    </div>
+  </div>
+</header>
+
+
+<main class="shell doc" id="main">
+  <header class="doc__head">
+    <p class="eyebrow"><span class="eyebrow__dot" aria-hidden="true"></span>Quota Run</p>
+    <h1 class="doc__title">Quota Run 怎么玩</h1>
+    <p class="doc__lede">Quota Run 比的是谁更快用完一个订阅的额度窗口：Codex 的一周、Claude 的五小时、Cursor 的一个月。要自己主动加入，读数来自你 Mac 上的 QuotaBar，每一个成绩都由服务器根据签过名的读数算出来。没有奖品。</p>
+  </header>
+
+  <div class="doc__layout">
+    <nav class="toc" aria-label="本页目录">
+      <p class="toc__label">本页目录</p>
+      <ol>
+        <li><a href="#joining">怎么加入</a></li>
+        <li><a href="#uploaded">哪些数据会离开 Mac</a></li>
+        <li><a href="#accounts">服务商账号</a></li>
+        <li><a href="#tiers">成绩级别</a></li>
+        <li><a href="#seasons">赛季和榜单</a></li>
+        <li><a href="#macs">只认一台 Mac</a></li>
+        <li><a href="#privacy">隐私</a></li>
+      </ol>
+    </nav>
+
+    <article class="doc__body">
+      <section class="rule" id="joining" aria-labelledby="joiningTitle">
+        <h2 id="joiningTitle">怎么加入</h2>
+        <p>不注册也有个人纪录：每一轮、最快用满的时间、到 50% 和 90% 的时间、最高峰值，QuotaBar 都记在你自己的 Mac 上，这些不上传。</p>
+        <ol class="rule__steps">
+          <li>打开 QuotaBar 的「设置」→「Quota Run」，点「用 quota.run 登录」。</li>
+          <li>看完同意说明。上面逐条列出会上传的内容，你点同意之前，什么都不会离开这台 Mac。</li>
+          <li>浏览器会打开 quota.run。用 GitHub、Google 或邮箱验证码登录（不用密码），核对连接码和 QuotaBar 里显示的一致，然后批准这台 Mac。</li>
+        </ol>
+        <p>之后 QuotaBar 每次刷新完都会上传新的读数。退出只要在应用里或账号页上点一下，服务器上和你有关的数据会全部删除。</p>
+      </section>
+
+      <section class="rule" id="uploaded" aria-labelledby="uploadedTitle">
+        <h2 id="uploadedTitle">哪些数据会离开 Mac</h2>
+        <p>应用只上传读数，不上传成绩。客户端声称「两小时用满」没有任何意义，因为每一轮成绩都由服务器自己算。</p>
+        <div class="lists">
+          <div class="list list--yes">
+            <h3>加入后会上传</h3>
+            <ul>
+              <li>服务商和套餐名</li>
+              <li>每个额度窗口的已用百分比、重置时间和读取时间</li>
+              <li>窗口的长度和范围</li>
+              <li>服务商账号的单向摘要，不是邮箱本身</li>
+              <li>本地 CLI 日志里每分钟的 token 数，只有数字</li>
+            </ul>
+          </div>
+          <div class="list list--no">
+            <h3>绝不上传</h3>
+            <ul>
+              <li>凭据、令牌、Cookie 和 API Key</li>
+              <li>提示词、代码和模型的输出</li>
+              <li>文件和项目路径</li>
+              <li>明文的服务商账号邮箱</li>
+            </ul>
+          </div>
+        </div>
+      </section>
+
+      <section class="rule" id="accounts" aria-labelledby="accountsTitle">
+        <h2 id="accountsTitle">服务商账号：绑定和归属</h2>
+        <p>QuotaBar 会读出每个服务商当前登录的是哪个账号，只上传它的摘要；quota.run 再把摘要加密存一遍。邮箱不会离开你的 Mac，服务器上也还原不出来。</p>
+        <dl class="facts">
+          <div><dt>绑定了才能上榜</dt><dd>不带服务商账号的读数不计成绩：一轮里每条读数都带着账号，才有资格上榜。</dd></div>
+          <div><dt>第一次上传就绑定</dt><dd>一个服务商账号只归一个 Quota 账号，也就是最先用它上传读数的那个人。别人的 Quota 账号里再出现同一个服务商账号，那些成绩会被扣下，不上榜。</dd></div>
+          <div><dt>用邮箱认领</dt><dd>如果这个服务商账号的邮箱，正好是你在 quota.run 上验证过的登录邮箱，它就归你，哪怕别人先上传过。服务器不需要你额外上传任何东西就能核对；在「账号」→「登录方式」里绑定那个邮箱即可认领。这样认领的账号不会再被别人抢走。</dd></div>
+          <div><dt><span class="acct">账号已核实</span></dt><dd>一轮里所有读数都来自用邮箱认领的服务商账号时，名字旁会显示这个标记。它只是标记，不是级别：邮箱不一样的账号照样上榜。</dd></div>
+          <div><dt>解除绑定</dt><dd>在账号页解除绑定，会删掉你来自这个服务商账号的读数和成绩。仍登录着它的 Mac 下次上传时会重新绑定，除非你在 QuotaBar 里也解除。</dd></div>
+        </dl>
+      </section>
+
+      <section class="rule" id="tiers" aria-labelledby="tiersTitle">
+        <h2 id="tiersTitle">成绩级别</h2>
+        <p>每一轮在读数到达时都会核对一遍。榜单上有两种级别，打开「只看已验证」就只剩第一种。</p>
+        <div class="tiergrid">
+          <div class="tier">
+            <p class="tier__name"><span class="tag tag--ok">已验证</span></p>
+            <ul>
+              <li>每条读数都来自归你所有的服务商账号</li>
+              <li>读数往回掉不超过 2 个点</li>
+              <li>5 分钟内不会猛涨超过 60 个点</li>
+              <li>第一条读数不超过 50%，到用满为止没有超过 20 分钟的空档</li>
+              <li>Codex 和 Claude 的轮次里，本地日志确实有 token 在消耗</li>
+            </ul>
+          </div>
+          <div class="tier">
+            <p class="tier__name"><span class="tag">标准</span></p>
+            <p>读数可信，但少了覆盖或活跃那一项——比如窗口过半才加入，或者 Mac 中途睡了一阵。</p>
+          </div>
+          <div class="tier tier--hidden">
+            <p class="tier__name"><span class="tag tag--warn">待复核</span></p>
+            <p>读数往回掉、突然猛涨，或者服务商账号归另一个 Quota 账号。先扣下来复核，不出现在榜单和个人主页上。</p>
+          </div>
+          <div class="tier tier--hidden">
+            <p class="tier__name"><span class="tag">不计名次</span></p>
+            <p>有读数没带服务商账号的轮次。会保存，但不会出现在榜单、最好成绩和最近几轮里。</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="rule" id="seasons" aria-labelledby="seasonsTitle">
+        <h2 id="seasonsTitle">赛季和榜单</h2>
+        <dl class="facts">
+          <div><dt>一轮</dt><dd>一个服务商账号、一个额度窗口的一个重置周期：从窗口开始到重置为止。窗口长度在 1 小时到 32 天之间的才参与排名。</dd></div>
+          <div><dt>一张榜</dt><dd>同一个服务商、同一个套餐、同一种窗口的人比，比如 Codex Pro 20x 的周额度。每个人只出现一次，取最好的一轮。</dd></div>
+          <div><dt>赛季</dt><dd>赛季就是按 UTC 算的 ISO 周，看的是窗口从哪一周开始，写作 2026-W37。「本周」是当前这一周，「上周」是前一周，「全部赛季」取每个人历来最好的一轮。</dd></div>
+          <div><dt>比什么</dt><dd>从窗口开始，到第一条达到 100%（99.5% 及以上）、90%、50% 的读数用了多久，以及最高峰值。峰值相同时，先到的排前面。</dd></div>
+          <div><dt>没有奖品</dt><dd>不发钱，也不发奖。桌面客户端没法做到无法作弊，只能让作弊又费劲又显眼。能赢的只有面子，和一个展示作品的主页。</dd></div>
+        </dl>
+      </section>
+
+      <section class="rule" id="macs" aria-labelledby="macsTitle">
+        <h2 id="macsTitle">只认一台 Mac</h2>
+        <p>每台 Mac 用一把不出本机的密钥给读数签名，有安全隔区的 Mac 就存在安全隔区里。一个账号可以连好几台 Mac，但只计「计分 Mac」的读数。把计分换到另一台，要距离上次更换满 7 天；一台都没有时，随时可以选。</p>
+      </section>
+
+      <section class="rule" id="privacy" aria-labelledby="privacyTitle">
+        <h2 id="privacyTitle">隐私</h2>
+        <dl class="facts">
+          <div><dt>公开的</dt><dd>用户名、显示名称、地区、简介、链接和项目；你的成绩、用时和级别；以及每一轮上榜成绩的用量曲线，也就是百分比在窗口里是怎么涨上去的。</dd></div>
+          <div><dt>不公开的</dt><dd>登录邮箱只留在 quota.run 用来让你登录，不会出现在主页和榜单上，也不会给任何人看。服务商账号的邮箱压根不会到服务器。</dd></div>
+          <div><dt>退出</dt><dd>删除账号会从 quota.run 删掉你的主页、项目、读数、成绩、Mac 和登录方式。QuotaBar 停止上传，本地纪录保留。</dd></div>
+        </dl>
+        <p class="doc__end">QuotaBar 是开源的，这个网站和它的服务端也是。 <a class="link" href="https://github.com/gentpan/QuotaBar">在 GitHub 上看代码</a></p>
+      </section>
+    </article>
+  </div>
+</main>
+
+<footer class="foot">
+  <div class="foot__inner">
+    <span class="foot__brand"><img src="../assets/icon.png?v=9adbf67e" alt="" width="16" height="16">Quota Run</span>
+    <nav class="foot__links" aria-label="更多">
+      <a href="https://quota.bar/zh/">QuotaBar 官网</a>
+      <a href="https://github.com/gentpan/QuotaBar">源代码</a>
+      <a href="https://quota.bar/zh/changelog.html">更新日志</a>
+      <a href="https://github.com/gentpan/QuotaBar/blob/main/LICENSE">MIT 许可证</a>
+    </nav>
+    <p class="foot__fine">Quota Run 与页面上出现的服务商均无关联，标志归各自所有者。</p>
+  </div>
+</footer>
+
+
+<script src="../common.js?v=9adbf67e"></script>
+</body>
+</html>
