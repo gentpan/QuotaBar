@@ -260,6 +260,41 @@ device (burst 5) → 429.
 `region` is `global` or `china` (a user attribute, chosen when joining; used as a
 filter). Omit it for everyone.
 
+### Public — comparison data (for the multi-view leaderboard)
+
+- **Seasons** everywhere accept `current`, `last` (the ISO week before the
+  current one), `all`, or `2026-W37`.
+- **`GET /leaderboard`** also takes `metric=to90` and `metric=to50` (rank by
+  `secondsTo90` / `secondsTo50` ascending among runs that reached it; best run
+  per user by that metric) and `limit` up to 200. Every entry additionally has
+  `runId, secondsTo50, secondsTo90, secondsTo100, seasonRuns` (`seasonRuns` = that
+  user's visible runs on this board in the selected season, all seasons for
+  `all`), and the response has
+  `summary: {runners, runnersPrev, fastest: {username, displayName, seconds} | null,
+  medianSecondsTo100, medianSecondsTo100Prev, medianRunId, completed, completedShare,
+  verifiedShare, accountVerifiedShare}` computed over each runner's best run
+  (speed) on the board for the selected season/region/tier. `*Prev` compare with
+  the previous ISO week (null for `all`). Medians use runs that reached 100%;
+  `medianRunId` is the run whose `secondsTo100` is the lower median. Shares are 0–1.
+- **`GET /runs/<runId>`** → `{run: {runId, username, displayName, provider, plan,
+  planLabel, windowKey, windowSeconds, windowTitle, windowStart, resetsAt, season,
+  tier, accountVerified, peakPercent, secondsTo50, secondsTo90, secondsTo100,
+  completedAt}, readings: [{t, p}]}` where `t` = seconds since `windowStart` and
+  `p` = used percent, ordered, at most 240 points (downsampled keeping the first,
+  the last and the first readings at ≥50/≥90/≥99.5). Only `verified`/`standard`
+  runs; otherwise `404 run_not_found`. `runId` is an opaque 12-character
+  base64url id stored with the run, stable across recomputes.
+- **`GET /insights?season=&region=`** → `{season, boards: [{provider, plan,
+  planLabel, windowKey, windowSeconds, windowTitle, runners, completed,
+  completedShare, fastestSeconds, p10Seconds, medianSeconds, p90Seconds,
+  medianByRegion: {global, china}}], updatedAt}` — one row per board with at
+  least one visible run, over each runner's best run; second statistics use
+  runs that reached 100% (null when none). Cached like the other public endpoints.
+- **`GET /users/<username>`**: `bests[]` gain `runId, secondsTo50, secondsTo90,
+  secondsTo100`; `recent[]` gain `runId`.
+- Publicly visible: results, the per-run usage curve above, and the time
+  achieved. The consent screen in the app says so.
+
 ### Device-signed
 
 Signed as in *Signing*, with `X-Quota-Device` except where noted.
@@ -374,15 +409,37 @@ on 127.0.0.1); `QUOTA_RUN_DEVICE_SIGNUP=1` re-enables `POST /register` with a us
 ## Web
 
 All on quota.run, English at the root and Chinese under `/zh/`; Caddy serves
-`/<page>` from `/<page>.html`.
+`/<page>` from `/<page>.html`. **Design**: light, following
+`docs/design/quota-run-leaderboard.html` and its screenshots
+(`docs/design/d-*.png`): white ground, neutral greys, one green accent
+(`#16a34a`), Instrument Sans with a monospace face for times, 12/14/16/20/24/32 px
+type, a 4 px spacing grid, 8 px radius, borders rather than shadows except for
+floating trays and the active sidebar item.
 
-- `/` (`/zh/`): board picker (provider → plan → window), metric (fastest to 100% /
-  highest peak), season (this week, last week, all time), region, verified-only
-  switch; rows with rank, name, value (`2h 37m` / `98%`), tier badge, time.
-  Empty state explains how to join.
+- **Leaderboard `/`** (`?board=codex:pro20x:604800:&view=sheet|track|compare|providers&metric=speed|to90|to50|peak&season=current|last|all&region=&tier=&compare=user1,user2`):
+  sidebar of boards (from `/boards`, provider logo, plan, window, runners) plus
+  "Provider comparison" (the providers view) and "My results" (`/@me` when signed
+  in); header with board title, season line and filters (season, region,
+  verified only); a KPI strip from `summary`; four views —
+  **Sheet** (podium of three with the time large and 50/90% splits, then a
+  table: compare checkbox, rank, runner with Account verified mark, to 50%, to
+  90%, to 100%, gap to first, season runs, tier; a floating tray to compare up
+  to 4 selected runners); **Track** (one lane per runner across the window with
+  0→50, 50→90, 90→100 segments, plus a median lane); **Compare** (usage curves
+  from `/runs/<id>` for the selected runners plus the median run, and a
+  side-by-side table with deltas against the first selected); **Providers**
+  (from `/insights`: each board's fastest, p10–p90 range and median as a
+  fraction of its window, runners, completed share, median global/china).
+  Empty board → a join panel explaining how to take part. Mobile: the sidebar
+  becomes a scrolling row of board chips; wide tables scroll inside their box.
+
 - `/@username` (Caddy rewrites to `/u.html`, `/zh/@username` to `/zh/u.html`):
-  name, bio, links, per-board bests with rank and top-percentile, recent runs,
-  projects as cards. 404 state when the user does not exist.
+  header (initial avatar, name, @username, bio, links, joined), stat strip,
+  bests table (board, to 50/90/100%, rank, percentile, tier, Account verified,
+  linking to that board), recent runs as small tracks, projects as cards.
+  404 state when the user does not exist.
+- `/rules`: how Quota Run works — what is uploaded, binding and ownership of
+  provider accounts, tiers, seasons, privacy — in the same style.
 - `/login`: Continue with GitHub, Continue with Google (only those configured),
   or an email address → 6-digit code; then, for a new identity, choose username
   (checked live), display name and region. Goes to `next` (default `/account`).
