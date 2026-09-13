@@ -277,12 +277,20 @@ struct SettingsView: View {
 
     private var detail: some View {
         VStack(alignment: .leading, spacing: 0) {
-            VStack(alignment: .leading, spacing: 3) {
+            // Title and explanation on one line, on a shared baseline: the
+            // explanation is a gloss on the title, not a second heading. It
+            // gives way before the title does when the window is narrow.
+            HStack(alignment: .firstTextBaseline, spacing: Design.space3) {
                 Text(section.title)
                     .font(.system(size: 20, weight: .semibold))
+                    .fixedSize()
+                    .layoutPriority(1)
                 Text(section.subtitle)
                     .font(.system(size: 12))
                     .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+                    .help(section.subtitle)
             }
             .padding(.horizontal, Design.space6)
             .padding(.top, Design.titlebarInset)

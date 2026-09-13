@@ -50,14 +50,15 @@ English and Simplified Chinese and follows the system language unless you pick o
 <!-- changelog:start -->
 <!-- Generated from CHANGELOG.en.md by Scripts/sync_changelog.py. Do not edit by hand. -->
 
-Latest release **0.5.3** (2026-09-13) · **1** changes in development · [full changelog](CHANGELOG.en.md)
+Latest release **0.5.3** (2026-09-13) · **2** changes in development · [full changelog](CHANGELOG.en.md)
 
 <details open>
-<summary><b>2026-09-13</b> · Unreleased · 1 style</summary>
+<summary><b>2026-09-13</b> · Unreleased · 2 style</summary>
 
 **Style**
 
 - An expanded row in Settings → Providers no longer gives "Test connection" and "Console" a line of their own: "Console" follows the provider's name and "Test connection" sits on the right ahead of the service status, level with the name; the test's result still appears below. Providers that need Save, browser sign-in or keychain authorisation keep those buttons on a line below.
+- Each Settings section's title and its explanation now share one line, on a common baseline, instead of stacking; in a narrow window the explanation is cut short first, with the full text on hover.
 
 </details>
 
