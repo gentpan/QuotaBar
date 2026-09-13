@@ -1666,7 +1666,7 @@ class ComparisonTests(ServerTestCase):
         self.assertEqual(last["season"], "2026-W37")
         self.assertEqual(last["summary"], {
             "runners": 2, "runnersPrev": 0,
-            "fastest": {"username": "alice", "displayName": "Alice", "seconds": 1800},
+            "fastest": {"username": "alice", "displayName": "Alice", "seconds": 1800, "runId": alice_prev},
             "medianSecondsTo100": 1800, "medianSecondsTo100Prev": None, "medianRunId": alice_prev,
             "completed": 2, "completedShare": 1.0, "verifiedShare": 1.0, "accountVerifiedShare": 1.0})
 
