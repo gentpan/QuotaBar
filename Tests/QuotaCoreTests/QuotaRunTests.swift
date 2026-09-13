@@ -352,7 +352,7 @@ final class QuotaRunClientTests: XCTestCase {
         XCTAssertFalse(publicKey.isValidSignature(signature, for: Data((request.canonical + "x").utf8)))
     }
 
-    func testOverriddenBaseAndNoDeviceOnRegister() throws {
+    func testOverriddenBaseAndNoDeviceBeforeConnecting() throws {
         let request = try client(base: URL(string: "http://127.0.0.1:8787/api/v1/")!, deviceId: nil).signedRequest("GET", "/me")
         XCTAssertEqual(request.url.absoluteString, "http://127.0.0.1:8787/api/v1/me")
         XCTAssertEqual(request.path, "/api/v1/me")
@@ -398,47 +398,116 @@ final class QuotaRunClientTests: XCTestCase {
         }
     }
 
-    func testRegisterBodies() async throws {
-        let recorder = Recorder(201, #"{"user":{"username":"peter","displayName":"Peter","region":"china"},"deviceId":"dev_9","ranked":true}"#)
-        let registration = try await client(deviceId: nil, transport: recorder.transport)
-            .register(username: " Peter ", displayName: "Peter", region: .china, deviceName: "Studio", appVersion: "0.6.0")
-        XCTAssertEqual(registration.deviceId, "dev_9")
-        XCTAssertTrue(registration.ranked)
-        XCTAssertEqual(registration.user.region, .china)
-        let sent = try XCTUnwrap(recorder.requests.first)
-        XCTAssertEqual(sent.method, "POST")
-        XCTAssertEqual(sent.url.path, "/api/v1/register")
-        XCTAssertNil(sent.headers["X-Quota-Device"])
+    /// Signed like every request, but with no device id: the server checks it
+    /// against the public key in the body.
+    private func assertSignedWithBodyKey(_ sent: (method: String, url: URL, headers: [String: String], body: Data?), path: String, file: StaticString = #filePath, line: UInt = #line) throws {
+        XCTAssertEqual(sent.method, "POST", file: file, line: line)
+        XCTAssertEqual(sent.url.path, path, file: file, line: line)
+        XCTAssertNil(sent.headers["X-Quota-Device"], file: file, line: line)
         let object = try XCTUnwrap(JSONSerialization.jsonObject(with: try XCTUnwrap(sent.body)) as? [String: Any])
-        XCTAssertEqual(object["username"] as? String, "peter")
-        XCTAssertEqual(object["platform"] as? String, "macos")
-        XCTAssertEqual(object["publicKey"] as? String, Base64URL.encode(signer.publicKeyX963))
-        XCTAssertNil(object["pairCode"])
-        // The signature covers exactly the bytes sent.
+        let keyText = try XCTUnwrap(object["publicKey"] as? String)
+        XCTAssertEqual(keyText, Base64URL.encode(signer.publicKeyX963), file: file, line: line)
+        // The signature covers exactly the bytes sent, and verifies with the
+        // key they carry.
         let canonical = [
-            "quota-run-v1", "POST", "/api/v1/register", sent.headers["X-Quota-Timestamp"]!, sent.headers["X-Quota-Nonce"]!,
+            "quota-run-v1", "POST", path, sent.headers["X-Quota-Timestamp"]!, sent.headers["X-Quota-Nonce"]!,
             RunCanonical.bodyHash(sent.body),
         ].joined(separator: "\n")
-        let publicKey = try P256.Signing.PublicKey(x963Representation: signer.publicKeyX963)
+        let publicKey = try P256.Signing.PublicKey(x963Representation: try XCTUnwrap(Base64URL.decode(keyText)))
         let signature = try P256.Signing.ECDSASignature(derRepresentation: Base64URL.decode(sent.headers["X-Quota-Signature"]!)!)
-        XCTAssertTrue(publicKey.isValidSignature(signature, for: Data(canonical.utf8)))
+        XCTAssertTrue(publicKey.isValidSignature(signature, for: Data(canonical.utf8)), file: file, line: line)
+    }
 
-        let paired = Recorder(201, #"{"user":{"username":"peter","displayName":"Peter","region":"global"},"deviceId":"dev_10","ranked":false}"#)
-        _ = try await client(deviceId: nil, transport: paired.transport).register(pairCode: "ab12cd34", deviceName: "Air", appVersion: "0.6.0")
-        let pairBody = try XCTUnwrap(JSONSerialization.jsonObject(with: try XCTUnwrap(paired.requests.first?.body)) as? [String: Any])
-        XCTAssertEqual(pairBody["pairCode"] as? String, "AB12CD34")
-        XCTAssertNil(pairBody["username"])
-        XCTAssertNil(pairBody["region"])
+    func testConnectStart() async throws {
+        let recorder = Recorder(201, #"{"requestId":"req_1","userCode":"KXPT-7M4Q","verifyURL":"https://quota.run/zh/connect?code=KXPT-7M4Q","expiresAt":1789420600,"interval":3}"#)
+        // A device id left over on the client still stays off these calls.
+        let start = try await client(deviceId: "dev_old", transport: recorder.transport)
+            .connectStart(deviceName: " Peter's Studio ", appVersion: "0.6.0", lang: "zh")
+        XCTAssertEqual(start.requestId, "req_1")
+        XCTAssertEqual(start.userCode, "KXPT-7M4Q")
+        XCTAssertEqual(start.verifyURL.absoluteString, "https://quota.run/zh/connect?code=KXPT-7M4Q")
+        XCTAssertEqual(start.expiresAt, Date(timeIntervalSince1970: 1_789_420_600))
+        XCTAssertEqual(start.interval, 3)
+
+        let sent = try XCTUnwrap(recorder.requests.first)
+        try assertSignedWithBodyKey(sent, path: "/api/v1/connect/start")
+        let object = try XCTUnwrap(JSONSerialization.jsonObject(with: try XCTUnwrap(sent.body)) as? [String: Any])
+        XCTAssertEqual(object["deviceName"] as? String, "Peter's Studio")
+        XCTAssertEqual(object["platform"] as? String, "macos")
+        XCTAssertEqual(object["appVersion"] as? String, "0.6.0")
+        XCTAssertEqual(object["lang"] as? String, "zh")
+        XCTAssertNil(object["username"])
+
+        // The contract's limits, and a language that follows the interface.
+        let long = Recorder(201, #"{"requestId":"r","userCode":"ABCD-EFGH","verifyURL":"https://quota.run/connect?code=ABCD-EFGH","expiresAt":1789420600}"#)
+        let saved = L10n.override
+        defer { L10n.override = saved }
+        L10n.override = .en
+        let defaults = try await client(transport: long.transport).connectStart(deviceName: String(repeating: "M", count: 80), appVersion: String(repeating: "9", count: 50))
+        XCTAssertEqual(defaults.interval, 3, "the contract's interval when none is sent")
+        let longBody = try XCTUnwrap(JSONSerialization.jsonObject(with: try XCTUnwrap(long.requests.first?.body)) as? [String: Any])
+        XCTAssertEqual((longBody["deviceName"] as? String)?.count, 60)
+        XCTAssertEqual((longBody["appVersion"] as? String)?.count, 40)
+        XCTAssertEqual(longBody["lang"] as? String, "en")
+
+        // Only a web page is ever opened.
+        do {
+            _ = try await client(transport: Recorder(201, #"{"requestId":"r","userCode":"ABCD-EFGH","verifyURL":"file:///etc/passwd","expiresAt":1789420600}"#).transport)
+                .connectStart(deviceName: "Mac", appVersion: "1")
+            XCTFail("expected an error")
+        } catch let error as QuotaRunError {
+            XCTAssertEqual(error.code, "bad_response")
+        }
+    }
+
+    func testConnectPollStatuses() async throws {
+        let pending = Recorder(200, #"{"status":"pending"}"#)
+        let status = try await client(deviceId: nil, transport: pending.transport).connectPoll(requestId: "req_1")
+        XCTAssertEqual(status, .pending)
+        let sent = try XCTUnwrap(pending.requests.first)
+        try assertSignedWithBodyKey(sent, path: "/api/v1/connect/poll")
+        let object = try XCTUnwrap(JSONSerialization.jsonObject(with: try XCTUnwrap(sent.body)) as? [String: Any])
+        XCTAssertEqual(object["requestId"] as? String, "req_1")
+
+        let denied = try await client(transport: Recorder(200, #"{"status":"denied"}"#).transport).connectPoll(requestId: "req_1")
+        XCTAssertEqual(denied, .denied)
+        let expired = try await client(transport: Recorder(200, #"{"status":"expired"}"#).transport).connectPoll(requestId: "req_1")
+        XCTAssertEqual(expired, .expired)
+
+        let approved = try await client(transport: Recorder(200, #"{"status":"approved","user":{"username":"peter","displayName":"Peter","region":"china"},"deviceId":"dev_9","ranked":true}"#).transport)
+            .connectPoll(requestId: "req_1")
+        XCTAssertEqual(approved, .approved(RunRegistration(user: RunUser(username: "peter", displayName: "Peter", region: .china), deviceId: "dev_9", ranked: true)))
+
+        do {
+            _ = try await client(transport: Recorder(200, #"{"status":"approved","user":{"username":"peter"}}"#).transport).connectPoll(requestId: "req_1")
+            XCTFail("an approval without a device id is no approval")
+        } catch let error as QuotaRunError {
+            XCTAssertEqual(error.code, "bad_response")
+        }
+        do {
+            _ = try await client(transport: Recorder(200, #"{"status":"thinking"}"#).transport).connectPoll(requestId: "req_1")
+            XCTFail("expected an error")
+        } catch let error as QuotaRunError {
+            XCTAssertEqual(error.code, "bad_response")
+        }
+        do {
+            _ = try await client(transport: Recorder(404, #"{"error":"connect_request_invalid","message":"Unknown request."}"#).transport).connectPoll(requestId: "req_x")
+            XCTFail("expected an error")
+        } catch let error as QuotaRunError {
+            XCTAssertEqual(error.status, 404)
+            XCTAssertEqual(error.code, "connect_request_invalid")
+            XCTAssertFalse(error.isAuthFailure)
+        }
     }
 
     func testErrorMapping() async {
         do {
-            _ = try await client(transport: Recorder(409, #"{"error":"username_taken","message":"Username is taken."}"#).transport)
-                .register(username: "peter", displayName: "P", region: .global, deviceName: "Mac", appVersion: "1")
+            _ = try await client(deviceId: nil, transport: Recorder(409, #"{"error":"key_registered","message":"Key is already registered."}"#).transport)
+                .connectStart(deviceName: "Mac", appVersion: "1")
             XCTFail("expected an error")
         } catch let error as QuotaRunError {
             XCTAssertEqual(error.status, 409)
-            XCTAssertEqual(error.code, "username_taken")
+            XCTAssertEqual(error.code, "key_registered")
             XCTAssertFalse(error.isAuthFailure)
         } catch {
             XCTFail("unexpected \(error)")
@@ -465,7 +534,7 @@ final class QuotaRunClientTests: XCTestCase {
         }
 
         do {
-            _ = try await client(transport: { _, _, _, _ in throw ProviderError.network("offline") }).pair()
+            _ = try await client(transport: { _, _, _, _ in throw ProviderError.network("offline") }).connectPoll(requestId: "req_1")
             XCTFail("expected an error")
         } catch let error as QuotaRunError {
             XCTAssertEqual(error.code, "network")
@@ -486,6 +555,31 @@ final class QuotaRunClientTests: XCTestCase {
         XCTAssertEqual(limited.retryAfter, 42)
     }
 
+    /// The codes the app can meet get a sentence of their own in both
+    /// languages, not the server's English.
+    func testErrorMessagesAreTheApps() {
+        let saved = L10n.override
+        defer { L10n.override = saved }
+        let cases: [(Int, String)] = [
+            (404, "connect_request_invalid"), (409, "key_registered"), (401, "not_signed_in"), (403, "needs_signup"), (409, "current_device"),
+        ]
+        for (status, code) in cases {
+            let body = Data(#"{"error":"\#(code)","message":"Server sentence."}"#.utf8)
+            L10n.override = .en
+            let english = QuotaRunError.from(status: status, body: body).errorDescription ?? ""
+            L10n.override = .zhHans
+            let chinese = QuotaRunError.from(status: status, body: body).errorDescription ?? ""
+            XCTAssertFalse(english.isEmpty, code)
+            XCTAssertNotEqual(english, "Server sentence.", code)
+            XCTAssertNotEqual(english, chinese, code)
+            XCTAssertTrue(chinese.unicodeScalars.contains { $0.value >= 0x4E00 && $0.value <= 0x9FFF }, code)
+        }
+        L10n.override = .en
+        let revoked = QuotaRunError.from(status: 401, body: Data(#"{"error":"unknown_device"}"#.utf8))
+        XCTAssertTrue(revoked.isAuthFailure)
+        XCTAssertTrue(revoked.errorDescription?.contains("sign in again") ?? false)
+    }
+
     func testRankedChangeCarriesTheCooldown() async throws {
         let recorder = Recorder(200, #"{"devices":[{"deviceId":"d1","name":"Studio","ranked":true,"current":true}],"rankedChangeAvailableAt":1790604800}"#)
         let change = try await client(transport: recorder.transport).setRanked(deviceId: "d1")
@@ -498,7 +592,8 @@ final class QuotaRunClientTests: XCTestCase {
     func testMeDecodesLeniently() async throws {
         let json = #"""
         {"user":{"username":"peter","displayName":"Peter","bio":null,"region":"mars","links":{"website":"https://a.dev","github":null},"joinedAt":"2026-09-01T10:00:00Z"},
-         "devices":[{"deviceId":"d1","name":"Studio","ranked":true,"lastSeenAt":1789420000000,"current":true},{"deviceId":"d2","name":"Air","ranked":false,"lastSeenAt":null,"current":false}],
+         "devices":[{"deviceId":"d1","name":"Studio","ranked":true,"lastSeenAt":1789420000000,"current":true,"appVersion":"0.6.0"},{"deviceId":"d2","name":"Air","ranked":false,"lastSeenAt":null,"current":false,"appVersion":null}],
+         "identities":[{"id":"i1","provider":"github","email":"peter@example.com","name":"gentpan","linkedAt":1789000000},{"id":7,"provider":"google","email":"peter@example.com","name":"Peter Pan"},{"id":"i3","provider":"email","email":"peter@example.com","name":null}],
          "rankedChangeAvailableAt":1790000000,"lastUploadAt":null,"projects":[{"name":"QuotaBar","url":"https://quota.bar","description":"Limits","builtWith":["codex","claude"]}]}
         """#
         let me = try await client(transport: Recorder(200, json).transport).me()
@@ -511,6 +606,20 @@ final class QuotaRunClientTests: XCTestCase {
         XCTAssertEqual(me.rankedChangeAvailableAt, Date(timeIntervalSince1970: 1_790_000_000))
         XCTAssertNil(me.lastUploadAt)
         XCTAssertEqual(me.projects.first?.builtWith, ["codex", "claude"])
+        XCTAssertEqual(me.devices.map(\.appVersion), ["0.6.0", nil])
+        XCTAssertEqual(me.identities.map(\.id), ["i1", "7", "i3"])
+        XCTAssertEqual(me.identities.first?.linkedAt, Date(timeIntervalSince1970: 1_789_000_000))
+        let saved = L10n.override
+        defer { L10n.override = saved }
+        L10n.override = .en
+        XCTAssertEqual(me.identities.map(\.label), ["GitHub · gentpan", "Google · peter@example.com", "Email · peter@example.com"])
+        L10n.override = .zhHans
+        XCTAssertEqual(me.identities.last?.label, "邮箱 · peter@example.com")
+
+        // A server from before sign-in methods: none, not a failure.
+        let older = try await client(transport: Recorder(200, #"{"user":{"username":"peter"},"devices":[{"deviceId":"d1"}]}"#).transport).me()
+        XCTAssertEqual(older.identities, [])
+        XCTAssertNil(older.devices.first?.appVersion)
 
         // And back through the state file.
         let encoder = JSONEncoder()
@@ -551,20 +660,24 @@ final class QuotaRunClientTests: XCTestCase {
         XCTAssertEqual(recorder.requests.first?.method, "DELETE")
         let gone = Recorder(204, "")
         try await client(transport: gone.transport).deleteAccount()
+        XCTAssertEqual(gone.requests.first?.url.path, "/api/v1/account")
+        XCTAssertEqual(gone.requests.first?.method, "DELETE")
     }
 
-    func testUsernames() {
-        XCTAssertNil(RunUsername.problem("Peter"))
-        XCTAssertEqual(RunUsername.normalize(" Peter "), "peter")
-        XCTAssertNil(RunUsername.problem("a-b_c9"))
-        XCTAssertNil(RunUsername.problem("abc"))
-        XCTAssertEqual(RunUsername.problem("ab"), .invalid)
-        XCTAssertEqual(RunUsername.problem("_abc"), .invalid)
-        XCTAssertEqual(RunUsername.problem("a.bc"), .invalid)
-        XCTAssertEqual(RunUsername.problem(String(repeating: "a", count: 21)), .invalid)
-        XCTAssertNil(RunUsername.problem(String(repeating: "a", count: 20)))
-        XCTAssertEqual(RunUsername.problem("Admin"), .reserved)
-        XCTAssertEqual(RunUsername.problem(""), .empty)
+    func testDisconnectCurrentDevice() async throws {
+        let recorder = Recorder(204, "")
+        try await client(transport: recorder.transport).disconnectCurrentDevice()
+        let sent = try XCTUnwrap(recorder.requests.first)
+        XCTAssertEqual(sent.method, "DELETE")
+        XCTAssertEqual(sent.url.absoluteString, "https://quota.run/api/v1/devices/current")
+        XCTAssertEqual(sent.headers["X-Quota-Device"], "dev_1")
+        XCTAssertNil(sent.body)
+        let canonical = ["quota-run-v1", "DELETE", "/api/v1/devices/current", sent.headers["X-Quota-Timestamp"]!, sent.headers["X-Quota-Nonce"]!, RunCanonical.bodyHash(nil)].joined(separator: "\n")
+        let signature = try P256.Signing.ECDSASignature(derRepresentation: Base64URL.decode(sent.headers["X-Quota-Signature"]!)!)
+        XCTAssertTrue(try P256.Signing.PublicKey(x963Representation: signer.publicKeyX963).isValidSignature(signature, for: Data(canonical.utf8)))
+
+        XCTAssertEqual(RunAccountState.accountURL(chinese: false).absoluteString, "https://quota.run/account")
+        XCTAssertEqual(RunAccountState.accountURL(chinese: true).absoluteString, "https://quota.run/zh/account")
     }
 }
 
