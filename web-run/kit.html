@@ -1,37 +1,31 @@
 <!doctype html>
-<!-- Built from site/u.html by Scripts/sync_changelog.py: edit the template, not this file. -->
+<!-- Built from site/kit.html by Scripts/sync_changelog.py: edit the template, not this file. -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Quota Run profile · QuotaBar</title>
-<meta name="description" content="A builder's Quota Run profile: personal bests on each quota board, recent runs and the projects they build.">
+<title>Components · Quota Run</title>
+<meta name="description" content="Every badge, card, chart and live element Quota Run is built from, with sample data.">
 <meta name="theme-color" content="#ffffff">
-<!-- /@username 由 Caddy 改写到这个文件。英文在根目录；浏览器语言是中文、或者之前选过中文的，去 /zh/@username。 -->
+<!-- Caddy 把 /kit 映射到这个文件。英文在根目录；浏览器语言是中文、或者之前选过中文的，去 /zh/kit。 -->
 <script>try{var l=localStorage.getItem("qb-lang"),n=navigator.languages&&navigator.languages[0]?navigator.languages[0]:navigator.language;if(l==="zh"?true:!l&&/^zh\b/i.test(String(n)))location.replace("zh/"+location.pathname.split("/").pop()+location.search+location.hash)}catch(e){}</script>
-<!-- 同一个文件服务所有用户：canonical 与 hreflang 由 profile.js 按用户名补上 -->
-<meta property="og:title" content="Quota Run profile">
-<meta property="og:description" content="Personal bests, recent runs and projects on Quota Run, QuotaBar's opt-in leaderboard.">
-<meta property="og:type" content="profile">
+<link rel="canonical" href="https://quota.run/kit">
+<link rel="alternate" hreflang="en" href="https://quota.run/kit">
+<link rel="alternate" hreflang="zh-CN" href="https://quota.run/zh/kit">
+<link rel="alternate" hreflang="x-default" href="https://quota.run/kit">
+<meta property="og:title" content="Components · Quota Run">
+<meta property="og:type" content="website">
 <meta property="og:site_name" content="QuotaBar">
-<meta property="og:locale" content="en_US">
-<meta property="og:locale:alternate" content="zh_CN">
 <meta property="og:image" content="https://quota.run/assets/og.jpg?v=88e655cb">
-<meta property="og:image:width" content="1200">
-<meta property="og:image:height" content="630">
-<meta name="twitter:card" content="summary_large_image">
-<meta name="twitter:image" content="https://quota.run/assets/og.jpg?v=88e655cb">
 <link rel="icon" type="image/png" sizes="256x256" href="assets/icon.png?v=88e655cb">
 <link rel="icon" sizes="48x48" href="/favicon.ico?v=88e655cb">
 <link rel="apple-touch-icon" sizes="180x180" href="assets/apple-touch-icon.png?v=88e655cb">
 <link rel="stylesheet" href="base.css?v=88e655cb">
 <link rel="stylesheet" href="ui.css?v=88e655cb">
 <link rel="stylesheet" href="pages.css?v=88e655cb">
-<link rel="stylesheet" href="profile.css?v=88e655cb">
-<!-- 自建统计。defer，不阻塞渲染；跨域脚本不参与本站的 ?v= 指纹。 -->
 <script defer src="https://tongji.giantaccel.com/script.js" data-website-id="8085631e-cc5d-4563-819f-ddd04c1bdcfa"></script>
 </head>
-<body data-run-page="profile">
+<body data-run-page="kit">
 <header class="nav">
   <a class="skip" href="#main">Skip to content</a>
   <div class="nav__inner">
@@ -44,28 +38,23 @@
       <a href="https://quota.bar/download/QuotaBar-0.5.3.dmg" download>Download QuotaBar</a>
     </nav>
     <div class="nav__right">
-      <a class="btn run-lang" href="zh/u.html" hreflang="zh-CN" lang="zh-CN" data-lang="zh" title="Read this page in Chinese">中文</a>
+      <a class="btn run-lang" href="zh/kit" hreflang="zh-CN" lang="zh-CN" data-lang="zh" title="Read this page in Chinese">中文</a>
       <a class="btn nav__account" id="runAccount" href="login" data-state="out">Sign in</a>
     </div>
   </div>
 </header>
 
 
-<main class="shell profile" id="main" aria-live="polite" aria-busy="true">
-  <!-- profile.js 按 /@username（或 ?user=）读 /api/v1/users/<username>，把整页画在这里。
-       没跑 JS 时留下这一段加载骨架和下面的说明。 -->
-  <div class="phead" aria-hidden="true">
-    <span class="skel av--xl skel--round"></span>
-    <div class="phead__text"><span class="skel skel--title"></span><span class="skel skel--line"></span></div>
-  </div>
-  <div class="kpis kpis--4 psec" aria-hidden="true">
-    <div class="kpi"><span class="skel skel--short"></span><span class="kpi__v"><span class="skel skel--value"></span></span></div>
-    <div class="kpi"><span class="skel skel--short"></span><span class="kpi__v"><span class="skel skel--value"></span></span></div>
-    <div class="kpi"><span class="skel skel--short"></span><span class="kpi__v"><span class="skel skel--value"></span></span></div>
-    <div class="kpi"><span class="skel skel--short"></span><span class="kpi__v"><span class="skel skel--value"></span></span></div>
-  </div>
-  <p class="sr-only" role="status">Loading the profile…</p>
-  <noscript><p class="note">This profile is drawn from Quota Run's public API and needs JavaScript.</p></noscript>
+<main class="shell page" id="main">
+  <header class="page__head">
+    <div class="page__title">
+      <p class="eyebrow"><span class="eyebrow__dot" aria-hidden="true"></span>Components</p>
+      <h1>What Quota Run is built from</h1>
+      <p class="page__lede">Badges, cards, charts and live pieces, drawn with sample data. Hover anything that looks like data.</p>
+    </div>
+    <div class="page__live" id="kitLive"></div>
+  </header>
+  <div id="kitBody"></div>
 </main>
 
 <footer class="foot">
@@ -86,6 +75,6 @@
 <script type="application/json" id="run-providers">{"codex":{"en":"Codex","zh":"Codex","tone":""},"claude":{"en":"Claude","zh":"Claude","tone":""},"cursor":{"en":"Cursor","zh":"Cursor","tone":"light"},"kimi":{"en":"Kimi Code","zh":"Kimi Code","tone":""},"zai":{"en":"z.ai","zh":"z.ai","tone":""},"opencode-go":{"en":"OpenCode Go","zh":"OpenCode Go","tone":""},"minimax":{"en":"MiniMax","zh":"MiniMax","tone":""},"gemini":{"en":"Gemini","zh":"Gemini","tone":""},"manus":{"en":"Manus","zh":"Manus","tone":"light"},"deepseek":{"en":"DeepSeek","zh":"DeepSeek","tone":""},"grok":{"en":"Grok","zh":"Grok","tone":"light"},"antigravity":{"en":"Antigravity","zh":"Antigravity","tone":""},"qwen":{"en":"Qwen Cloud","zh":"Qwen Cloud","tone":""},"alibaba":{"en":"Alibaba Coding Plan","zh":"阿里云百炼","tone":""},"volcengine":{"en":"Volcengine Ark","zh":"火山方舟","tone":""},"zhipu":{"en":"Zhipu GLM","zh":"智谱 GLM","tone":""},"moonshot":{"en":"Moonshot API","zh":"Kimi 开放平台","tone":""},"copilot":{"en":"GitHub Copilot","zh":"GitHub Copilot","tone":""},"openrouter":{"en":"OpenRouter","zh":"OpenRouter","tone":""},"mimo":{"en":"Xiaomi MiMo","zh":"小米 MiMo","tone":""},"qoder":{"en":"Qoder","zh":"Qoder","tone":""},"windsurf":{"en":"Windsurf","zh":"Windsurf","tone":""},"kiro":{"en":"Kiro","zh":"Kiro","tone":""}}</script>
 <script src="common.js?v=88e655cb"></script>
 <script src="ui.js?v=88e655cb"></script>
-<script src="profile.js?v=88e655cb"></script>
+<script src="kit.js?v=88e655cb"></script>
 </body>
 </html>

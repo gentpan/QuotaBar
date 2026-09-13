@@ -260,6 +260,13 @@
     return (ZH ? "/zh/@" : "/@") + u + (q ? "?" + q : "");
   }
 
+  // 公开项目的页面：/@username/slug（本地预览走 project.html?user=&slug=）
+  function projectHref(username, slug) {
+    if (LOCAL) return ROOT + (ZH ? "zh/" : "") + "project.html?" + query(demoPairs({ user: username, slug: slug }));
+    var q = query(demoPairs({}));
+    return (ZH ? "/zh/@" : "/@") + encodeURIComponent(username) + "/" + encodeURIComponent(slug) + (q ? "?" + q : "");
+  }
+
   function homeHref(pairs) {
     var q = query(demoPairs(pairs));
     return ROOT + (ZH ? "zh/" : "") + (LOCAL ? "index.html" : "") + (q ? "?" + q : "");
@@ -371,8 +378,9 @@
 
   /* ── 接口 ─────────────────────────────────────────────────────────── */
 
-  function api(path) {
-    return fetch(API + path, { headers: { Accept: "application/json" }, credentials: "omit" }).then(function (response) {
+  // fresh：实时刷新时绕过浏览器按 Cache-Control 缓存的上一份
+  function api(path, fresh) {
+    return fetch(API + path, { headers: { Accept: "application/json" }, credentials: "omit", cache: fresh ? "no-cache" : "default" }).then(function (response) {
       return response.json().catch(function () { return null; }).then(function (body) {
         if (!response.ok) {
           var error = new Error((body && body.message) || "HTTP " + response.status);
@@ -402,8 +410,8 @@
   }
 
   // 公开接口：真接口，或者示例
-  function getJSON(path) {
-    return DEMO ? demo().then(function (d) { return d.get(path); }) : api(path);
+  function getJSON(path, fresh) {
+    return DEMO ? demo().then(function (d) { return d.get(path); }) : api(path, fresh);
   }
 
   // 登录后的接口（会话 Cookie）：带上同源 Cookie，JSON 进出。浏览器在 POST/PUT/DELETE 上自己带 Origin。
@@ -715,7 +723,7 @@
     providerName: providerName, logo: logo, windowLabel: windowLabel, windowSpan: windowSpan, boardName: boardName, boardKey: boardKey,
     avatar: avatar, initial: initial, tierTag: tierTag, accountMark: accountMark, regionLabel: regionLabel, safeLink: safeLink, hostOf: hostOf,
     LINK_KINDS: LINK_KINDS, linkName: linkName, linkLabel: linkLabel,
-    query: query, demoPairs: demoPairs, profileHref: profileHref, homeHref: homeHref, boardHref: boardHref, pageHref: pageHref, demoHref: demoHref,
+    query: query, demoPairs: demoPairs, profileHref: profileHref, projectHref: projectHref, homeHref: homeHref, boardHref: boardHref, pageHref: pageHref, demoHref: demoHref,
     currentPath: currentPath, langHref: langHref, setLangLinks: setLangLinks,
     api: api, getJSON: getJSON, request: request, session: session, signedInUser: signedInUser,
     renderAccountLink: renderAccountLink, demoSession: demoSession,

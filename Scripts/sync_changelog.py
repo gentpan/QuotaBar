@@ -606,7 +606,9 @@ RUN_STALE = ["styles.css", "app.js", "run.css", "run.js",
              "assets/wallpaper-dark-1280.webp", "assets/wallpaper-light-1280.webp"]
 # The pages of quota.run: template in site/ → page in web-run/ and web-run/zh/.
 RUN_PAGES = (("leaderboard.html", "index.html"), ("u.html", "u.html"), ("rules.html", "rules.html"),
-             ("login.html", "login.html"), ("account.html", "account.html"), ("connect.html", "connect.html"))
+             ("login.html", "login.html"), ("account.html", "account.html"), ("connect.html", "connect.html"),
+             ("usage.html", "usage.html"), ("projects.html", "projects.html"), ("project.html", "project.html"),
+             ("kit.html", "kit.html"))
 
 
 def copy_run_assets():
@@ -663,11 +665,13 @@ def run_page_values(name, lang, values):
     language switch points (Caddy serves /rules from rules.html; profile.js gives the
     profile its /@username address)."""
     other = LANGS[lang]["other_url"]
-    page = {"index.html": "", "u.html": "u.html"}.get(name, name.removesuffix(".html"))
+    page = {"index.html": "", "u.html": "u.html", "project.html": "project.html"}.get(name, name.removesuffix(".html"))
     current = ' aria-current="page"'
     return dict(values,
                 lang_href=other + page,
                 cur_board=current if name == "index.html" else "",
+                cur_usage=current if name == "usage.html" else "",
+                cur_projects=current if name in ("projects.html", "project.html") else "",
                 cur_rules=current if name == "rules.html" else "",
                 cur_login=current if name == "login.html" else "")
 

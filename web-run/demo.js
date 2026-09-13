@@ -431,6 +431,7 @@
         bluesky: "https://bsky.app/profile/peter.example.com", mastodon: "https://mastodon.example/@peter" } : {},
       activity: activityOf(username),
       github: mine ? { login: "gentpan", url: "https://github.com/gentpan" } : null,
+      badges: badgesOf(username),
       stats: mine ? { runs: 86, verifiedRuns: 71, providers: 3, activeDays: 41 }
         : { runs: 12 + Math.floor(r() * 60), verifiedRuns: 8 + Math.floor(r() * 30), providers: 2, activeDays: 6 + Math.floor(r() * 30) },
       bests: bests,
@@ -441,6 +442,423 @@
         { name: "shiori-cli", url: "https://shiori.example/cli", github: "https://github.com/example/shiori-cli", description: "Bookmarks from the terminal, searchable offline, synced as plain Markdown.", builtWith: ["codex"] },
       ] : [],
     };
+  }
+
+  /* ── 用量：看板、项目、个人与项目页、实时事件 ─────────────────────── */
+
+  var TOOL_IDS = ["claude", "codex", "opencode"];
+  var MODE_IDS = ["desktop", "cli", "ide", "sdk"];
+  var MODELS = { claude: ["claude-opus-5", "claude-sonnet-5", "claude-fable-5-1"], codex: ["gpt-5.6-codex", "gpt-5.6-sol"], opencode: ["opencode"] };
+  var PROJECT_NAMES = ["Tidewire", "shiori-cli", "openimg", "atlas-api", "pixel-forge", "ledger-sync", "nebula-ui", "kit-cli", "rust-raft",
+    "mdx-blog", "taskboard", "vector-kv", "ai-notes", "edge-proxy", "field-app", "data-pipe", "tiny-lsp", "render-farm"];
+  var USAGE_COUNT = 180;
+  var LIVE_BONUS = {};
+  var usageMemo = {};
+
+  function utcToday() {
+    var d = new Date();
+    return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
+  }
+  function iso(date) { return date.toISOString().slice(0, 10); }
+  function addDays(date, n) { return new Date(date.getTime() + n * 86400000); }
+
+  // 每个参与用量榜的人：日均花费、忙碌程度、工具偏好、公开的项目
+  var usagePeople = null;
+  function usersForUsage() {
+    if (usagePeople) return usagePeople;
+    usagePeople = PEOPLE.slice(0, USAGE_COUNT).map(function (p, index) {
+      var r = rng("usage:" + p[0]);
+      var mine = p[0] === "peter";
+      var scale = mine ? 420 : Math.pow(r(), 2.4) * 900 + 8;
+      var weights = mine ? [0.62, 0.34, 0.04] : [r() + 0.2, r() * 0.9, r() < 0.3 ? r() * 0.4 : 0];
+      var total = weights[0] + weights[1] + weights[2];
+      var projects = [];
+      var count = mine ? 2 : r() < 0.55 ? 1 + Math.floor(r() * 3) : 0;
+      for (var i = 0; i < count; i++) {
+        var name = mine ? ["QuotaBar", "Tidewire"][i] : PROJECT_NAMES[Math.floor(r() * PROJECT_NAMES.length)];
+        if (projects.some(function (x) { return x.name === name; })) continue;
+        var slug = name.toLowerCase().replace(/[^a-z0-9]+/g, "-");
+        var repoOwner = mine ? "gentpan" : p[0];
+        var shared = !mine && r() < 0.25;   // 有些项目是好几个人一起做的同一个仓库
+        projects.push({ id: "r" + String(index) + "p" + i, name: name, slug: slug, share: i === 0 ? 0.6 : 0.3,
+          repo: r() < 0.8 ? "github.com/" + (shared ? "tidewire-labs" : repoOwner) + "/" + name : null, repoVerified: !shared && r() < 0.7 });
+      }
+      return { username: p[0], displayName: p[1], region: p[2], index: index, scale: scale, busy: mine ? 0.85 : 0.25 + r() * 0.65,
+        weights: weights.map(function (w) { return w / total; }), verified: mine ? 0.85 : r(), projects: projects };
+    });
+    return usagePeople;
+  }
+
+  // 一个人一天：按工具分的花费、token、会话、分钟、是否核实，以及按项目分的花费
+  function usageDay(person, key) {
+    var memoKey = person.username + "|" + key;
+    var day = usageMemo[memoKey];
+    if (!day) {
+      var r = rng("day:" + memoKey);
+      var date = new Date(key + "T00:00:00Z");
+      var age = (utcToday() - date) / 86400000;
+      var weekend = date.getUTCDay() === 0 || date.getUTCDay() === 6;
+      var active = age >= 0 && r() < person.busy * (weekend ? 0.6 : 1) * (age > 250 ? 0.4 : 1);
+      day = { date: key, tools: {} };
+      if (active) {
+        var cost = person.scale * (0.2 + Math.pow(r(), 1.6) * 1.8);
+        TOOL_IDS.forEach(function (tool, i) {
+          var c = cost * person.weights[i] * (0.6 + r() * 0.8);
+          if (c < 0.05) return;
+          day.tools[tool] = { cost: c, tokens: Math.round(c * (tool === "codex" ? 520000 : 780000)), sessions: 1 + Math.floor(r() * 6),
+            minutes: 10 + Math.floor(r() * 240), verified: tool !== "opencode" && r() < person.verified, mode: MODE_IDS[Math.floor(r() * (tool === "opencode" ? 2 : 4))] };
+        });
+      }
+      usageMemo[memoKey] = day;
+    }
+    var bonus = LIVE_BONUS[person.username] && LIVE_BONUS[person.username][key];
+    if (!bonus) return day;
+    var copy = { date: key, tools: JSON.parse(JSON.stringify(day.tools)) };
+    var claude = copy.tools.claude || (copy.tools.claude = { cost: 0, tokens: 0, sessions: 1, minutes: 5, verified: true, mode: "desktop" });
+    claude.cost += bonus;
+    claude.tokens += Math.round(bonus * 780000);
+    return copy;
+  }
+
+  function dayTotals(day, tool, verifiedOnly) {
+    var out = { cost: 0, tokens: 0, sessions: 0, minutes: 0, verifiedCost: 0, byTool: {} };
+    Object.keys(day.tools).forEach(function (id) {
+      var t = day.tools[id];
+      if (tool && id !== tool) return;
+      if (verifiedOnly && !t.verified) return;
+      out.cost += t.cost;
+      out.tokens += t.tokens;
+      out.sessions += t.sessions;
+      out.minutes += t.minutes;
+      if (t.verified) out.verifiedCost += t.cost;
+      out.byTool[id] = (out.byTool[id] || 0) + t.cost;
+    });
+    return out;
+  }
+
+  function periodRange(period) {
+    var today = utcToday();
+    var monday = addDays(today, -((today.getUTCDay() + 6) % 7));
+    if (period === "last") return [addDays(monday, -7), addDays(monday, -1), [addDays(monday, -14), addDays(monday, -8)]];
+    if (period === "month") {
+      var first = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), 1));
+      var last = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth() + 1, 0));
+      var prevLast = addDays(first, -1);
+      return [first, last, [new Date(Date.UTC(prevLast.getUTCFullYear(), prevLast.getUTCMonth(), 1)), prevLast]];
+    }
+    if (period === "all") return [addDays(today, -364), today, null];
+    return [monday, addDays(monday, 6), [addDays(monday, -7), addDays(monday, -1)]];
+  }
+
+  function eachDate(from, to, fn) {
+    for (var d = from; d <= to; d = addDays(d, 1)) fn(iso(d));
+  }
+
+  function round2(n) { return Math.round(n * 100) / 100; }
+
+  function streakOf(person, tool, verifiedOnly) {
+    var today = utcToday();
+    var cursor = dayTotals(usageDay(person, iso(today)), tool, verifiedOnly).tokens > 0 ? today : addDays(today, -1);
+    var n = 0;
+    while (n < 400 && dayTotals(usageDay(person, iso(cursor)), tool, verifiedOnly).tokens > 0) { n++; cursor = addDays(cursor, -1); }
+    return n;
+  }
+
+  function totalsFor(person, from, to, tool, verifiedOnly) {
+    var out = { cost: 0, tokens: 0, days: 0, sessions: 0, verifiedCost: 0, byTool: {}, projects: {} };
+    eachDate(from, to, function (key) {
+      var d = dayTotals(usageDay(person, key), tool, verifiedOnly);
+      if (!d.tokens) return;
+      out.cost += d.cost;
+      out.tokens += d.tokens;
+      out.sessions += d.sessions;
+      out.verifiedCost += d.verifiedCost;
+      out.days += 1;
+      Object.keys(d.byTool).forEach(function (id) { out.byTool[id] = (out.byTool[id] || 0) + d.byTool[id]; });
+    });
+    return out;
+  }
+
+  function rankPeople(metric, from, to, tool, region, verifiedOnly) {
+    return usersForUsage().filter(function (p) { return !region || p.region === region; }).map(function (p) {
+      var total = totalsFor(p, from, to, tool, verifiedOnly);
+      var value = metric === "tokens" ? total.tokens : metric === "active" ? total.days : metric === "streak" ? (total.tokens ? streakOf(p, tool, verifiedOnly) : 0) : total.cost;
+      return { person: p, total: total, value: value };
+    }).filter(function (row) { return row.value > 0; }).sort(function (a, b) { return b.value - a.value || b.total.tokens - a.total.tokens; });
+  }
+
+  function usageBoard(q) {
+    var metric = q.get("metric") || "cost", period = q.get("period") || "week";
+    var tool = q.get("tool") || null, region = q.get("region") || null, verified = q.get("verified") !== "0";
+    var limit = Math.min(200, Number(q.get("limit")) || 100);
+    var range = periodRange(period);
+    var ranked = rankPeople(metric, range[0], range[1], tool, region, verified);
+    var previous = {};
+    if (range[2] && metric !== "streak") {
+      rankPeople(metric, range[2][0], range[2][1], tool, region, verified).forEach(function (row, i) { previous[row.person.username] = i + 1; });
+    }
+    var entries = ranked.slice(0, limit).map(function (row, i) {
+      var p = row.person, before = previous[p.username];
+      var top = p.projects[0];
+      return {
+        rank: i + 1, username: p.username, displayName: p.displayName, region: p.region,
+        value: metric === "cost" ? round2(row.value) : row.value, unit: { cost: "usd", tokens: "tokens", streak: "days", active: "days" }[metric],
+        costUSD: round2(row.total.cost), tokens: row.total.tokens, activeDays: row.total.days, sessions: row.total.sessions,
+        verifiedShare: row.total.cost ? Math.round(row.total.verifiedCost / row.total.cost * 10000) / 10000 : null,
+        tools: Object.keys(row.total.byTool).map(function (id) { return { tool: id, costUSD: round2(row.total.byTool[id]) }; }).sort(function (a, b) { return b.costUSD - a.costUSD; }),
+        topProject: top ? { name: top.name, slug: top.slug } : null,
+        change: before ? before - (i + 1) : null, new: Object.keys(previous).length > 0 && !before,
+      };
+    });
+    var chartFrom = period === "all" ? addDays(utcToday(), -89) : range[0];
+    var chartTo = period === "all" ? utcToday() : range[1];
+    var daily = [];
+    eachDate(chartFrom, chartTo, function (key) {
+      var sum = { date: key, costUSD: 0, tokens: 0, byTool: {} };
+      ranked.forEach(function (row) {
+        var d = dayTotals(usageDay(row.person, key), tool, verified);
+        sum.costUSD += d.cost;
+        sum.tokens += d.tokens;
+        Object.keys(d.byTool).forEach(function (id) { sum.byTool[id] = round2((sum.byTool[id] || 0) + d.byTool[id]); });
+      });
+      sum.costUSD = round2(sum.costUSD);
+      daily.push(sum);
+    });
+    var byTool = {};
+    daily.forEach(function (d) { Object.keys(d.byTool).forEach(function (id) { byTool[id] = round2((byTool[id] || 0) + d.byTool[id]); }); });
+    return {
+      metric: metric, period: period, from: iso(range[0]), to: iso(range[1]), tool: tool, region: region, verified: verified, entries: entries,
+      summary: {
+        runners: ranked.length, costUSD: round2(ranked.reduce(function (s, r) { return s + r.total.cost; }, 0)),
+        tokens: ranked.reduce(function (s, r) { return s + r.total.tokens; }, 0), sessions: ranked.reduce(function (s, r) { return s + r.total.sessions; }, 0),
+        byTool: Object.keys(byTool).map(function (id) { return { tool: id, costUSD: byTool[id] }; }).sort(function (a, b) { return b.costUSD - a.costUSD; }),
+        daily: daily,
+      },
+      updatedAt: NOW,
+    };
+  }
+
+  // 一个项目一天的份额：第一个项目占六成，别的三成，按日期稍微摆动
+  function projectDay(person, project, key) {
+    var d = usageDay(person, key);
+    var r = rng("pd:" + project.id + key)();
+    var out = { date: key, tools: {} };
+    Object.keys(d.tools).forEach(function (id) {
+      var t = d.tools[id], f = project.share * (0.7 + r * 0.6);
+      out.tools[id] = { cost: t.cost * f, tokens: Math.round(t.tokens * f), sessions: Math.max(1, Math.round(t.sessions * f)), minutes: Math.round(t.minutes * f), verified: t.verified, mode: t.mode };
+    });
+    return out;
+  }
+
+  function projectRows(from, to, tool) {
+    var rows = [];
+    usersForUsage().forEach(function (p) {
+      p.projects.forEach(function (project) {
+        var total = { cost: 0, tokens: 0, sessions: 0, minutes: 0, days: 0, byTool: {} };
+        eachDate(from, to, function (key) {
+          var d = dayTotals(projectDay(p, project, key), tool, false);
+          if (!d.tokens) return;
+          total.cost += d.cost; total.tokens += d.tokens; total.sessions += d.sessions; total.minutes += d.minutes; total.days += 1;
+          Object.keys(d.byTool).forEach(function (id) { total.byTool[id] = (total.byTool[id] || 0) + d.byTool[id]; });
+        });
+        if (total.tokens) rows.push({ person: p, project: project, total: total });
+      });
+    });
+    return rows.sort(function (a, b) { return b.total.cost - a.total.cost; });
+  }
+
+  function projectBrief(project) {
+    return { id: project.id, name: project.name, slug: project.slug, repo: project.repo, repoVerified: project.repoVerified };
+  }
+
+  function projectBoard(q) {
+    var period = q.get("period") || "week", tool = q.get("tool") || null;
+    var range = periodRange(period);
+    var rows = projectRows(range[0], range[1], tool);
+    var before = {};
+    if (range[2]) projectRows(range[2][0], range[2][1], tool).forEach(function (row) { before[row.project.id] = row.total.cost; });
+    var today = utcToday();
+    return {
+      period: period, from: iso(range[0]), to: iso(range[1]), tool: tool,
+      entries: rows.slice(0, Math.min(100, Number(q.get("limit")) || 50)).map(function (row, i) {
+        var spark = [];
+        for (var k = 13; k >= 0; k--) spark.push(round2(dayTotals(projectDay(row.person, row.project, iso(addDays(today, -k))), tool, false).cost));
+        return {
+          rank: i + 1, project: projectBrief(row.project), owner: { username: row.person.username, displayName: row.person.displayName },
+          costUSD: round2(row.total.cost), tokens: row.total.tokens, sessions: row.total.sessions, activeMinutes: row.total.minutes, activeDays: row.total.days,
+          tools: Object.keys(row.total.byTool).map(function (id) { return { tool: id, costUSD: round2(row.total.byTool[id]) }; }).sort(function (a, b) { return b.costUSD - a.costUSD; }),
+          growth: before[row.project.id] ? Math.round((row.total.cost / before[row.project.id] - 1) * 10000) / 10000 : null,
+          spark: spark,
+        };
+      }),
+      summary: { projects: rows.length, costUSD: round2(rows.reduce(function (s, r) { return s + r.total.cost; }, 0)), tokens: rows.reduce(function (s, r) { return s + r.total.tokens; }, 0) },
+      updatedAt: NOW,
+    };
+  }
+
+  // 个人或项目的一年：日序列、窗口合计、连续、工具、方式、模型
+  function yearOf(dayFn) {
+    var today = utcToday(), from = addDays(today, -370);
+    var list = [], tools = {}, modes = {}, models = {};
+    eachDate(from, today, function (key) {
+      var d = dayFn(key);
+      var sum = { date: key, costUSD: 0, tokens: 0, sessions: 0, activeMinutes: 0, verifiedCostUSD: 0, byTool: {} };
+      Object.keys(d.tools).forEach(function (id) {
+        var t = d.tools[id];
+        sum.costUSD += t.cost; sum.tokens += t.tokens; sum.sessions += t.sessions; sum.activeMinutes += t.minutes;
+        if (t.verified) sum.verifiedCostUSD += t.cost;
+        sum.byTool[id] = round2(t.cost);
+        tools[id] = tools[id] || { tool: id, costUSD: 0, tokens: 0 };
+        tools[id].costUSD += t.cost; tools[id].tokens += t.tokens;
+        var mk = id + "|" + t.mode;
+        modes[mk] = modes[mk] || { tool: id, mode: t.mode, costUSD: 0, tokens: 0 };
+        modes[mk].costUSD += t.cost; modes[mk].tokens += t.tokens;
+        MODELS[id].forEach(function (model, n) {
+          var share = MODELS[id].length === 1 ? 1 : n === 0 ? 0.7 : 0.3 / (MODELS[id].length - 1);
+          models[model] = models[model] || { model: model, tool: id, costUSD: 0, tokens: 0 };
+          models[model].costUSD += t.cost * share; models[model].tokens += Math.round(t.tokens * share);
+        });
+      });
+      if (sum.tokens) {
+        sum.costUSD = round2(sum.costUSD);
+        sum.verifiedCostUSD = round2(sum.verifiedCostUSD);
+        list.push(sum);
+      }
+    });
+    function windowTotals(a, b) {
+      var picked = list.filter(function (d) { return d.date >= iso(a) && d.date <= iso(b); });
+      return { costUSD: round2(picked.reduce(function (s, d) { return s + d.costUSD; }, 0)), tokens: picked.reduce(function (s, d) { return s + d.tokens; }, 0),
+        sessions: picked.reduce(function (s, d) { return s + d.sessions; }, 0), activeMinutes: picked.reduce(function (s, d) { return s + d.activeMinutes; }, 0),
+        activeDays: picked.length, verifiedCostUSD: round2(picked.reduce(function (s, d) { return s + d.verifiedCostUSD; }, 0)) };
+    }
+    var active = {};
+    list.forEach(function (d) { active[d.date] = true; });
+    var longest = 0, run = 0;
+    eachDate(from, today, function (key) { run = active[key] ? run + 1 : 0; longest = Math.max(longest, run); });
+    var current = 0, cursor = active[iso(today)] ? today : addDays(today, -1);
+    while (active[iso(cursor)]) { current++; cursor = addDays(cursor, -1); }
+    var week = periodRange("week"), month = periodRange("month");
+    function values(map) { return Object.keys(map).map(function (k) { var v = map[k]; v.costUSD = round2(v.costUSD); return v; }).sort(function (a, b) { return b.costUSD - a.costUSD; }); }
+    return {
+      from: iso(from), to: iso(today), days: list,
+      totals: { week: windowTotals(week[0], week[1]), month: windowTotals(month[0], month[1]), all: windowTotals(addDays(today, -364), today) },
+      streaks: { current: current, longest: longest },
+      tools: values(tools), modes: values(modes), models: values(models).slice(0, 10),
+    };
+  }
+
+  function userUsage(username) {
+    var person = usersForUsage().filter(function (p) { return p.username === username; })[0];
+    if (!person) {
+      if (!PERSON[username]) throw status(404, "user_not_found");
+      return { username: username, timezone: "UTC", from: iso(addDays(utcToday(), -370)), to: iso(utcToday()), days: [],
+        totals: { week: {}, month: {}, all: { costUSD: 0, tokens: 0 } }, streaks: { current: 0, longest: 0 }, ranks: { week: { rank: null, runners: 0 }, all: { rank: null, runners: 0 } },
+        tools: [], modes: [], models: [], projects: [], updatedAt: NOW };
+    }
+    var year = yearOf(function (key) { return usageDay(person, key); });
+    var week = usageBoard(new URLSearchParams("period=week&limit=200")), all = usageBoard(new URLSearchParams("period=all&limit=200"));
+    function rankIn(board) { var e = board.entries.filter(function (x) { return x.username === username; })[0]; return { rank: e ? e.rank : null, runners: board.summary.runners }; }
+    var boardRanks = {};
+    projectBoard(new URLSearchParams("period=week&limit=100")).entries.forEach(function (e) { boardRanks[e.project.id] = e.rank; });
+    var today = utcToday();
+    var projects = person.projects.map(function (project) {
+      var py = yearOf(function (key) { return projectDay(person, project, key); });
+      var spark = [];
+      for (var k = 29; k >= 0; k--) {
+        var key = iso(addDays(today, -k));
+        var hit = py.days.filter(function (d) { return d.date === key; })[0];
+        spark.push(hit ? hit.costUSD : 0);
+      }
+      return Object.assign(projectBrief(project), { costUSD: py.totals.all.costUSD, tokens: py.totals.all.tokens, sessions: py.totals.all.sessions,
+        activeMinutes: py.totals.all.activeMinutes, weekCostUSD: py.totals.week.costUSD, lastDate: py.days.length ? py.days[py.days.length - 1].date : null,
+        tools: py.tools.map(function (x) { return x.tool; }), rank: boardRanks[project.id] || null, spark: spark });
+    });
+    return Object.assign(year, { username: username, timezone: "Asia/Shanghai", ranks: { week: rankIn(week), all: rankIn(all) }, projects: projects, updatedAt: NOW });
+  }
+
+  function projectDetail(username, slug) {
+    var person = usersForUsage().filter(function (p) { return p.username === username; })[0];
+    var project = person && person.projects.filter(function (x) { return x.slug === String(slug).toLowerCase(); })[0];
+    if (!project) throw status(404, "project_not_found");
+    var year = yearOf(function (key) { return projectDay(person, project, key); });
+    function rankIn(period) {
+      var board = projectBoard(new URLSearchParams("period=" + period + "&limit=100"));
+      var e = board.entries.filter(function (x) { return x.project.id === project.id; })[0];
+      return { rank: e ? e.rank : null, projects: board.summary.projects };
+    }
+    var contributors = [];
+    if (project.repo) {
+      usersForUsage().forEach(function (p) {
+        p.projects.forEach(function (x) {
+          if (x.repo && x.repo.toLowerCase() === project.repo.toLowerCase()) {
+            contributors.push({ username: p.username, displayName: p.displayName, slug: x.slug, name: x.name, repoVerified: x.repoVerified,
+              costUSD: yearOf(function (key) { return projectDay(p, x, key); }).totals.all.costUSD, self: x.id === project.id });
+          }
+        });
+      });
+      contributors.sort(function (a, b) { return b.costUSD - a.costUSD; });
+    }
+    var github = project.repo && /^github\.com\//i.test(project.repo) ? {
+      repo: project.repo.slice("github.com/".length), url: "https://" + project.repo, description: "A demo repository", stars: 180 + person.index * 7,
+      forks: 12 + person.index, language: ["TypeScript", "Swift", "Rust", "Go", "Python"][person.index % 5], pushedAt: NOW - 7200, archived: false,
+      weeks: Array.from({ length: 52 }, function (_, i) { return i < 12 ? 0 : Math.floor(rng("w" + project.id + i)() * 60); }), commits: 1400, fetchedAt: NOW - 3600,
+    } : null;
+    return Object.assign(year, {
+      project: projectBrief(project), owner: { username: person.username, displayName: person.displayName, region: person.region },
+      firstDate: year.days.length ? year.days[0].date : null, lastDate: year.days.length ? year.days[year.days.length - 1].date : null,
+      ranks: { week: rankIn("week"), all: rankIn("all") },
+      repo: project.repo ? { key: project.repo, url: "https://" + project.repo, github: github } : null,
+      contributors: contributors, updatedAt: NOW,
+    });
+  }
+
+  // 徽章：和服务端同样的门槛
+  var BADGE_RULES = [["streak", [7, 30, 100]], ["spend", [100, 1000, 10000]], ["bigday", [1e8, 5e8, 1e9]], ["tools", [2, 3]], ["ways", [3, 5]],
+    ["verified", [7, 30, 100]], ["projects", [1, 3, 10]], ["opensource", [1]], ["nightowl", [25]], ["weekend", [30]], ["podium", [10, 3, 1], true],
+    ["speedrun", [1, 10, 50]], ["github", [500, 2000, 5000]]];
+
+  function badgesOf(username) {
+    var usage = userUsage(username);
+    var person = usersForUsage().filter(function (p) { return p.username === username; })[0];
+    var r = rng("badges:" + username);
+    var values = {
+      streak: usage.streaks.longest, spend: Math.floor(usage.totals.all.costUSD || 0),
+      bigday: usage.days.reduce(function (m, d) { return Math.max(m, d.tokens); }, 0), tools: usage.tools.length, ways: usage.modes.length,
+      verified: usage.days.filter(function (d) { return d.verifiedCostUSD > 0; }).length, projects: person ? person.projects.length : 0,
+      opensource: person ? person.projects.filter(function (x) { return x.repoVerified; }).length : 0,
+      nightowl: Math.floor(r() * 40), weekend: Math.floor(r() * 45), podium: usage.ranks.week.rank, speedrun: Math.floor(r() * 30), github: username === "peter" ? 5295 : Math.floor(r() * 3000),
+    };
+    return BADGE_RULES.map(function (rule) {
+      var value = values[rule[0]], lower = !!rule[2];
+      var tier = lower ? (value == null ? 0 : rule[1].filter(function (limit) { return value <= limit; }).length) : rule[1].filter(function (limit) { return (value || 0) >= limit; }).length;
+      return { id: rule[0], value: value == null ? null : value, tier: tier, tiers: rule[1].length, thresholds: rule[1], next: tier < rule[1].length ? rule[1][tier] : null, lowerIsBetter: lower };
+    });
+  }
+
+  // 实时：每隔两三秒有人的用量涨了，偶尔有一条额度读数
+  function live(onEvent) {
+    var timer = null, stopped = false;
+    function tick() {
+      if (stopped) return;
+      var people = usersForUsage();
+      var r = Math.random();
+      var person = r < 0.35 ? people[Math.floor(Math.random() * 12)] : people[Math.floor(Math.random() * people.length)];
+      var key = iso(utcToday());
+      LIVE_BONUS[person.username] = LIVE_BONUS[person.username] || {};
+      var add = person.scale * (0.02 + Math.random() * 0.12);
+      LIVE_BONUS[person.username][key] = (LIVE_BONUS[person.username][key] || 0) + add;
+      var day = dayTotals(usageDay(person, key), null, false);
+      onEvent("usage", { username: person.username, displayName: person.displayName, date: key, costUSD: round2(day.cost), tokens: day.tokens, byTool: day.byTool, deltaUSD: round2(add), at: Math.floor(Date.now() / 1000) });
+      var board = usageBoard(new URLSearchParams("period=week&limit=10"));
+      onEvent("board", { board: "cost:week:verified", entries: board.entries.map(function (e) { return { rank: e.rank, username: e.username, displayName: e.displayName, value: e.value }; }), summary: { runners: board.summary.runners, costUSD: board.summary.costUSD }, at: Math.floor(Date.now() / 1000) });
+      if (Math.random() < 0.3) {
+        var b = BOARDS[Math.floor(Math.random() * 3)];
+        onEvent("reading", { username: person.username, displayName: person.displayName, provider: b.provider, planLabel: b.planLabel, windowKey: b.windowKey, windowSeconds: b.windowSeconds, usedPercent: Math.round(40 + Math.random() * 60), observedAt: Math.floor(Date.now() / 1000), tier: "verified", at: Math.floor(Date.now() / 1000) });
+      }
+      timer = setTimeout(tick, 2200 + Math.random() * 2600);
+    }
+    timer = setTimeout(tick, 1200);
+    return { close: function () { stopped = true; clearTimeout(timer); } };
   }
 
   /* ── 个人主页的热力图与 GitHub ───────────────────────────────────── */
@@ -533,6 +951,10 @@
     if (route === "/insights") return insights(q);
     if (route === "/stats") return stats();
     if ((m = /^\/runs\/([A-Za-z0-9_-]{1,40})$/.exec(route))) return run(m[1]);
+    if (route === "/usage/boards") return usageBoard(q);
+    if (route === "/usage/projects") return projectBoard(q);
+    if ((m = /^\/users\/([^\/]+)\/usage$/.exec(route))) return userUsage(decodeURIComponent(m[1]));
+    if ((m = /^\/users\/([^\/]+)\/projects\/([^\/]+)$/.exec(route))) return projectDetail(decodeURIComponent(m[1]), decodeURIComponent(m[2]));
     if ((m = /^\/users\/([^\/]+)\/github$/.exec(route))) {
       user(decodeURIComponent(m[1]));   // 没这个人时同样 404
       return githubOf(decodeURIComponent(m[1]));
@@ -542,6 +964,7 @@
   }
 
   window.QuotaRunDemo = {
+    live: live,
     get: function (path) {
       return new Promise(function (resolve, reject) {
         setTimeout(function () {

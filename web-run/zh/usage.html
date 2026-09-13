@@ -1,0 +1,124 @@
+<!doctype html>
+<!-- 由 Scripts/sync_changelog.py 从 site/usage.html 生成：改模板，不要改这个文件。 -->
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>用量榜 · Quota Run</title>
+<meta name="description" content="这周谁在 AI 编程上花得最多：来自 Claude Code、Codex、OpenCode 的等价花费和 token，用额度读数核实，实时更新。">
+<meta name="theme-color" content="#ffffff">
+<link rel="canonical" href="https://quota.run/zh/usage">
+<link rel="alternate" hreflang="en" href="https://quota.run/usage">
+<link rel="alternate" hreflang="zh-CN" href="https://quota.run/zh/usage">
+<link rel="alternate" hreflang="x-default" href="https://quota.run/usage">
+<meta property="og:title" content="用量榜 · Quota Run">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="QuotaBar">
+<meta property="og:image" content="https://quota.run/assets/og-zh.jpg?v=88e655cb">
+<link rel="icon" type="image/png" sizes="256x256" href="../assets/icon.png?v=88e655cb">
+<link rel="icon" sizes="48x48" href="/favicon.ico?v=88e655cb">
+<link rel="apple-touch-icon" sizes="180x180" href="../assets/apple-touch-icon.png?v=88e655cb">
+<link rel="stylesheet" href="../base.css?v=88e655cb">
+<link rel="stylesheet" href="../ui.css?v=88e655cb">
+<link rel="stylesheet" href="../pages.css?v=88e655cb">
+<script defer src="https://tongji.giantaccel.com/script.js" data-website-id="8085631e-cc5d-4563-819f-ddd04c1bdcfa"></script>
+</head>
+<body data-run-page="usage">
+<header class="nav">
+  <a class="skip" href="#main">跳到正文</a>
+  <div class="nav__inner">
+    <a class="nav__brand" href="./" data-local="index.html"><img src="../assets/icon.png?v=88e655cb" alt="" width="24" height="24">Quota Run</a>
+    <nav class="nav__links" aria-label="站点">
+      <a href="usage" data-local="usage.html" aria-current="page">用量榜</a>
+      <a href="./" data-local="index.html">额度榜</a>
+      <a href="projects" data-local="projects.html">项目</a>
+      <a href="rules" data-local="rules.html">规则</a>
+      <a href="https://quota.bar/download/QuotaBar-0.5.3.dmg" download>下载 QuotaBar</a>
+    </nav>
+    <div class="nav__right">
+      <a class="btn run-lang" href="../usage" hreflang="en" lang="en" data-lang="en" title="切换到英文">EN</a>
+      <a class="btn nav__account" id="runAccount" href="login" data-state="out">登录</a>
+    </div>
+  </div>
+</header>
+
+
+<main class="shell page" id="main" aria-busy="true">
+  <header class="page__head">
+    <div class="page__title">
+      <p class="eyebrow"><span class="eyebrow__dot" aria-hidden="true"></span>用量榜</p>
+      <h1 id="usageTitle">谁在 AI 编程上花得最多</h1>
+      <p class="page__lede" id="usageLede">来自 Claude Code、Codex、OpenCode 的等价花费，由 quota.run 按公开价目统一计算。</p>
+    </div>
+    <div class="page__live" id="usageLive"></div>
+  </header>
+
+  <div class="filters page__filters" role="group" aria-label="筛选">
+    <div class="seg" id="periodSeg" role="group" aria-label="时间">
+      <button type="button" data-value="week" aria-pressed="true">本周</button>
+      <button type="button" data-value="last" aria-pressed="false">上周</button>
+      <button type="button" data-value="month" aria-pressed="false">本月</button>
+      <button type="button" data-value="all" aria-pressed="false">近一年</button>
+    </div>
+    <div class="seg" id="metricSeg" role="group" aria-label="排名依据">
+      <button type="button" data-value="cost" aria-pressed="true">花费</button>
+      <button type="button" data-value="tokens" aria-pressed="false">Token</button>
+      <button type="button" data-value="streak" aria-pressed="false">连续天数</button>
+      <button type="button" data-value="active" aria-pressed="false">活跃天数</button>
+    </div>
+    <span class="filters__spacer"></span>
+    <label class="select select--sm"><span class="sr-only">工具</span>
+      <select id="toolSelect">
+        <option value="">全部工具</option>
+        <option value="claude">Claude Code</option>
+        <option value="codex">Codex</option>
+        <option value="opencode">OpenCode</option>
+      </select>
+    </label>
+    <label class="select select--sm"><span class="sr-only">地区</span>
+      <select id="regionSelect">
+        <option value="">全部地区</option>
+        <option value="global">国际</option>
+        <option value="china">中国</option>
+      </select>
+    </label>
+    <label class="switch" title="主榜：只算额度读数确实上涨的日子。关掉就是全部上传的用量，包括 OpenCode。">
+      <input type="checkbox" id="verifiedSwitch" checked>
+      <span class="switch__track" aria-hidden="true"></span>
+      <span class="switch__label">只看已核实</span>
+    </label>
+  </div>
+
+  <div id="usageBody">
+    <div class="tiles" style="--tiles:4" aria-hidden="true">
+      <div class="tile"><span class="skel skel--short"></span><span class="skel skel--value"></span></div>
+      <div class="tile"><span class="skel skel--short"></span><span class="skel skel--value"></span></div>
+      <div class="tile"><span class="skel skel--short"></span><span class="skel skel--value"></span></div>
+      <div class="tile"><span class="skel skel--short"></span><span class="skel skel--value"></span></div>
+    </div>
+    <p class="sr-only" role="status">正在加载用量榜…</p>
+  </div>
+  <noscript><p class="note">用量榜的内容来自 Quota Run 的公开接口，需要开启 JavaScript。</p></noscript>
+</main>
+
+<footer class="foot">
+  <div class="foot__inner">
+    <span class="foot__brand"><img src="../assets/icon.png?v=88e655cb" alt="" width="16" height="16">Quota Run</span>
+    <nav class="foot__links" aria-label="更多">
+      <a href="https://quota.bar/zh/">QuotaBar 官网</a>
+      <a href="https://github.com/gentpan/QuotaBar">源代码</a>
+      <a href="https://quota.bar/zh/changelog.html">更新日志</a>
+      <a href="kit" data-local="kit.html">组件</a>
+      <a href="https://github.com/gentpan/QuotaBar/blob/main/LICENSE">MIT 许可证</a>
+    </nav>
+    <p class="foot__fine">Quota Run 与页面上出现的服务商均无关联，标志归各自所有者。</p>
+  </div>
+</footer>
+
+
+<script type="application/json" id="run-providers">{"codex":{"en":"Codex","zh":"Codex","tone":""},"claude":{"en":"Claude","zh":"Claude","tone":""},"cursor":{"en":"Cursor","zh":"Cursor","tone":"light"},"kimi":{"en":"Kimi Code","zh":"Kimi Code","tone":""},"zai":{"en":"z.ai","zh":"z.ai","tone":""},"opencode-go":{"en":"OpenCode Go","zh":"OpenCode Go","tone":""},"minimax":{"en":"MiniMax","zh":"MiniMax","tone":""},"gemini":{"en":"Gemini","zh":"Gemini","tone":""},"manus":{"en":"Manus","zh":"Manus","tone":"light"},"deepseek":{"en":"DeepSeek","zh":"DeepSeek","tone":""},"grok":{"en":"Grok","zh":"Grok","tone":"light"},"antigravity":{"en":"Antigravity","zh":"Antigravity","tone":""},"qwen":{"en":"Qwen Cloud","zh":"Qwen Cloud","tone":""},"alibaba":{"en":"Alibaba Coding Plan","zh":"阿里云百炼","tone":""},"volcengine":{"en":"Volcengine Ark","zh":"火山方舟","tone":""},"zhipu":{"en":"Zhipu GLM","zh":"智谱 GLM","tone":""},"moonshot":{"en":"Moonshot API","zh":"Kimi 开放平台","tone":""},"copilot":{"en":"GitHub Copilot","zh":"GitHub Copilot","tone":""},"openrouter":{"en":"OpenRouter","zh":"OpenRouter","tone":""},"mimo":{"en":"Xiaomi MiMo","zh":"小米 MiMo","tone":""},"qoder":{"en":"Qoder","zh":"Qoder","tone":""},"windsurf":{"en":"Windsurf","zh":"Windsurf","tone":""},"kiro":{"en":"Kiro","zh":"Kiro","tone":""}}</script>
+<script src="../common.js?v=88e655cb"></script>
+<script src="../ui.js?v=88e655cb"></script>
+<script src="../usage.js?v=88e655cb"></script>
+</body>
+</html>

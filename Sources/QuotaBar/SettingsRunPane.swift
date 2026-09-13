@@ -568,6 +568,7 @@ private struct RunConsent: View {
             L10n.t("The window's length and scope", "窗口长度和适用范围"),
             L10n.t("A one-way digest of the provider account (never the email)", "服务商账号的单向摘要（不含邮箱本身）"),
             L10n.t("Tokens per minute from local CLI logs — counts only", "本地 CLI 日志里每分钟的 token 数，只有数量"),
+            L10n.t("Tokens per day by tool, way of working and model; a project's name and repository only once you make it public", "每天按工具、编程方式和模型分的 token 数；项目的名称和仓库只在你把它公开之后才会上传"),
             L10n.t("Your username, display name, region and this Mac's name", "你的用户名、显示名称、地区和这台 Mac 的名字"),
         ]
     }

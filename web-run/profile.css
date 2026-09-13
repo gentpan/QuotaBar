@@ -14,6 +14,12 @@
 .phead__links a:hover { color: var(--text-1); }
 .phead__actions { display: flex; flex-wrap: wrap; gap: var(--space-2); }
 .phead .skel--title { margin: var(--space-2) 0; }
+.phead__badges { margin-top: var(--space-2); }
+.psec__head--sub { margin-top: var(--space-8); border-bottom: 0; padding-bottom: 0; }
+.psec__head--sub h3 { font-size: var(--text-base); }
+.psec__head--sub + .pcards { margin-top: var(--space-3); }
+.usage-modes { margin-top: var(--space-2); }
+.ui-sec__note { margin-top: var(--space-4); }
 
 .psec { margin-top: var(--space-10); }
 .kpis.psec { margin-top: var(--space-8); }

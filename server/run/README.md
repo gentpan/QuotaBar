@@ -34,12 +34,17 @@ Python 服务，数据放 SQLite（WAL）。验签、存读数、算 run 和 tie
 - `GET /insights?season=&region=`：各榜的人数、完成比例、最快、p10 / 中位数 / p90、按地区的中位数
 - `GET /users/<username>`：资料、链接、项目、各榜最好成绩（名次、人数、前百分之几）、最近 20 条 run、统计，
   以及近 53 周每天 token 数的热力图（`activity`）和关联的 GitHub 登录名（`github`）
+- `GET /usage/boards`、`GET /usage/projects`、`GET /users/<username>/usage`、`GET /users/<username>/projects/<slug>`：
+  用量榜（默认只算已核实的日子）、项目榜、个人和项目的一年用量
+- `GET /live`：Server-Sent Events（usage、board、reading），不走锁和缓存，每 15 秒一次心跳，最多 500 个连接
 - `GET /users/<username>/github`：GitHub 贡献日历（有令牌时带提交、PR、评审、Issue 数）和项目里各仓库的星标、语言、
   近 52 周每周提交数。不走 30 秒内存缓存，数据在 `github_cache` 表里；手里还没有时回 `pending: true`（`no-store`）
 
 以下全部 `Cache-Control: no-store`。
 
 设备签名：
+
+- `POST /usage`：按天、项目、工具、编程方式、模型的 token；这台 Mac 列出的日子整天替换；花费按价目表算
 
 - `POST /connect/start`、`POST /connect/poll`（没有设备号，按请求体里的 `publicKey` 验签；start 可带
   `lang: "zh"`，`verifyURL` 就指向 `/zh/connect`）
@@ -119,6 +124,12 @@ Python 服务，数据放 SQLite（WAL）。验签、存读数、算 run 和 tie
   人多的在前。秒数统计只看跑完的，用最近秩百分位（第 ⌈p × n / 100⌉ 个，整数运算），没人跑完时为 `null`；
   `medianSeconds` 与 summary 的下中位数一致。`region` 过滤人数和各项统计，`medianByRegion` 不受它影响
   （始终按全部人分地区算）。`planLabel`、`windowSeconds`、`windowTitle` 取这个赛季该榜最近一条 run 的。
+- **用量**：`usage_rows` 主键是（设备、日期、工具、方式、模型、项目），不公开的项目是空串；日期是 Mac 的本地日期，
+  看板的周、月按 UTC 的「今天」划。价目表存在数据库旁边的 `pricing.json`，一天取一次（后台线程，读 12 MB 以内）。
+  **已核实**：计分设备上、归这个人的 Claude / Codex 账号的读数比同一窗口上一条高，那天（按这台 Mac 上传时报的时区）
+  这个工具的用量算已核实；归属变了（认领、解绑、删号）就按全部读数重算。`projectsComplete` 把这台设备不在名单里的
+  项目行并进同一格的不公开行。没有任何行指向的项目删除。仓库地址的 owner 等于登录用的 GitHub 账号时 `repoVerified`。
+- **徽章**：随 `/users/<username>` 算，门槛在 `BADGES`；`podium` 看本周和上周的已核实花费榜。
 - **个人页**：`bests` 多了那条最好成绩的 `runId`、`secondsTo50/90/100`；`recent` 每条多了 `runId`。
 - **stats**：`providers` 是数量（整数）；`runs`/`verifiedRuns` 不含 flagged 和 unranked；`users` 是全部已加入用户。
 - **个人页 bests**：名次按全部赛季、全部地区、全部 tier 算；`runners` 是该指标榜上的人数，

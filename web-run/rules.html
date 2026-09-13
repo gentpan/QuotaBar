@@ -29,7 +29,9 @@
   <div class="nav__inner">
     <a class="nav__brand" href="./" data-local="index.html"><img src="assets/icon.png?v=88e655cb" alt="" width="24" height="24">Quota Run</a>
     <nav class="nav__links" aria-label="Site">
-      <a href="./" data-local="index.html">Leaderboard</a>
+      <a href="usage" data-local="usage.html">Usage board</a>
+      <a href="./" data-local="index.html">Quota board</a>
+      <a href="projects" data-local="projects.html">Projects</a>
       <a href="rules" data-local="rules.html" aria-current="page">Rules</a>
       <a href="https://quota.bar/download/QuotaBar-0.5.3.dmg" download>Download QuotaBar</a>
     </nav>
@@ -58,6 +60,7 @@
         <li><a href="#tiers">Tiers</a></li>
         <li><a href="#seasons">Seasons and boards</a></li>
         <li><a href="#macs">One ranked Mac</a></li>
+        <li><a href="#usage">Usage and projects</a></li>
         <li><a href="#privacy">Privacy</a></li>
       </ol>
     </nav>
@@ -86,6 +89,7 @@
               <li>The window's length and scope</li>
               <li>A one-way digest of the provider account — never the email itself</li>
               <li>Tokens per minute from local CLI logs — counts only</li>
+              <li>Tokens per day by tool, way of working and model; a project's name and repository only if you make it public</li>
             </ul>
           </div>
           <div class="list list--no">
@@ -157,6 +161,13 @@
         <p>Each Mac signs its readings with a key that never leaves it — in the Secure Enclave when the Mac has one. An account can connect several Macs, but only the ranked one's readings count. Moving the ranking to another Mac waits 7 days after the last change; choosing one when there is none is always allowed.</p>
       </section>
 
+      <section class="rule" id="usage" aria-labelledby="usageTitle">
+        <h2 id="usageTitle">Usage and projects</h2>
+        <p>Every signed-in Mac uploads the tokens its Claude Code, Codex and OpenCode logs recorded each day, by project, tool, way of working (terminal, desktop app, editor, SDK) and model. quota.run prices them itself at list rates, so everyone's cost is counted the same way.</p>
+        <p>The main usage board counts only verified days: a day of Claude or Codex usage is verified when that day's quota reading for one of your bound provider accounts rose. Turn “Verified only” off to see every upload, OpenCode included.</p>
+        <p>Projects are private until you turn their switch on in QuotaBar → Settings → Projects. A public project shows its name, repository and daily cost by tool; a private one only adds to your totals as “other projects”, without a name. Folder paths and anything from the sessions are never uploaded. Turning a project off takes it off quota.run at once.</p>
+      </section>
+
       <section class="rule" id="privacy" aria-labelledby="privacyTitle">
         <h2 id="privacyTitle">Privacy</h2>
         <dl class="facts">
@@ -177,6 +188,7 @@
       <a href="https://quota.bar/">QuotaBar home</a>
       <a href="https://github.com/gentpan/QuotaBar">Source code</a>
       <a href="https://quota.bar/changelog.html">Changelog</a>
+      <a href="kit" data-local="kit.html">Components</a>
       <a href="https://github.com/gentpan/QuotaBar/blob/main/LICENSE">MIT License</a>
     </nav>
     <p class="foot__fine">Quota Run is independent of every provider shown; logos belong to their owners.</p>

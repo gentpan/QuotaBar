@@ -10,8 +10,8 @@
 (function () {
   "use strict";
 
-  var Q = window.QuotaRun;
-  if (!Q || Q.PAGE !== "profile") return;
+  var Q = window.QuotaRun, U = window.QuotaUI;
+  if (!Q || !U || Q.PAGE !== "profile") return;
   var t = Q.t, esc = Q.esc, $ = Q.$, each = Q.each, ZH = Q.ZH, clock = Q.clock, has = Q.has;
   var params = new URLSearchParams(location.search);
   var main = $("main");
@@ -310,7 +310,10 @@
 
   /* ── 整页 ─────────────────────────────────────────────────────────── */
 
+  var current = null;
+
   function render(user) {
+    current = user;
     setHead(user);
     var links = user.links || {};
     var linkItems = Q.LINK_KINDS.map(function (entry) {
@@ -339,6 +342,7 @@
           '<p class="phead__meta">' + meta.map(function (m) { return "<span>" + m + "</span>"; }).join("") + "</p>" +
           (user.bio ? '<p class="phead__bio">' + esc(user.bio) + "</p>" : "") +
           (linkItems ? '<ul class="phead__links">' + linkItems + "</ul>" : "") +
+          badgesRow(user.badges) +
         "</div>" +
         '<div class="phead__actions">' +
           '<button type="button" class="btn" id="shareCopy" data-done="' + esc(t("Link copied", "链接已复制")) + '">' + Q.ICONS.link + "<span>" + t("Copy profile link", "复制主页链接") + "</span></button>" +
@@ -349,6 +353,8 @@
         [[t("Runs", "轮次"), stats.runs], [t("Verified runs", "已验证轮次"), stats.verifiedRuns], [t("Providers", "服务商"), stats.providers], [t("Active days", "活跃天数"), stats.activeDays]]
           .map(function (pair) { return '<div class="kpi"><dt>' + pair[0] + '</dt><dd class="kpi__v">' + Q.number(pair[1]) + "</dd></div>"; }).join("") +
       "</dl>" +
+      '<div id="medals" hidden></div>' +
+      '<section class="psec" id="usageSection" aria-labelledby="usageHeading" hidden></section>' +
       (user.activity || user.github
         ? '<section class="psec" aria-labelledby="activityHeading">' +
             '<div class="psec__head"><h2 id="activityHeading">' + t("Activity", "活跃度") + '</h2><p class="hint">' + t("The last 53 weeks, one square a day", "近 53 周，一格一天") + "</p></div>" +
@@ -375,6 +381,70 @@
     copy.addEventListener("click", function () { Q.copyText(Q.SHARE.replace(/zh\/$/, "") + (ZH ? "zh/" : "") + "@" + user.username, copy); });
     Q.heatmapReady(main);
     if (user.github || projects.some(repoKey)) loadGithub(user, 0);
+    loadUsage(user);
+  }
+
+  /* ── 徽章与用量 ───────────────────────────────────────────────────── */
+
+  // 头部一行：拿到的徽章里档位高的前 6 个，再加「全部徽章」
+  function badgesRow(badges) {
+    var earned = U.sortBadges(badges).filter(function (b) { return b.tier > 0; });
+    if (!(badges || []).length) return "";
+    return '<div class="badges phead__badges">' + earned.slice(0, 6).map(U.badgeChip).join("") +
+      '<button type="button" class="btn btn--sm" data-medals aria-expanded="false" aria-controls="medals">' +
+      esc(ZH ? "全部徽章 " + earned.length + "/" + badges.length : "All badges " + earned.length + "/" + badges.length) + "</button></div>";
+  }
+
+  function usageSection(user, usage) {
+    var totals = usage.totals || {};
+    var week = usage.ranks && usage.ranks.week;
+    var stacks = null;
+    var html = '<div class="psec__head"><h2 id="usageHeading">' + t("AI coding spend", "AI 编程花费") + '</h2><p class="hint">' +
+      esc(ZH ? "由 quota.run 按公开价目计算 · 已核实的日子来自额度读数" : "Priced by quota.run at list rates · verified days come from quota readings") + "</p></div>" +
+      '<div class="ui-sec__note">' + U.tiles([
+        { label: t("This week", "本周"), value: (totals.week || {}).costUSD || 0, format: "money", key: "pu-week" },
+        { label: t("This month", "本月"), value: (totals.month || {}).costUSD || 0, format: "money", key: "pu-month" },
+        { label: t("365 days", "近一年"), value: (totals.all || {}).costUSD || 0, format: "money", key: "pu-all" },
+        { label: t("Weekly board", "本周用量榜"), value: week && week.rank ? week.rank : 0, format: "number", key: "pu-rank" },
+      ]) + "</div>" +
+      '<div class="ui-grid ui-grid--chart hmcards">' +
+        '<section class="card"><div class="card__head"><div><h3 class="card__title">' + t("Cost per day, 90 days", "近 90 天每天的花费") + '</h3><p class="card__sub">' + t("By tool", "按工具分段") + "</p></div>" + U.toolLegend() + '</div><div id="usageDaily"></div></section>' +
+        '<section class="card"><div class="card__head"><h3 class="card__title">' + t("Tools and ways of working", "工具和编程方式") + '</h3></div><div id="usageTools"></div>' +
+          '<ul class="legend-row usage-modes">' + (usage.modes || []).slice(0, 6).map(function (m) {
+            return '<li><i class="dot dot--' + esc(m.tool) + '" aria-hidden="true"></i>' + esc(U.toolName(m.tool) + " · " + U.modeName(m.mode)) + "</li>";
+          }).join("") + "</ul></section>" +
+      "</div>";
+    if ((usage.projects || []).length) {
+      html += '<div class="psec__head psec__head--sub"><h3>' + t("Public projects", "公开的项目") + '</h3><p class="hint">' + t("Made public from QuotaBar, with their cost", "在 QuotaBar 里公开的项目和它们的花费") + "</p></div>" +
+        '<div class="pcards">' + usage.projects.map(function (p) {
+          return '<a class="card" href="' + esc(Q.projectHref(user.username, p.slug)) + '">' +
+            '<div class="card__head"><div class="pcard__name"><h4 class="card__title">' + esc(p.name) + "</h4>" +
+              (p.repo ? '<span class="pcard__repo">' + Q.ICONS.github + esc(p.repo.replace(/^github\.com\//, "")) + "</span>" : "") + "</div>" +
+              (p.rank ? '<span class="pcard__rank" title="' + esc(t("This week's project board", "本周项目榜")) + '">#' + p.rank + "</span>" : "") + "</div>" +
+            '<div class="pcard__value"><div><p class="pcard__big">' + esc(U.money(p.costUSD)) + '</p><p class="card__sub">' + esc(Q.compact(p.tokens) + " token · " + t("this week ", "本周 ") + U.money(p.weekCostUSD)) + "</p></div>" +
+              U.spark(p.spark, { width: 96, height: 32 }) + "</div>" +
+            '<div class="card__foot"><span>' + (p.tools || []).map(function (id) { return '<i class="dot dot--' + esc(id) + '" aria-hidden="true"></i> ' + esc(U.toolName(id)); }).join("  ") + "</span>" +
+              (p.repoVerified ? U.verifiedMark(t("Owner's repository", "本人的仓库")) : "") + "</div></a>";
+        }).join("") + "</div>";
+    }
+    return html;
+  }
+
+  function loadUsage(user) {
+    Q.getJSON("/users/" + encodeURIComponent(user.username) + "/usage").then(function (usage) {
+      var section = $("usageSection");
+      if (!section || !usage || !(usage.days || []).length) return;
+      section.innerHTML = usageSection(user, usage);
+      section.hidden = false;
+      var from = new Date(new Date(usage.to + "T00:00:00Z").getTime() - 89 * 86400000).toISOString().slice(0, 10);
+      var stacks = U.dailyStacks(usage.days, from, usage.to);
+      U.columns($("usageDaily"), { dates: stacks.dates, stacks: stacks.stacks, height: 180, label: t("Cost per day by tool", "每天按工具的花费") });
+      U.donut($("usageTools"), {
+        items: (usage.tools || []).map(function (x) { return { id: x.tool, label: U.toolName(x.tool), color: U.toolColor(x.tool), value: x.costUSD }; }),
+        caption: t("365 days", "近一年"), stack: true,
+      });
+      U.countUp(section, true);
+    }).catch(function () { /* 没有用量就不显示这一节 */ });
   }
 
   // GitHub 的贡献日历和仓库数据：服务端第一次取时可能回 pending，隔几秒再读，最多读六次
@@ -441,6 +511,14 @@
 
   main.addEventListener("click", function (event) {
     if (event.target.closest("[data-retry]")) { Q.setBusy(main, true); load(); }
+    var toggle = event.target.closest("[data-medals]");
+    if (toggle && current) {
+      var box = $("medals");
+      var open = box.hidden;
+      if (open && !box.innerHTML) box.innerHTML = '<div class="medals psec">' + U.sortBadges(current.badges).map(U.medal).join("") + "</div>";
+      box.hidden = !open;
+      toggle.setAttribute("aria-expanded", String(open));
+    }
   });
 
   load();

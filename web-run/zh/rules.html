@@ -27,7 +27,9 @@
   <div class="nav__inner">
     <a class="nav__brand" href="./" data-local="index.html"><img src="../assets/icon.png?v=88e655cb" alt="" width="24" height="24">Quota Run</a>
     <nav class="nav__links" aria-label="站点">
-      <a href="./" data-local="index.html">排行榜</a>
+      <a href="usage" data-local="usage.html">用量榜</a>
+      <a href="./" data-local="index.html">额度榜</a>
+      <a href="projects" data-local="projects.html">项目</a>
       <a href="rules" data-local="rules.html" aria-current="page">规则</a>
       <a href="https://quota.bar/download/QuotaBar-0.5.3.dmg" download>下载 QuotaBar</a>
     </nav>
@@ -56,6 +58,7 @@
         <li><a href="#tiers">成绩级别</a></li>
         <li><a href="#seasons">赛季和榜单</a></li>
         <li><a href="#macs">只认一台 Mac</a></li>
+        <li><a href="#usage">用量榜和项目</a></li>
         <li><a href="#privacy">隐私</a></li>
       </ol>
     </nav>
@@ -84,6 +87,7 @@
               <li>窗口的长度和范围</li>
               <li>服务商账号的单向摘要，不是邮箱本身</li>
               <li>本地 CLI 日志里每分钟的 token 数，只有数字</li>
+              <li>每天按工具、编程方式和模型分的 token 数；项目的名称和仓库只在你公开它之后才上传</li>
             </ul>
           </div>
           <div class="list list--no">
@@ -155,6 +159,13 @@
         <p>每台 Mac 用一把不出本机的密钥给读数签名，有安全隔区的 Mac 就存在安全隔区里。一个账号可以连好几台 Mac，但只计「计分 Mac」的读数。把计分换到另一台，要距离上次更换满 7 天；一台都没有时，随时可以选。</p>
       </section>
 
+      <section class="rule" id="usage" aria-labelledby="usageTitle">
+        <h2 id="usageTitle">用量榜和项目</h2>
+        <p>每台登录的 Mac 都会上传本机 Claude Code、Codex、OpenCode 日志里每天的 token，按项目、工具、编程方式（命令行、桌面版、编辑器插件、SDK）和模型分开。花费由 quota.run 按公开价目统一计算，每个人都用同一把尺子。</p>
+        <p>用量榜的主榜只算已核实的日子：某一天你绑定的 Claude 或 Codex 账号的额度读数确实涨了，那天这个工具的用量就算已核实。关掉「只看已核实」能看到全部上传的用量，包括 OpenCode。</p>
+        <p>项目默认不公开，要在 QuotaBar 的「设置 → 项目」里自己打开开关。公开的项目会显示名称、仓库和每天按工具分的花费；不公开的只算进你的总量，显示为「其他项目」、没有名字。文件夹路径和会话里的任何内容永远不上传。把项目关掉，它会立刻从 quota.run 上撤下。</p>
+      </section>
+
       <section class="rule" id="privacy" aria-labelledby="privacyTitle">
         <h2 id="privacyTitle">隐私</h2>
         <dl class="facts">
@@ -175,6 +186,7 @@
       <a href="https://quota.bar/zh/">QuotaBar 官网</a>
       <a href="https://github.com/gentpan/QuotaBar">源代码</a>
       <a href="https://quota.bar/zh/changelog.html">更新日志</a>
+      <a href="kit" data-local="kit.html">组件</a>
       <a href="https://github.com/gentpan/QuotaBar/blob/main/LICENSE">MIT 许可证</a>
     </nav>
     <p class="foot__fine">Quota Run 与页面上出现的服务商均无关联，标志归各自所有者。</p>

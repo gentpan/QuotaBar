@@ -1,0 +1,89 @@
+/* 用量榜（usage.html）、项目榜（projects.html）、项目页（project.html）和组件页（kit.html）的版面。
+ * 组件本身在 ui.css；这里只管页头、领奖台、名次表、项目卡片的排布。 */
+
+.page { padding-top: var(--space-8); padding-bottom: var(--space-16); }
+.page__head { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: var(--space-4) var(--space-6); }
+.page__title { display: grid; gap: var(--space-2); min-width: 0; max-width: 720px; }
+.page__title h1 { font-size: var(--text-2xl); overflow-wrap: anywhere; }
+.page__lede { color: var(--text-2); font-size: var(--text-base); }
+.page__live { display: flex; align-items: center; gap: var(--space-3); }
+.page__filters { margin: var(--space-6) 0; padding-bottom: var(--space-4); border-bottom: var(--border); }
+.page__meta { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2) var(--space-4); color: var(--text-2); }
+.page__actions { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+
+.link-quiet { color: var(--text-1); text-decoration: underline; text-decoration-color: var(--color-neutral-300); text-underline-offset: var(--space-1); }
+.link-quiet:hover { text-decoration-color: currentColor; }
+.strong { font-weight: 600; }
+
+/* 头像、用户 */
+.av--lg { width: var(--space-10); height: var(--space-10); font-size: var(--text-base); }
+.runner { display: inline-flex; align-items: center; gap: var(--space-3); min-width: 0; }
+.runner__text { display: grid; min-width: 0; }
+.runner__text b { overflow: hidden; font-weight: 500; text-overflow: ellipsis; white-space: nowrap; }
+.runner__text small { overflow: hidden; color: var(--text-2); font-size: var(--text-xs); text-overflow: ellipsis; white-space: nowrap; }
+a.runner:hover b { text-decoration: underline; text-decoration-color: var(--color-neutral-300); text-underline-offset: var(--space-1); }
+
+/* ── 领奖台 ───────────────────────────────────────────────────────────── */
+
+.podium { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-4); }
+.podium__card { gap: var(--space-3); }
+.podium--1 { border-color: var(--color-primary); }
+.podium__rank { display: inline-grid; place-items: center; width: var(--space-8); height: var(--space-8); border-radius: var(--radius-full); background: var(--color-neutral-100); font-family: var(--font-mono); font-size: var(--text-base); font-weight: 600; }
+.podium--1 .podium__rank { background: var(--color-primary); color: var(--color-neutral-0); }
+.podium--2 .podium__rank { background: var(--heat-2); }
+.podium--3 .podium__rank { background: var(--heat-1); }
+.podium__value { font-size: var(--text-2xl); font-weight: 600; letter-spacing: -0.02em; line-height: 1.25; }
+@media (max-width: 900px) { .podium { grid-template-columns: minmax(0, 1fr); } }
+
+/* ── 名次表 ───────────────────────────────────────────────────────────── */
+
+.ranks { width: 100%; }
+.ranks th[scope="col"] { padding: var(--space-2); border-bottom: var(--border); color: var(--text-3); font-size: var(--text-xs); font-weight: 500; text-align: left; white-space: nowrap; }
+.ranks td, .ranks th[scope="row"] { height: var(--space-14); padding: var(--space-2); border-bottom: var(--border-soft); font-weight: 400; text-align: left; white-space: nowrap; }
+.ranks .num { text-align: right; }
+.ranks .rank-cell { width: var(--space-8); color: var(--text-2); }
+.ranks tbody tr:hover { background: var(--color-neutral-50); }
+.ranks th[scope="row"] { min-width: 200px; }
+.tools-cell .split { display: inline-flex; vertical-align: middle; }
+
+/* ── 项目卡片（项目榜、个人主页） ─────────────────────────────────────── */
+
+.pcards { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: var(--space-4); }
+.pcard__rank { display: inline-grid; place-items: center; min-width: var(--space-6); height: var(--space-6); padding: 0 var(--space-1); border-radius: var(--radius-sm); background: var(--color-neutral-100); font-family: var(--font-mono); font-size: var(--text-xs); font-weight: 600; }
+.pcard__name { display: grid; gap: var(--space-half); min-width: 0; }
+.pcard__name a:hover .card__title { text-decoration: underline; text-decoration-color: var(--color-neutral-300); text-underline-offset: var(--space-1); }
+.pcard__value { display: flex; align-items: flex-end; justify-content: space-between; gap: var(--space-3); }
+.pcard__big { font-size: var(--text-xl); font-weight: 600; letter-spacing: -0.02em; line-height: 1.25; }
+.pcard__repo { display: inline-flex; align-items: center; gap: var(--space-1); color: var(--text-2); font-size: var(--text-xs); }
+.pcard__repo svg { width: var(--space-3); height: var(--space-3); }
+.growth { font-family: var(--font-mono); font-size: var(--text-xs); }
+.growth.is-up { color: var(--rise); }
+.growth.is-down { color: var(--fall); }
+
+/* ── 项目页 ───────────────────────────────────────────────────────────── */
+
+.phead2 { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: var(--space-4) var(--space-6); }
+.phead2__title { display: grid; gap: var(--space-2); min-width: 0; }
+.phead2__title h1 { font-size: var(--text-2xl); overflow-wrap: anywhere; }
+.rank-chip { display: inline-flex; align-items: center; gap: var(--space-2); height: var(--space-8); padding: 0 var(--space-3); border: var(--border); border-radius: var(--radius-full); font-size: var(--text-xs); font-weight: 500; }
+.rank-chip b { font-family: var(--font-mono); font-size: var(--text-sm); }
+.range-seg { margin-left: auto; }
+.contributors { display: grid; gap: var(--space-px); overflow: hidden; border: var(--border); border-radius: var(--radius); background: var(--color-neutral-100); }
+.contributors li { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: var(--space-3); padding: var(--space-3) var(--space-4); background: var(--color-neutral-0); }
+.contributors li.is-self { background: var(--color-neutral-50); }
+.models { width: 100%; }
+.models td { padding: var(--space-2) 0; border-bottom: var(--border-soft); }
+.models td.num { text-align: right; font-family: var(--font-mono); }
+.share-card { display: none; }
+
+/* ── 组件页 ───────────────────────────────────────────────────────────── */
+
+.kit-block { display: grid; gap: var(--space-4); }
+.kit-note { color: var(--text-2); font-size: var(--text-xs); }
+.kit-row { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-3); }
+
+@media (max-width: 640px) {
+  .shell.page { padding: var(--space-6) var(--space-4) var(--space-12); }
+  .page__title h1, .phead2__title h1 { font-size: var(--text-xl); }
+  .page__filters .filters__spacer { display: none; }
+}

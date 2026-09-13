@@ -42,6 +42,7 @@
         <li><a href="#tiers">[[Tiers||成绩级别]]</a></li>
         <li><a href="#seasons">[[Seasons and boards||赛季和榜单]]</a></li>
         <li><a href="#macs">[[One ranked Mac||只认一台 Mac]]</a></li>
+        <li><a href="#usage">[[Usage and projects||用量榜和项目]]</a></li>
         <li><a href="#privacy">[[Privacy||隐私]]</a></li>
       </ol>
     </nav>
@@ -70,6 +71,7 @@
               <li>[[The window's length and scope||窗口的长度和范围]]</li>
               <li>[[A one-way digest of the provider account — never the email itself||服务商账号的单向摘要，不是邮箱本身]]</li>
               <li>[[Tokens per minute from local CLI logs — counts only||本地 CLI 日志里每分钟的 token 数，只有数字]]</li>
+              <li>[[Tokens per day by tool, way of working and model; a project's name and repository only if you make it public||每天按工具、编程方式和模型分的 token 数；项目的名称和仓库只在你公开它之后才上传]]</li>
             </ul>
           </div>
           <div class="list list--no">
@@ -139,6 +141,13 @@
       <section class="rule" id="macs" aria-labelledby="macsTitle">
         <h2 id="macsTitle">[[One ranked Mac||只认一台 Mac]]</h2>
         <p>[[Each Mac signs its readings with a key that never leaves it — in the Secure Enclave when the Mac has one. An account can connect several Macs, but only the ranked one's readings count. Moving the ranking to another Mac waits 7 days after the last change; choosing one when there is none is always allowed.||每台 Mac 用一把不出本机的密钥给读数签名，有安全隔区的 Mac 就存在安全隔区里。一个账号可以连好几台 Mac，但只计「计分 Mac」的读数。把计分换到另一台，要距离上次更换满 7 天；一台都没有时，随时可以选。]]</p>
+      </section>
+
+      <section class="rule" id="usage" aria-labelledby="usageTitle">
+        <h2 id="usageTitle">[[Usage and projects||用量榜和项目]]</h2>
+        <p>[[Every signed-in Mac uploads the tokens its Claude Code, Codex and OpenCode logs recorded each day, by project, tool, way of working (terminal, desktop app, editor, SDK) and model. quota.run prices them itself at list rates, so everyone's cost is counted the same way.||每台登录的 Mac 都会上传本机 Claude Code、Codex、OpenCode 日志里每天的 token，按项目、工具、编程方式（命令行、桌面版、编辑器插件、SDK）和模型分开。花费由 quota.run 按公开价目统一计算，每个人都用同一把尺子。]]</p>
+        <p>[[The main usage board counts only verified days: a day of Claude or Codex usage is verified when that day's quota reading for one of your bound provider accounts rose. Turn “Verified only” off to see every upload, OpenCode included.||用量榜的主榜只算已核实的日子：某一天你绑定的 Claude 或 Codex 账号的额度读数确实涨了，那天这个工具的用量就算已核实。关掉「只看已核实」能看到全部上传的用量，包括 OpenCode。]]</p>
+        <p>[[Projects are private until you turn their switch on in QuotaBar → Settings → Projects. A public project shows its name, repository and daily cost by tool; a private one only adds to your totals as “other projects”, without a name. Folder paths and anything from the sessions are never uploaded. Turning a project off takes it off quota.run at once.||项目默认不公开，要在 QuotaBar 的「设置 → 项目」里自己打开开关。公开的项目会显示名称、仓库和每天按工具分的花费；不公开的只算进你的总量，显示为「其他项目」、没有名字。文件夹路径和会话里的任何内容永远不上传。把项目关掉，它会立刻从 quota.run 上撤下。]]</p>
       </section>
 
       <section class="rule" id="privacy" aria-labelledby="privacyTitle">

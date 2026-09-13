@@ -23,9 +23,9 @@ RUN_ROOT="${RUN_ROOT:-/var/www/quota.run}"
 python3 Scripts/sync_changelog.py ${CHANGELOG_FILE:+--changelog "$CHANGELOG_FILE"}
 
 # quota.run 的样式和脚本：共用的 base.css / common.js，各页自己的 css / js，以及只在 ?demo=1 时加载的 demo.js。
-RUN_CSS="web-run/base.css web-run/board.css web-run/profile.css web-run/rules.css web-run/account.css"
-RUN_JS="web-run/common.js web-run/board.js web-run/profile.js web-run/account.js web-run/demo.js"
-RUN_PAGES="index u rules login account connect"
+RUN_CSS="web-run/base.css web-run/board.css web-run/profile.css web-run/rules.css web-run/account.css web-run/ui.css web-run/pages.css"
+RUN_JS="web-run/common.js web-run/board.js web-run/profile.js web-run/account.js web-run/demo.js web-run/ui.js web-run/usage.js web-run/projects.js web-run/project.js web-run/kit.js"
+RUN_PAGES="index u rules login account connect usage projects project kit"
 
 # 图片也算进去：只换了截图、分享图或服务商 logo 时，指纹不变的话 CDN 会继续给旧图。
 STAMP="$( { cat web/styles.css web/replica.css web/app.js web/replica.js $RUN_CSS $RUN_JS \
@@ -71,7 +71,8 @@ done
 # /rules、/login、/account、/connect 走 Caddy 的 try_files，顺便验证这条映射在线上生效。
 for page in quota.bar/ quota.bar/zh/ quota.run/ quota.run/zh/ quota.run/u.html quota.run/zh/u.html \
             quota.run/rules quota.run/zh/rules quota.run/login quota.run/zh/login \
-            quota.run/account quota.run/zh/account quota.run/connect quota.run/zh/connect; do
+            quota.run/account quota.run/zh/account quota.run/connect quota.run/zh/connect \
+            quota.run/usage quota.run/zh/usage quota.run/projects quota.run/zh/projects quota.run/kit quota.run/zh/kit; do
   html=$(curl -s --max-time 20 "https://$page" | grep -c "?v=$STAMP" || true)
   [ "$html" -gt 0 ] && printf "  ✅ %-22s 引用 %s 处新指纹\n" "$page" "$html" \
                     || { printf "  ❌ %-22s 仍在引用旧指纹\n" "$page"; fail=1; }

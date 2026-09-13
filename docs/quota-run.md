@@ -31,7 +31,9 @@ and this file disagree, this file wins until it is changed on purpose.
    file or project paths, model outputs, the account email in the clear.
 3. **Uploaded after joining:** provider, plan name, per-window used percent,
    reset time, observation time, the window's length and scope, a one-way digest
-   of the provider account, and per-minute token counts from local CLI logs.
+   of the provider account, per-minute token counts from local CLI logs, and
+   tokens per day by tool, mode and model — with a project's name and repository
+   only for projects the owner made public (*Usage by project*).
 4. **Readings, not results.** The server turns a time series into a run; a
    client claiming "100% in 2h" is meaningless.
 5. **No money prizes.** Cheating a desktop client cannot be made impossible,
@@ -336,6 +338,66 @@ filter). Omit it for everyone.
   achieved, and (unless turned off on the account page) tokens per day by tool
   on the profile heatmap. The consent screen in the app says so.
 
+### Usage by project
+
+Tokens per day from the local CLI logs, by project, tool, way of working and
+model, from **every** Mac on the account (each Mac's logs are its own work).
+
+- **Upload** `POST /usage` (device-signed): `{timezone, days: [≤62 "YYYY-MM-DD"],
+  rows: [≤5000 {date, tool: claude|codex|opencode, mode: cli|desktop|ide|sdk|cloud|other,
+  model, project?: id, input, output, cacheRead, cacheWrite, sessions, activeMinutes,
+  costUSD?}], projects: [≤200 {id, name ≤60, repo?: "host/owner/repo"}], projectsComplete}`
+  → `{accepted, days, projects: [{id, slug, repoVerified}]}`. Dates are the Mac's
+  local days within the last 400 days (and at most tomorrow in UTC). Every listed
+  day **replaces** what this Mac had for it; rows for the same cell are summed.
+  `project` must be one of `projects` (public projects only; everything private
+  is sent without a project). With `projectsComplete: true` this Mac's rows for
+  any project not listed become private at once. A project with no rows left is
+  removed. Ids are `[A-Za-z0-9_-]{8,40}`; the app derives a repository's id from
+  its remote, so every Mac sends the same one. Errors `400 invalid_usage`
+  (`rows[i]: …`), `400 too_much_usage`, `400 invalid_timezone`.
+- **Cost** is priced by the server: LiteLLM's catalog (fetched daily, cached next
+  to the database) by exact model id, then without a `-YYYYMMDD` suffix, then the
+  app's fallback table by marker; cache writes at the 5-minute rate. OpenCode
+  rows keep the `costUSD` the tool recorded. Stored as micro-dollars.
+- **Repository verified**: the repo is on github.com and its owner is the login of
+  the account's GitHub sign-in identity.
+- **Verified days** (`usage_verified`): a Claude or Codex reading from the ranked
+  device, for a provider account owned by the user, that is higher than the
+  previous reading of the same window marks that day (in the Mac's upload time
+  zone) as verified for that tool. Recomputed from all readings when ownership
+  changes. OpenCode is never verified.
+
+Public, cached like the others (`/usage/*` and `/users/*` are dropped from the
+cache when usage arrives):
+
+| Method & path | Returns |
+|---|---|
+| `GET /usage/boards?metric=cost\|tokens\|streak\|active&period=week\|last\|month\|all&tool=&region=&verified=1\|0&limit=` | `{metric, period, from, to, tool, region, verified, entries: [{rank, username, displayName, region, value, unit: usd\|tokens\|days, costUSD, tokens, activeDays, sessions, verifiedShare, tools: [{tool, costUSD, tokens}], topProject: {name, slug} \| null, change, new}], summary: {runners, costUSD, tokens, sessions, byTool, daily: [{date, costUSD, tokens, byTool}]}, updatedAt}`. Periods: the ISO week (UTC), the week before, the calendar month, or the last 365 days. **`verified` defaults to 1: the main board counts only verified days**; `0` counts every upload. `streak` is the current run of active days ending today or yesterday. `change` is places gained against the period before (null when unranked then; `new` true). `daily` covers the period (the last 90 days for `all`). |
+| `GET /usage/projects?period=&tool=&limit=` | `{period, from, to, tool, entries: [{rank, project: {id, name, slug, repo, repoVerified}, owner: {username, displayName}, costUSD, tokens, sessions, activeMinutes, activeDays, tools, growth, spark: [14 daily costs]}], summary: {projects, costUSD, tokens}}`; `growth` is cost against the period before (null when new or for `all`). |
+| `GET /users/<username>/usage` | `{username, timezone, from, to, days: [{date, costUSD, tokens, sessions, activeMinutes, verifiedCostUSD, byTool}], totals: {week, month, all: {costUSD, tokens, sessions, activeMinutes, activeDays, verifiedCostUSD}}, streaks: {current, longest}, ranks: {week, all: {rank, runners}}, tools, modes: [{tool, mode, costUSD, tokens}], models: [≤10], projects: [{id, name, slug, repo, repoVerified, costUSD, tokens, sessions, activeMinutes, weekCostUSD, lastDate, tools, rank, spark: [30]}]}` — ranks are on the verified cost board. |
+| `GET /users/<username>/projects/<slug>` | `{project, owner, from, to, days, totals, firstDate, lastDate, streaks, ranks: {week, all: {rank, projects}}, tools, modes, models, repo: {key, url, github: repo stats from the GitHub cache \| null} \| null, contributors: [{username, displayName, slug, name, repoVerified, costUSD, self}]}`; `404 project_not_found`. Contributors are every public project on the same repository. |
+
+**Badges** on `GET /users/<username>`: `badges: [{id, value, tier, tiers,
+thresholds, next, lowerIsBetter}]` for `streak` (longest run of active days:
+7/30/100), `spend` (all-time USD: 100/1,000/10,000), `bigday` (tokens in a day:
+100M/500M/1B), `tools` (2/3), `ways` (tool × mode pairs: 3/5), `verified`
+(verified days: 7/30/100), `projects` (public: 1/3/10), `opensource` (a public
+project in one's own repository), `nightowl` (≥25% of 90 days' activity tokens
+between 0 and 5 local), `weekend` (≥30% of 90 days' cost on weekends), `podium`
+(best place on the verified weekly cost board this or last week: top 10/3/1),
+`speedrun` (runs that reached 100%: 1/10/50), `github` (contributions in a year:
+500/2,000/5,000). `tier` is how many thresholds are met.
+
+**Live** `GET /live`: Server-Sent Events, public, one heartbeat comment every
+15 s, at most 500 connections (`503 live_full`). Events: `hello`; `usage`
+`{username, displayName, date, costUSD, tokens, byTool, at}` after an upload
+(that user's totals for the latest uploaded day); `board` `{board:
+"cost:week:verified", entries: [top 10 {rank, username, displayName, value}],
+summary, at}` when that top 10 changed; `reading` `{username, displayName,
+provider, plan, planLabel, windowKey, windowSeconds, usedPercent, observedAt,
+runId, tier, secondsTo100, at}` for readings that belong to a public run.
+
 ### Device-signed
 
 Signed as in *Signing*, with `X-Quota-Device` except where noted.
@@ -487,6 +549,31 @@ floating trays and the active sidebar item.
   small tracks, projects as cards (with a GitHub repository: stars, forks,
   language, last push and 52 weekly commit bars). 404 state when the user does
   not exist.
+- **Usage board `/usage`** (`?period=&metric=&tool=&region=&verified=0`): live status,
+  a ticker with the latest event, figures that roll to new values (runners, cost,
+  tokens, sessions), cost per day as stacked columns by tool with a hover tooltip,
+  a ring of cost by tool, a podium of three cards, a table of the rest (place change,
+  tool split, top project, verified share) whose rows slide to new places and flash
+  when their value changes, and a feed of what is happening. Live events reload the
+  board (bypassing the browser cache).
+- **Project board `/projects`** (`?period=&tool=`): project cards (rank, owner,
+  repository with the owner's-repository mark, cost, tokens, sessions, 14-day
+  sparkline, tool split, growth), live.
+- **Project page `/@username/slug`** (Caddy rewrites to `/project.html`, which sets
+  `<base href="/">`): name, owner, repository, board places, figures, cost per day
+  for 30/90/365 days, a year heatmap of cost, tools ring, ways of working, models,
+  the GitHub repository with 52 weekly commits, everyone else on the same
+  repository, and a 1200×630 share image drawn in the browser.
+- **Profiles** add the earned badges (all of them, with progress, behind a button),
+  AI coding spend (this week, month, year, weekly place, 90 days of stacked columns,
+  tools and ways of working) and public project cards.
+- **Components `/kit`**: every badge, figure, card, chart, mark and live piece with
+  sample data.
+- **Charts**: hand-written SVG, bars at most 24 px wide with 4 px rounded data
+  ends and 2 px gaps between stacked segments, 2 px lines over a 10% wash with a
+  crosshair, a ring with gaps; tool colours fixed by tool (Claude Code #d97757,
+  Codex #2563eb, OpenCode #0d9488, checked for colour-blind separation); motion is
+  dropped under `prefers-reduced-motion`.
 - `/rules`: how Quota Run works — what is uploaded, binding and ownership of
   provider accounts, tiers, seasons, privacy — in the same style.
 - `/login`: Continue with GitHub, Continue with Google (only those configured),
@@ -534,6 +621,15 @@ floating trays and the active sidebar item.
   with that email to claim it). "Unbind" (confirm) → `DELETE /accounts/<id>` and
   adds the digest to a local exclusion list; "Bind again" removes it from the list.
   Personal records' "likely verified" estimate requires a digest on every reading.
+- **Projects** (Settings → Projects, no account needed): the log scan resolves each
+  turn's working directory to its Git repository (worktrees included; folders that
+  share a repository's name are folded into it) and keeps tokens per day, project,
+  CLI, mode and model in a project archive next to the usage archive. Signed in,
+  each project has a Public on quota.run switch and a public name; nothing is public
+  until switched on.
+- **Usage upload**: from every signed-in Mac, recent days (today and the two before)
+  at most every ten minutes, and every day again, 30 days per request, whenever a
+  switch or a public name changes (`projectsComplete: true` each time).
 - **Upload**: after each refresh, readings not yet sent plus activity minutes
   since the last upload, batched, at most every 60 s, queued on disk while offline,
   retried with backoff. Only when signed in and this Mac is the ranked device.
