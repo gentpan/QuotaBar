@@ -41,18 +41,18 @@ PY
     ;;
   cloudflare)
     # Cloudflare Email Sending 的 SMTP：smtp.mx.cloudflare.net:465（隐式 TLS），用户名是字面的 api_token，
-    # 密码是带「Email Sending: Edit」权限的 API 令牌；发件域名要先在 Email Service → Email Sending 里接入。
+    # 密码是带「Email Sending: Edit」权限的 API 令牌；发件域名 notice.quota.run 要先在 Email Service → Email Sending 里接入。
     read -r -s -p "Cloudflare API 令牌（Email Sending: Edit，不回显）: " token; echo
-    read -r -p "发件人 [Quota Run <noreply@quota.run>]: " from
+    read -r -p "发件人 [Quota Run <noreply@notice.quota.run>]: " from
     [ -n "$token" ] || die "令牌不能为空"
-    payload="$(T="$token" F="${from:-Quota Run <noreply@quota.run>}" python3 -c 'import json, os; print(json.dumps({"QUOTA_RUN_SMTP_HOST": "smtp.mx.cloudflare.net", "QUOTA_RUN_SMTP_PORT": "465", "QUOTA_RUN_SMTP_USER": "api_token", "QUOTA_RUN_SMTP_PASSWORD": os.environ["T"], "QUOTA_RUN_MAIL_FROM": os.environ["F"]}))')"
+    payload="$(T="$token" F="${from:-Quota Run <noreply@notice.quota.run>}" python3 -c 'import json, os; print(json.dumps({"QUOTA_RUN_SMTP_HOST": "smtp.mx.cloudflare.net", "QUOTA_RUN_SMTP_PORT": "465", "QUOTA_RUN_SMTP_USER": "api_token", "QUOTA_RUN_SMTP_PASSWORD": os.environ["T"], "QUOTA_RUN_MAIL_FROM": os.environ["F"]}))')"
     ;;
   smtp)
     read -r -p "SMTP 主机（如 smtp.resend.com）: " host
     read -r -p "端口（465 = TLS，587 = STARTTLS）[465]: " port
     read -r -p "用户名: " user
     read -r -s -p "密码（不回显）: " password; echo
-    read -r -p "发件人（如 Quota Run <noreply@quota.run>）: " from
+    read -r -p "发件人（如 Quota Run <noreply@notice.quota.run>）: " from
     [ -n "$host" ] && [ -n "$user" ] && [ -n "$password" ] && [ -n "$from" ] || die "主机、用户名、密码、发件人都要填"
     payload="$(H="$host" P="${port:-465}" U="$user" W="$password" F="$from" python3 -c 'import json, os; print(json.dumps({"QUOTA_RUN_SMTP_HOST": os.environ["H"], "QUOTA_RUN_SMTP_PORT": os.environ["P"], "QUOTA_RUN_SMTP_USER": os.environ["U"], "QUOTA_RUN_SMTP_PASSWORD": os.environ["W"], "QUOTA_RUN_MAIL_FROM": os.environ["F"]}))')"
     ;;
