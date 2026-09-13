@@ -1638,7 +1638,7 @@ class ComparisonTests(ServerTestCase):
         current = self.board()["summary"]
         self.assertEqual(current, {
             "runners": 5, "runnersPrev": 2,
-            "fastest": {"username": "alice", "displayName": "Alice", "seconds": 3600},
+            "fastest": {"username": "alice", "displayName": "Alice", "seconds": 3600, "runId": alice_fast},
             "medianSecondsTo100": 7200, "medianSecondsTo100Prev": 1800, "medianRunId": bob_run,
             "completed": 4, "completedShare": 0.8, "verifiedShare": 0.6, "accountVerifiedShare": 0.8})
         # summary 与 metric 无关
@@ -1648,7 +1648,7 @@ class ComparisonTests(ServerTestCase):
         verified = self.board(tier="verified")["summary"]
         self.assertEqual(verified, {
             "runners": 3, "runnersPrev": 2,
-            "fastest": {"username": "alice", "displayName": "Alice", "seconds": 3600},
+            "fastest": {"username": "alice", "displayName": "Alice", "seconds": 3600, "runId": alice_fast},
             "medianSecondsTo100": 3600, "medianSecondsTo100Prev": 1800, "medianRunId": alice_fast,
             "completed": 2, "completedShare": 0.6667, "verifiedShare": 1.0, "accountVerifiedShare": 0.6667})
 
