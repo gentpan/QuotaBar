@@ -505,7 +505,7 @@
           </div>
           <div class="card__body">
             <h3 id="privacy">用量不出这台 Mac</h3>
-            <p>用量在本机读取和计算，不做分析，不做追踪。自动型服务商复用你 CLI 已有的登录会话；手动填的凭据进 macOS 钥匙串，不写进任何文件。</p>
+            <p>用量在本机读取和计算，不做分析，不做追踪。自动型服务商复用你 CLI 已有的登录会话；手动填的凭据进 macOS 钥匙串，不写进任何文件。只有你主动加入 <a href="leaderboard.html">Quota Run 排行榜</a>，才会从一台 Mac 上传额度读数，凭据、提示词和代码永远不上传。</p>
           </div>
         </div>
       </div>
@@ -536,7 +536,7 @@
       <div class="log">
         <article class="log__day">
           <header class="log__head"><time datetime="2026-09-13">2026-09-13</time><span class="log__tag">未发布</span></header>
-          <p class="log__counts">新增 6 · 样式 5 · 修复 3</p>
+          <p class="log__counts">新增 7 · 样式 5 · 修复 3</p>
           <ul class="log__list">
             <li><span class="badge badge--add">新增</span>下拉面板服务商卡片的右键菜单新增三组快捷设置：「卡片上显示的额度」逐项勾选哪些额度显示在外面、哪些收进展开箭头（每个服务商分别记住，可恢复默认，最后一项不能取消）；「圆环跟随的额度」选择停靠条圆环、刘海岛和菜单栏跟随的窗口，与双击窗口是同一个设置；「显示位置」勾选这个服务商是否出现在下拉面板、停靠条、刘海岛和桌面卡片，另有「菜单栏只显示此服务商」和「添加一张此服务商的桌面卡片」。原来的「在下拉面板中隐藏」和「圆环改回按最满的窗口显示」并入这几组。</li>
             <li><span class="badge badge--add">新增</span>在线更新改为更新卡片：发现新版本时弹出一张卡片，显示新版本号、当前版本、发布日期和这一版的更新内容（按界面语言显示中文或英文，分新增、样式、修复，可展开全部并打开完整更新日志），点「安装并重启」后下载、验证开发者签名和 Apple 公证，完成后自动替换并重启；不会再不打招呼就重启。「更新方式」改为「后台下载」（发现后先在后台下载验证好，点安装即刻完成）和「安装时再下载」。原地替换失败（例如没有「应用程序」文件夹的写入权限）时，卡片说明原因并提供「重试」和「下载安装包」。菜单栏右键菜单、面板顶部横幅和设置里的更新页都打开这张卡片；同一版本每次启动只自动弹出一次。</li>
@@ -544,7 +544,7 @@
             <li><span class="badge badge--add">新增</span>每周用量周报：每周一上午 9 点后推送一条通知，写明上周的花费、token 数和用得最多的 CLI 所占比例；上周没有用量时不发。可在设置 → 提醒 →「花费」里关闭。</li>
             <li><span class="badge badge--add">新增</span>额度重置日历：设置 → 用量统计顶部新增「接下来 7 天的额度重置」，按天列出已开启服务商的每个额度窗口什么时候重置（今天、明天、具体日期和时间），以及当前剩余或已用，快用完的标成橙色或红色。</li>
           </ul>
-          <a class="log__more" href="changelog.html#d-2026-09-13">还有 9 项 →</a>
+          <a class="log__more" href="changelog.html#d-2026-09-13">还有 10 项 →</a>
         </article>
         <article class="log__day">
           <header class="log__head"><time datetime="2026-09-13">2026-09-13</time><span class="log__tag">0.5.3</span></header>
@@ -588,7 +588,7 @@
         </details>
         <details class="qa">
           <summary class="qa__q">我的凭据安全吗？</summary>
-          <div class="qa__a"><div>手动填写的凭据只存 macOS 登录钥匙串，不会写进配置文件。自动型服务商根本不存——每次直接读你 CLI 已有的会话。应用不向我们上报任何用量数据。除各服务商自己的接口外，它只会连接各家的公开状态页、每天取一次汇率的 open.er-api.com、GitHub（新版本和模型价目表），以及你主动提交反馈、或连不上 GitHub 检查更新时的 quota.bar。设置了代理时，这些请求都经过代理。</div></div>
+          <div class="qa__a"><div>手动填写的凭据只存 macOS 登录钥匙串，不会写进配置文件。自动型服务商根本不存——每次直接读你 CLI 已有的会话。应用不向我们上报任何用量数据。除各服务商自己的接口外，它只会连接各家的公开状态页、每天取一次汇率的 open.er-api.com、GitHub（新版本和模型价目表），以及你主动提交反馈、或连不上 GitHub 检查更新时的 quota.bar。设置了代理时，这些请求都经过代理。Quota Run 排行榜是自愿加入的；加入后，一台 Mac 还会把额度读数和每分钟的 token 数上传到 quota.bar，具体上传什么、绝不上传什么，排行榜页面上写得很清楚。</div></div>
         </details>
         <details class="qa">
           <summary class="qa__q">费用数字准不准？</summary>
