@@ -39,7 +39,18 @@ extension UsageStore {
         widgetRevision &+= 1
     }
 
-    // MARK: Card expansion
+    /// The order a surface's providers were dragged into, saved as the
+    /// order every surface lists them in.
+    func arrangeProviders(_ arranged: [ProviderID]) {
+        config.arrangeEnabled(arranged)
+        guard config.enabledProviders != enabled else { return }
+        enabled = config.enabledProviders
+        dockRevision &+= 1
+        islandRevision &+= 1
+        widgetRevision &+= 1
+    }
+
+        // MARK: Card expansion
 
     func isCardExpanded(_ id: ProviderID) -> Bool {
         experience.expandedCards.contains(id.rawValue)

@@ -214,6 +214,22 @@ final class ConfigStoreTests: XCTestCase {
     }
 }
 
+final class ProviderOrderTests: XCTestCase {
+    /// Dragging in the panel rearranges what the panel shows; a provider
+    /// hidden from the panel keeps its place in the shared order.
+    func testArrangingKeepsHiddenProvidersInPlace() {
+        let order: [ProviderID] = [.codex, .claude, .grok, .cursor]
+        XCTAssertEqual(ConfigStore.arranging(order, as: [.cursor, .codex, .claude]), [.cursor, .codex, .grok, .claude])
+        XCTAssertEqual(ConfigStore.arranging(order, as: [.claude, .codex]), [.claude, .codex, .grok, .cursor])
+    }
+
+    func testArrangingIgnoresAStaleOrDuplicatedDrag() {
+        let order: [ProviderID] = [.codex, .claude]
+        XCTAssertEqual(ConfigStore.arranging(order, as: [.claude, .cursor]), order, "cursor was turned off mid-drag")
+        XCTAssertEqual(ConfigStore.arranging(order, as: [.claude, .claude]), order)
+    }
+}
+
 final class AlertSettingsTests: XCTestCase {
     func testCriticalIsPulledUpToWarning() {
         let settings = AlertSettings(enabled: true, warning: 90, critical: 70).normalized()

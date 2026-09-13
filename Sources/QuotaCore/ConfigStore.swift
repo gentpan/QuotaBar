@@ -398,6 +398,28 @@ public final class ConfigStore: @unchecked Sendable {
         }
     }
 
+    /// Puts the providers one surface shows into the order they were dragged
+    /// to. Providers hidden from that surface keep their places; the dragged
+    /// ones fill the slots they held, in their new order.
+    public func arrangeEnabled(_ arranged: [ProviderID]) {
+        mutate { config in
+            config.enabled = Self.arranging(config.enabled, as: arranged)
+        }
+    }
+
+    /// `order`, with the members of `arranged` rearranged into its slots and
+    /// everything else where it was. Unchanged unless `arranged` is exactly
+    /// a rearrangement of members of `order` — a drag that finished after a
+    /// provider was turned off must not resurrect or drop anything.
+    public static func arranging(_ order: [ProviderID], as arranged: [ProviderID]) -> [ProviderID] {
+        let members = Set(arranged)
+        guard members.count == arranged.count, members.isSubset(of: Set(order)) else { return order }
+        let slots = order.indices.filter { members.contains(order[$0]) }
+        var result = order
+        for (slot, id) in zip(slots, arranged) { result[slot] = id }
+        return result
+    }
+
     public func setEnabled(_ id: ProviderID, _ on: Bool) {
         lock.lock()
         if on, !config.enabled.contains(id) {

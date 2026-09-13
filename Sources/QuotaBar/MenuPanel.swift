@@ -173,6 +173,15 @@ final class MenuPanelController {
 
 // MARK: - Content
 
+/// Each provider card's height, for working out when a dragged card has
+/// passed its neighbour.
+private struct CardHeightsKey: PreferenceKey {
+    static var defaultValue: [ProviderID: CGFloat] = [:]
+    static func reduce(value: inout [ProviderID: CGFloat], nextValue: () -> [ProviderID: CGFloat]) {
+        value.merge(nextValue()) { $1 }
+    }
+}
+
 private struct PanelHeightKey: PreferenceKey {
     static var defaultValue: CGFloat = 0
     static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = max(value, nextValue()) }
@@ -184,6 +193,20 @@ struct MenuPanelView: View {
     var scrollable = true
     @State private var scrollHeight: CGFloat = 0
     @State private var footerHeight: CGFloat = 52
+    /// Dragging a provider card: which one, the order as it stands mid-drag,
+    /// and how far the card sits from its current slot. The order is saved
+    /// once, on release.
+    @State private var dragging: ProviderID?
+    @State private var dragOrder: [ProviderID]?
+    @State private var dragOffset: CGFloat = 0
+    /// How far the dragged card's slot has moved since the drag began, as
+    /// the cards it passed closed up behind it.
+    @State private var dragShift: CGFloat = 0
+    @State private var cardHeights: [ProviderID: CGFloat] = [:]
+    /// True while a card is held. It resets on its own when the gesture ends
+    /// *or is cancelled* — released outside the panel, say — which `onEnded`
+    /// alone does not report, and the card was left lifted with the order unsaved.
+    @GestureState private var holdingCard = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -227,8 +250,10 @@ struct MenuPanelView: View {
         .honoursReducedMotion()
     }
 
+    private var cardSpacing: CGFloat { store.experience.panelDensity == .compact ? 8 : 10 }
+
     private var cards: some View {
-                VStack(spacing: store.experience.panelDensity == .compact ? 8 : 10) {
+                VStack(spacing: cardSpacing) {
                     if !store.experience.welcomeDismissed {
                         WelcomeCard(store: store)
                     }
@@ -239,8 +264,20 @@ struct MenuPanelView: View {
                     if store.enabled.isEmpty {
                         emptyState
                     }
-                    ForEach(store.panelProviders) { id in
+                    ForEach(dragOrder ?? store.panelProviders) { id in
+                        let lifted = dragging == id
                         ProviderCardView(store: store, id: id)
+                            .background(GeometryReader { proxy in
+                                Color.clear.preference(key: CardHeightsKey.self, value: [id: proxy.size.height])
+                            })
+                            .scaleEffect(lifted ? 1.02 : 1)
+                            .shadow(color: .black.opacity(lifted ? 0.5 : 0), radius: lifted ? 16 : 0, y: lifted ? 8 : 0)
+                            .offset(y: lifted ? dragOffset : 0)
+                            .zIndex(lifted ? 1 : 0)
+                            // The lifted card follows the pointer exactly; only
+                            // the cards making room for it animate.
+                            .transaction { if lifted { $0.animation = nil } }
+                            .gesture(reorderGesture(for: id))
                     }
                     let hidden = store.hiddenProviders(on: .panel)
                     if !hidden.isEmpty {
@@ -248,10 +285,64 @@ struct MenuPanelView: View {
                     }
                 }
                 .padding(10)
+                .onPreferenceChange(CardHeightsKey.self) { cardHeights = $0 }
+                .onChange(of: holdingCard) { _, holding in
+                    if !holding { finishReorder() }
+                }
                 .background(GeometryReader { proxy in
                     Color.clear.preference(key: PanelHeightKey.self, value: proxy.size.height)
                 })
                 .animation(Motion.animation(Motion.spring), value: store.experience.expandedCards)
+    }
+
+    /// Press a card and drag it up or down the list. Once its centre passes
+    /// halfway over a neighbour, the two trade places and the neighbour slides
+    /// into the gap; on release the card settles into its slot and the order
+    /// is saved for every surface. Clicks, buttons and the bars inside the card
+    /// keep working: the drag only starts after six points of movement.
+    private func reorderGesture(for id: ProviderID) -> some Gesture {
+        DragGesture(minimumDistance: 6, coordinateSpace: .global)
+            .updating($holdingCard) { _, holding, _ in holding = true }
+            .onChanged { value in
+                if dragging == nil {
+                    dragging = id
+                    dragOrder = store.panelProviders
+                    dragShift = 0
+                }
+                guard dragging == id, var order = dragOrder, let index = order.firstIndex(of: id) else { return }
+                var offset = value.translation.height - dragShift
+                if offset > 0, index + 1 < order.count {
+                    let step = (cardHeights[order[index + 1]] ?? 0) + cardSpacing
+                    if step > cardSpacing, offset > step / 2 {
+                        order.swapAt(index, index + 1)
+                        dragShift += step
+                        offset -= step
+                        withAnimation(Motion.animation(Motion.spring)) { dragOrder = order }
+                    }
+                } else if offset < 0, index > 0 {
+                    let step = (cardHeights[order[index - 1]] ?? 0) + cardSpacing
+                    if step > cardSpacing, -offset > step / 2 {
+                        order.swapAt(index, index - 1)
+                        dragShift -= step
+                        offset += step
+                        withAnimation(Motion.animation(Motion.spring)) { dragOrder = order }
+                    }
+                }
+                dragOffset = offset
+            }
+            .onEnded { _ in finishReorder() }
+    }
+
+    /// Settles the lifted card into its slot and saves the order.
+    private func finishReorder() {
+        guard dragging != nil else { return }
+        if let order = dragOrder { store.arrangeProviders(order) }
+        withAnimation(Motion.animation(Motion.spring)) {
+            dragOffset = 0
+            dragging = nil
+        }
+        dragOrder = nil
+        dragShift = 0
     }
 
     private var emptyState: some View {
