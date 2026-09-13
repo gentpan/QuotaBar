@@ -305,8 +305,16 @@ struct SettingsView: View {
             if scrollable {
                 // `.never`, not `.hidden`: hidden still flashes the bar
                 // whenever the content grows, as it does when a row opens.
-                ScrollView { paneBody }
-                    .scrollIndicators(.never)
+                ScrollViewReader { reader in
+                    ScrollView { paneBody }
+                        .scrollIndicators(.never)
+                        .onReceive(NotificationCenter.default.publisher(for: SettingsWindow.scrollTo)) { note in
+                            guard let anchor = note.object as? String else { return }
+                            withAnimation(Motion.animation(.easeOut(duration: 0.25))) {
+                                reader.scrollTo(anchor, anchor: .top)
+                            }
+                        }
+                }
             } else {
                 paneBody
             }

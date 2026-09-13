@@ -251,6 +251,7 @@ final class StatusItemCoordinator: NSObject {
 
         add(menu, L10n.t("Refresh Now", "立即刷新"), "r") { [store] in store.refreshAll() }
         menu.addItem(updateItem(store: store))
+        menu.addItem(runItem(store: store))
         add(menu, L10n.t("Feedback…", "反馈…"), "") { SettingsWindow.open(section: .feedback) }
         add(menu, L10n.t("Settings…", "设置…"), ",") { SettingsWindow.open() }
         menu.addItem(.separator())
@@ -318,6 +319,20 @@ final class StatusItemCoordinator: NSObject {
             }
         }
         return item
+    }
+
+    /// Quota Run from the menu bar: signing in when this Mac isn't, otherwise
+    /// who it is signed in as. Both open Settings → Quota Run, the first
+    /// scrolled down to the sign-in card.
+    private func runItem(store: UsageStore) -> NSMenuItem {
+        if let account = store.run.account {
+            return makeClosureItem("Quota Run · @\(account.username)…", "") {
+                SettingsWindow.open(section: .run)
+            }
+        }
+        return makeClosureItem(L10n.t("Sign In to Quota Run…", "登录 Quota Run…"), "") {
+            SettingsWindow.open(section: .run, anchor: RunSignInCard.anchor)
+        }
     }
 
     private var menuActions: [ClosureTarget] = []

@@ -22,13 +22,20 @@ enum SettingsWindow {
 
     /// Posted with a `SettingsSection` raw value to turn the open window to it.
     static let showSection = Notification.Name("bar.quota.settings.showSection")
+    /// Posted with a view id inside the section just shown, to scroll it into view.
+    static let scrollTo = Notification.Name("bar.quota.settings.scrollTo")
 
-    /// Opens Settings at one section.
-    static func open(section: SettingsSection) {
+    /// Opens Settings at one section, optionally scrolled to a card in it.
+    static func open(section: SettingsSection, anchor: String? = nil) {
         open()
         // After the window exists and its view is listening.
         DispatchQueue.main.async {
             NotificationCenter.default.post(name: showSection, object: section.rawValue)
+            guard let anchor else { return }
+            // A beat later: the new section has to be laid out before it can scroll.
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+                NotificationCenter.default.post(name: scrollTo, object: anchor)
+            }
         }
     }
 

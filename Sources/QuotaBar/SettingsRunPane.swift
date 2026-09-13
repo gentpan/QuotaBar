@@ -31,6 +31,7 @@ struct RunPane: View {
             RunLeaveCard(run: run, account: account)
         } else {
             RunSignInCard(run: run, now: now)
+                .id(RunSignInCard.anchor)
         }
     }
 }
@@ -411,6 +412,9 @@ enum RunShare {
 // MARK: Signing in
 
 struct RunSignInCard: View {
+    /// Where the menu bar's "Sign In to Quota Run…" scrolls Settings to.
+    static let anchor = "run-sign-in"
+
     @ObservedObject var run: RunCenter
     /// Pinned by the previews; otherwise the expiry counts down on its own.
     var now: Date?
