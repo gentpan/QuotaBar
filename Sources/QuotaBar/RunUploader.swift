@@ -6,7 +6,8 @@ import QuotaCore
 ///
 /// There is no queue beyond the ledger itself. A reading taken offline is
 /// simply past the cursor until a send goes through; one that ages past the
-/// server's seven days is stepped over (`RunUploadPlan`). Failures back off
+/// server's seven days is stepped over (`RunUploadPlan`), and so is one
+/// without a provider account digest or with one the owner unbound. Failures back off
 /// from a minute to an hour; a refused key stops the upload until `/me`
 /// works again, because resending with a key the server rejects only adds
 /// noise to its logs.
@@ -42,10 +43,11 @@ extension RunCenter {
             readings: ledger.readings(after: upload.sentSeq),
             activity: UsageArchiveStore.shared.recentActivity,
             state: upload,
+            excluded: account.excludedDigests,
             now: now)
         guard !batch.isEmpty else {
-            // Only stale readings were waiting: step the cursor past them
-            // without a request.
+            // Only readings that will never go were waiting — stale, or
+            // with no account to rank under: step past them without a request.
             updateUpload {
                 $0.sentSeq = batch.sentSeq
                 $0.activityMinute = batch.activityMinute
@@ -77,6 +79,7 @@ extension RunCenter {
                     $0.lastRejected = receipt.rejected.count
                 }
                 if batch.hasMore { scheduleUpload(at: Date().addingTimeInterval(RunUploadPlan.minimumInterval)) }
+                afterUpload(digests: Set(batch.snapshots.compactMap(\.accountDigest)))
             } catch let error as QuotaRunError where error.isAuthFailure {
                 updateUpload {
                     $0.stopped = true

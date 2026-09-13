@@ -19,6 +19,9 @@ struct RunPane: View {
             .onAppear { run.refreshRecords() }
         if let account = run.account {
             RunMembershipCard(run: run, account: account, now: now ?? Date())
+            RunProviderAccountsCard(
+                run: run, account: account,
+                accounts: run.localAccounts.filter { $0.providerID.map(store.enabled.contains) ?? false })
             RunDevicesCard(run: run, account: account, now: now ?? Date())
             RunProfileCard(run: run, account: account)
                 // The server's copy re-seeds the fields.
@@ -139,11 +142,15 @@ enum RunText {
         RunFormat.windowName(seconds: seconds, scope: scope, fallback: scope ?? "")
     }
 
-    static func tier(_ tier: RunTier) -> String? {
-        switch tier {
-        case .verified: L10n.t("likely verified", "预计可验证")
-        case .standard: nil
-        case .flagged: L10n.t("would be flagged", "可能被标记存疑")
+    /// The local estimate of a run's tier. A run with a reading that named
+    /// no provider account is unranked on quota.run unless it is flagged.
+    static func tier(_ record: RunRecord) -> String? {
+        switch record.tier {
+        case .flagged: return L10n.t("would be flagged", "可能被标记存疑")
+        case _ where record.unbound:
+            return L10n.t("Not bound to an account — won't rank", "未绑定服务商账号，不会上榜")
+        case .verified: return L10n.t("likely verified", "预计可验证")
+        case .standard: return nil
         }
     }
 }
@@ -220,7 +227,7 @@ private struct RunBestRow: View {
         if let peak = best.highestPeak {
             parts.append(L10n.t("peak \(QuotaFormat.percent(peak.peakPercent))", "最高 \(QuotaFormat.percent(peak.peakPercent))"))
         }
-        if let tier = (best.fastest ?? best.highestPeak).flatMap({ RunText.tier($0.tier) }) {
+        if let tier = (best.fastest ?? best.highestPeak).flatMap(RunText.tier) {
             parts.append(tier)
         }
         return parts.joined(separator: " · ")
@@ -747,6 +754,124 @@ private struct RunMembershipCard: View {
 
     static func relative(_ date: Date, now: Date) -> String {
         L10n.t("in \(QuotaFormat.countdown(to: date, from: now))", "\(QuotaFormat.countdown(to: date, from: now))后")
+    }
+}
+
+/// The provider accounts this Mac reads, and where each stands on quota.run.
+/// The email is shown masked and only here; quota.run only ever sees a digest.
+struct RunProviderAccountsCard: View {
+    @ObservedObject var run: RunCenter
+    let account: RunAccountState
+    /// This Mac's accounts for the providers that are turned on.
+    let accounts: [RunLocalAccount]
+    @State private var confirmUnbind: RunLocalAccount?
+
+    var body: some View {
+        SettingsCard(L10n.t("Provider accounts", "服务商账号")) {
+            if accounts.isEmpty {
+                SettingFootnote(L10n.t(
+                    "None of your providers has reported which account it is signed in with yet.",
+                    "你的服务商还没有报告登录的是哪个账号。"))
+            } else {
+                VStack(spacing: Design.space1) {
+                    ForEach(accounts) { local in
+                        row(local)
+                    }
+                }
+            }
+            RunPhaseLabel(phase: run.accountsPhase)
+            SettingFootnote(L10n.t(
+                "Only runs bound to a provider account can rank, and each provider account counts for one Quota account. The email stays on this Mac; quota.run gets a one-way digest.",
+                "只有绑定了服务商账号的成绩才能上榜，每个服务商账号只归属一个 Quota 账户。邮箱只留在这台 Mac 上，quota.run 收到的是单向摘要。"))
+        }
+        .onAppear { Task { await run.lookupAccounts() } }
+        .alert(
+            L10n.t("Unbind this provider account?", "解除绑定这个服务商账号？"),
+            isPresented: Binding(get: { confirmUnbind != nil }, set: { if !$0 { confirmUnbind = nil } }),
+            presenting: confirmUnbind)
+        { local in
+            Button(L10n.t("Unbind", "解除绑定"), role: .destructive) { run.unbindAccount(local) }
+            Button(L10n.t("Cancel", "取消"), role: .cancel) {}
+        } message: { local in
+            Text(account.standing(of: local.digest).account == nil
+                 ? L10n.t(
+                     "This Mac stops uploading \(local.masked). Nothing from it is on quota.run yet. Your records on this Mac stay.",
+                     "这台 Mac 将停止上传 \(local.masked)。quota.run 上还没有它的任何数据。本机上的个人记录会保留。")
+                 : L10n.t(
+                     "Deletes the readings and runs of \(local.masked) on quota.run and stops uploading it from this Mac. Your records on this Mac stay.",
+                     "将删除 quota.run 上 \(local.masked) 的读数和成绩，并停止从这台 Mac 上传它。本机上的个人记录会保留。"))
+        }
+    }
+
+    private func row(_ local: RunLocalAccount) -> some View {
+        let standing = account.standing(of: local.digest)
+        return HStack(spacing: Design.space3) {
+            // Marks differ in width; a fixed column keeps the names in line.
+            RunGlyph(provider: local.provider)
+                .frame(width: 18)
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(spacing: Design.space2) {
+                    Text(RunText.providerName(local.provider))
+                        .font(.system(size: 13, weight: .medium))
+                        .lineLimit(1)
+                        .fixedSize()
+                    Text(local.masked)
+                        .font(.system(size: 12))
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                    chip(standing)
+                }
+                if let detail = detail(standing, local: local) {
+                    Text(detail)
+                        .font(.system(size: 11))
+                        .foregroundStyle(.secondary)
+                        .lineLimit(2)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            Spacer(minLength: Design.space2)
+            if case .unbound = standing {
+                Button(L10n.t("Bind Again", "重新绑定")) { run.bindAgain(local) }
+                    .glassAction(compact: true)
+                    .disabled(run.accountsPhase.isWorking)
+            } else {
+                Button(L10n.t("Unbind…", "解除绑定…"), role: .destructive) { confirmUnbind = local }
+                    .glassAction(compact: true)
+                    .disabled(run.accountsPhase.isWorking)
+            }
+        }
+        .padding(.horizontal, Design.space3)
+        .padding(.vertical, Design.space2)
+        .background(RoundedRectangle(cornerRadius: Design.radiusTile, style: .continuous).fill(Design.surfaceStrong))
+    }
+
+    @ViewBuilder
+    private func chip(_ standing: RunAccountStanding) -> some View {
+        switch standing {
+        case .notUploaded: StatusPill(text: L10n.t("Not uploaded yet", "尚未上传"), tone: .idle)
+        case .bound: StatusPill(text: L10n.t("Bound", "已绑定"), tone: .ready)
+        case .verified: StatusPill(text: L10n.t("Account verified", "账号已验证"), tone: .ready)
+        case .elsewhere: StatusPill(text: L10n.t("Owned by another Quota account", "归属另一个 Quota 账户"), tone: .attention)
+        case .unbound: StatusPill(text: L10n.t("Unbound", "已解除绑定"), tone: .idle)
+        }
+    }
+
+    private func detail(_ standing: RunAccountStanding, local: RunLocalAccount) -> String? {
+        switch standing {
+        case .notUploaded:
+            return nil
+        case let .bound(bound), let .verified(bound):
+            return L10n.t(bound.runs == 1 ? "1 run counts" : "\(bound.runs) runs count", "\(bound.runs) 轮成绩计入")
+        case .elsewhere:
+            return local.isEmail
+                ? L10n.t(
+                    "Runs from it don't count. Sign in to quota.run with this email to claim it.",
+                    "它的成绩不计入。用这个邮箱登录 quota.run 即可认领。")
+                : L10n.t("Runs from it don't count while another Quota account owns it.", "在另一个 Quota 账户名下时，它的成绩不计入。")
+        case .unbound:
+            return L10n.t("This Mac doesn't upload it.", "这台 Mac 不再上传它。")
+        }
     }
 }
 

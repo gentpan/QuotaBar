@@ -16,8 +16,19 @@ public struct RunAccountState: Codable, Equatable, Sendable {
     public var ranked: Bool
     public var me: RunMe?
     public var meFetchedAt: Date?
+    /// Provider account digests the owner unbound on this Mac: their readings
+    /// are not uploaded until bound again. Goes with the account.
+    public var excludedDigests: Set<String>
+    /// What `accounts/lookup` last said, by digest; a digest it did not know
+    /// is absent. Only digests and quota.run's own ids — never an email.
+    public var accountLookups: [String: RunProviderAccount]
+    public var accountsCheckedAt: Date?
 
-    public init(username: String, displayName: String, region: RunRegion, deviceId: String, joinedAt: Date, ranked: Bool, me: RunMe? = nil, meFetchedAt: Date? = nil) {
+    public init(
+        username: String, displayName: String, region: RunRegion, deviceId: String, joinedAt: Date, ranked: Bool,
+        me: RunMe? = nil, meFetchedAt: Date? = nil, excludedDigests: Set<String> = [],
+        accountLookups: [String: RunProviderAccount] = [:], accountsCheckedAt: Date? = nil)
+    {
         self.username = username
         self.displayName = displayName
         self.region = region
@@ -26,9 +37,14 @@ public struct RunAccountState: Codable, Equatable, Sendable {
         self.ranked = ranked
         self.me = me
         self.meFetchedAt = meFetchedAt
+        self.excludedDigests = excludedDigests
+        self.accountLookups = accountLookups
+        self.accountsCheckedAt = accountsCheckedAt
     }
 
-    private enum CodingKeys: String, CodingKey { case username, displayName, region, deviceId, joinedAt, ranked, me, meFetchedAt }
+    private enum CodingKeys: String, CodingKey {
+        case username, displayName, region, deviceId, joinedAt, ranked, me, meFetchedAt, excludedDigests, accountLookups, accountsCheckedAt
+    }
 
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
@@ -40,6 +56,9 @@ public struct RunAccountState: Codable, Equatable, Sendable {
         ranked = (try? c.decodeIfPresent(Bool.self, forKey: .ranked)) ?? false
         me = try? c.decodeIfPresent(RunMe.self, forKey: .me)
         meFetchedAt = c.lenientDate(.meFetchedAt)
+        excludedDigests = Set(((try? c.decodeIfPresent([String].self, forKey: .excludedDigests)) ?? []).map { $0.lowercased() })
+        accountLookups = (try? c.decodeIfPresent([String: RunProviderAccount].self, forKey: .accountLookups)) ?? [:]
+        accountsCheckedAt = c.lenientDate(.accountsCheckedAt)
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -52,6 +71,23 @@ public struct RunAccountState: Codable, Equatable, Sendable {
         try c.encode(ranked, forKey: .ranked)
         try c.encodeIfPresent(me, forKey: .me)
         try c.encodeIfPresent(meFetchedAt.map { Int($0.timeIntervalSince1970) }, forKey: .meFetchedAt)
+        try c.encode(excludedDigests.sorted(), forKey: .excludedDigests)
+        try c.encode(accountLookups, forKey: .accountLookups)
+        try c.encodeIfPresent(accountsCheckedAt.map { Int($0.timeIntervalSince1970) }, forKey: .accountsCheckedAt)
+    }
+
+    /// Where one of this Mac's provider accounts stands.
+    public func standing(of digest: String) -> RunAccountStanding {
+        RunAccountStanding.of(digest: digest, lookups: accountLookups, excluded: excludedDigests)
+    }
+
+    /// Folds a lookup in: known accounts are kept, and a digest quota.run
+    /// answered null for is dropped.
+    public mutating func apply(_ lookups: [RunAccountLookup], at date: Date) {
+        for entry in lookups {
+            accountLookups[entry.digest] = entry.account
+        }
+        accountsCheckedAt = date
     }
 
     /// `https://quota.run/@username`.
@@ -157,7 +193,7 @@ public struct RunUploadBatch: Equatable, Sendable {
     public var snapshots: [RunSnapshotPayload]
     public var activity: [RunActivityPayload]
     /// The cursors after this batch — past what it carries and past anything
-    /// skipped as too old for the server to take.
+    /// skipped: too old for the server, without an account digest, or unbound.
     public var sentSeq: Int
     public var activityMinute: Int
     /// More is waiting beyond the batch limits.
@@ -175,7 +211,16 @@ public enum RunUploadPlan {
     public static let maximumAhead = 300
     public static let minimumInterval: TimeInterval = 60
 
-    public static func batch(readings: [RunReading], activity: ActivityMinutes, state: RunUploadState, now: Date) -> RunUploadBatch {
+    /// Whether a reading goes up at all: it names a provider account the owner
+    /// has not unbound, and the server would still take it. Anything else is
+    /// stepped over for good — it will never become acceptable.
+    public static func isUploadable(_ reading: RunReading, excluded: Set<String>, clock: Int) -> Bool {
+        guard let digest = reading.accountDigest, !excluded.contains(digest) else { return false }
+        return reading.observedAt >= clock - maximumAge && reading.observedAt <= clock + maximumAhead
+            && RunMath.isInsideWindow(reading)
+    }
+
+    public static func batch(readings: [RunReading], activity: ActivityMinutes, state: RunUploadState, excluded: Set<String> = [], now: Date) -> RunUploadBatch {
         let clock = Int(now.timeIntervalSince1970)
         var cursor = state.sentSeq
         var snapshots: [RunSnapshotPayload] = []
@@ -186,10 +231,9 @@ public enum RunUploadPlan {
                 break
             }
             cursor = reading.seq
-            // Too old or from the future: the server would reject it, and
-            // it will never become acceptable. Step past it.
-            guard reading.observedAt >= clock - maximumAge, reading.observedAt <= clock + maximumAhead,
-                  RunMath.isInsideWindow(reading) else { continue }
+            // No account digest (it could never rank), an unbound account,
+            // too old or from the future: step past it.
+            guard isUploadable(reading, excluded: excluded, clock: clock) else { continue }
             snapshots.append(RunSnapshotPayload(reading))
         }
 

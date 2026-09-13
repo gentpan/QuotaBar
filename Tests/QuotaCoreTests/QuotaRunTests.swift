@@ -103,10 +103,30 @@ final class RunMathTests: XCTestCase {
         XCTAssertEqual(RunMath.runs(from: cursor).first?.tier, .verified)
     }
 
-    func testMissingDigestIsStandard() {
+    func testMissingDigestIsStandardAndUnbound() throws {
         var readings = clean
         readings[3].accountDigest = nil
-        XCTAssertEqual(RunMath.runs(from: readings) { _, _, _ in true }.first?.tier, .standard)
+        let run = try XCTUnwrap(RunMath.runs(from: readings) { _, _, _ in true }.first)
+        XCTAssertEqual(run.tier, .standard, "never likely verified")
+        XCTAssertTrue(run.unbound, "one reading without an account is enough")
+        XCTAssertFalse(run.wouldRank)
+        let bound = try XCTUnwrap(RunMath.runs(from: clean) { _, _, _ in true }.first)
+        XCTAssertFalse(bound.unbound)
+        XCTAssertTrue(bound.wouldRank)
+        // An unranked run is still a personal record.
+        XCTAssertEqual(RunMath.bests(from: [run]).first?.fastest?.id, run.id)
+    }
+
+    func testStoredRecordsFromBeforeUnboundStillDecode() throws {
+        var run = try XCTUnwrap(RunMath.runs(from: clean).first)
+        run.unbound = true
+        let data = try JSONEncoder().encode(run)
+        XCTAssertEqual(try JSONDecoder().decode(RunRecord.self, from: data), run)
+        var object = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        object.removeValue(forKey: "unbound")
+        let older = try JSONDecoder().decode(RunRecord.self, from: JSONSerialization.data(withJSONObject: object))
+        XCTAssertFalse(older.unbound)
+        XCTAssertEqual(older.secondsTo100, run.secondsTo100)
     }
 
     func testDropIsFlagged() {
@@ -191,6 +211,40 @@ final class RunLedgerTests: XCTestCase {
         XCTAssertEqual(RunAccountDigest.digest(provider: "codex", account: "  Dev@Example.COM\n"), expected)
         XCTAssertNotEqual(RunAccountDigest.digest(provider: "claude", account: "dev@example.com"), expected)
         XCTAssertNil(RunAccountDigest.digest(provider: "codex", account: "  "))
+    }
+
+    func testMaskedAccounts() {
+        XCTAssertEqual(RunAccountDigest.masked("Peter@Gmail.com"), "p***@gmail.com")
+        XCTAssertEqual(RunAccountDigest.masked("  a@b.co "), "a***@b.co")
+        XCTAssertEqual(RunAccountDigest.masked("8f2c61d0-4b7a-4e0f-9d2e-31c5a7b9e204"), "8f2c…")
+        XCTAssertEqual(RunAccountDigest.masked("user-42"), "u…", "a short id is not shown whole")
+        XCTAssertEqual(RunAccountDigest.masked("@handle"), "@…", "not an email without a local part")
+        XCTAssertEqual(RunAccountDigest.masked("name@"), "n…")
+
+        let email = try? XCTUnwrap(RunLocalAccount(provider: .claude, account: "Peter@Gmail.com"))
+        XCTAssertEqual(email?.masked, "p***@gmail.com")
+        XCTAssertEqual(email?.digest, RunAccountDigest.digest(provider: "claude", account: "peter@gmail.com"))
+        XCTAssertEqual(email?.isEmail, true)
+        let id = RunLocalAccount(provider: .codex, account: "8f2c61d0-4b7a-4e0f-9d2e-31c5a7b9e204")
+        XCTAssertEqual(id?.isEmail, false)
+        XCTAssertNil(RunLocalAccount(provider: .codex, account: " "))
+
+        XCTAssertTrue(RunAccountDigest.isDigest(RunAccountDigest.digest(provider: "codex", account: "x")!))
+        XCTAssertFalse(RunAccountDigest.isDigest("sample"))
+        XCTAssertFalse(RunAccountDigest.isDigest(String(repeating: "A", count: 64)))
+    }
+
+    func testLocalAccountsOnePerProviderInProviderOrder() throws {
+        let claude = try XCTUnwrap(RunLocalAccount(provider: .claude, account: "a@x.dev"))
+        let codex = try XCTUnwrap(RunLocalAccount(provider: .codex, account: "b@x.dev"))
+        let switched = try XCTUnwrap(RunLocalAccount(provider: .claude, account: "c@x.dev"))
+        var list = RunLocalAccount.merge([], with: claude)
+        list = RunLocalAccount.merge(list, with: codex)
+        list = RunLocalAccount.merge(list, with: switched)
+        XCTAssertEqual(list.count, 2)
+        XCTAssertEqual(list.first { $0.provider == "claude" }?.masked, "c***@x.dev")
+        let order = ProviderID.allCases.map(\.rawValue)
+        XCTAssertEqual(list.map(\.provider), order.filter { ["claude", "codex"].contains($0) })
     }
 
     func testReadingsFromASnapshot() {
@@ -562,6 +616,7 @@ final class QuotaRunClientTests: XCTestCase {
         defer { L10n.override = saved }
         let cases: [(Int, String)] = [
             (404, "connect_request_invalid"), (409, "key_registered"), (401, "not_signed_in"), (403, "needs_signup"), (409, "current_device"),
+            (404, "account_not_found"), (400, "invalid_digests"),
         ]
         for (status, code) in cases {
             let body = Data(#"{"error":"\#(code)","message":"Server sentence."}"#.utf8)
@@ -580,6 +635,96 @@ final class QuotaRunClientTests: XCTestCase {
         XCTAssertTrue(revoked.errorDescription?.contains("sign in again") ?? false)
     }
 
+    private func assertDeviceSigned(_ sent: (method: String, url: URL, headers: [String: String], body: Data?), method: String, path: String, file: StaticString = #filePath, line: UInt = #line) throws {
+        XCTAssertEqual(sent.method, method, file: file, line: line)
+        XCTAssertEqual(sent.url.path, path, file: file, line: line)
+        XCTAssertEqual(sent.headers["X-Quota-Device"], "dev_1", file: file, line: line)
+        let canonical = [
+            "quota-run-v1", method, path, sent.headers["X-Quota-Timestamp"]!, sent.headers["X-Quota-Nonce"]!, RunCanonical.bodyHash(sent.body),
+        ].joined(separator: "\n")
+        let signature = try P256.Signing.ECDSASignature(derRepresentation: try XCTUnwrap(Base64URL.decode(try XCTUnwrap(sent.headers["X-Quota-Signature"]))))
+        XCTAssertTrue(try P256.Signing.PublicKey(x963Representation: signer.publicKeyX963).isValidSignature(signature, for: Data(canonical.utf8)), file: file, line: line)
+    }
+
+    func testLookupAccounts() async throws {
+        let first = RunAccountDigest.digest(provider: "codex", account: "a@example.com")!
+        let second = RunAccountDigest.digest(provider: "claude", account: "b@example.com")!
+        let recorder = Recorder(200, #"""
+        {"accounts":[
+          {"digest":"\#(first)","account":{"id":"0123456789abcdef","provider":"codex","firstSeenAt":1789000000,"lastSeenAt":"2026-09-13T10:00:00Z","status":"owned","verifiedByEmail":true,"runs":4}},
+          {"digest":"\#(second)","account":null},
+          {"account":{"id":"x"}}
+        ]}
+        """#)
+        let answers = try await client(transport: recorder.transport).lookupAccounts(digests: [first, first.uppercased(), second, "not-a-digest"])
+        XCTAssertEqual(answers.count, 2, "a malformed entry is dropped, not the answer")
+        XCTAssertEqual(answers[0].digest, first)
+        XCTAssertEqual(answers[0].account?.id, "0123456789abcdef")
+        XCTAssertEqual(answers[0].account?.status, .owned)
+        XCTAssertEqual(answers[0].account?.verifiedByEmail, true)
+        XCTAssertEqual(answers[0].account?.runs, 4)
+        XCTAssertEqual(answers[0].account?.firstSeenAt, Date(timeIntervalSince1970: 1_789_000_000))
+        XCTAssertEqual(answers[0].account?.lastSeenAt, Dates.parseISO("2026-09-13T10:00:00Z"))
+        XCTAssertNil(answers[1].account)
+
+        XCTAssertEqual(recorder.requests.count, 1)
+        let sent = try XCTUnwrap(recorder.requests.first)
+        try assertDeviceSigned(sent, method: "POST", path: "/api/v1/accounts/lookup")
+        let object = try XCTUnwrap(JSONSerialization.jsonObject(with: try XCTUnwrap(sent.body)) as? [String: Any])
+        XCTAssertEqual(Set(object.keys), ["digests"], "digests only, nothing else about the account")
+        XCTAssertEqual(object["digests"] as? [String], [first, second], "deduplicated, lower-case, well-formed")
+
+        // More than the contract's 20: several requests.
+        let many = (0..<45).map { RunAccountDigest.digest(provider: "codex", account: "u\($0)@example.com")! }
+        let chunks = Recorder(200, #"{"accounts":[]}"#)
+        _ = try await client(transport: chunks.transport).lookupAccounts(digests: many)
+        let sizes = try chunks.requests.map { request -> Int in
+            let body = try XCTUnwrap(JSONSerialization.jsonObject(with: try XCTUnwrap(request.body)) as? [String: Any])
+            return (body["digests"] as? [String])?.count ?? 0
+        }
+        XCTAssertEqual(sizes, [20, 20, 5])
+
+        // Nothing to ask: no request.
+        let none = Recorder(200, #"{"accounts":[]}"#)
+        _ = try await client(transport: none.transport).lookupAccounts(digests: [])
+        XCTAssertTrue(none.requests.isEmpty)
+    }
+
+    func testUnbindAccount() async throws {
+        let recorder = Recorder(200, #"{"providerAccounts":[{"id":"fedcba9876543210","provider":"claude","status":"elsewhere","runs":0}]}"#)
+        let remaining = try await client(transport: recorder.transport).unbindAccount(id: "0123456789abcdef")
+        XCTAssertEqual(remaining, [RunProviderAccount(id: "fedcba9876543210", provider: "claude", status: .elsewhere)])
+        let sent = try XCTUnwrap(recorder.requests.first)
+        try assertDeviceSigned(sent, method: "DELETE", path: "/api/v1/accounts/0123456789abcdef")
+        XCTAssertNil(sent.body)
+
+        let escaped = Recorder(200, #"{"providerAccounts":[]}"#)
+        _ = try await client(transport: escaped.transport).unbindAccount(id: "a/b")
+        XCTAssertEqual(escaped.requests.first?.url.absoluteString, "https://quota.run/api/v1/accounts/a%2Fb")
+
+        do {
+            _ = try await client(transport: Recorder(404, #"{"error":"account_not_found","message":"No such account."}"#).transport).unbindAccount(id: "0123456789abcdef")
+            XCTFail("expected an error")
+        } catch let error as QuotaRunError {
+            XCTAssertEqual(error.status, 404)
+            XCTAssertEqual(error.code, "account_not_found")
+            XCTAssertFalse(error.isAuthFailure)
+        }
+    }
+
+    func testProviderAccountDecodesLeniently() throws {
+        let account = try JSONDecoder().decode(RunProviderAccount.self, from: Data(#"{"id":42,"status":"disputed","runs":-3}"#.utf8))
+        XCTAssertEqual(account.id, "42")
+        XCTAssertEqual(account.provider, "")
+        XCTAssertEqual(account.status, .elsewhere, "an unknown status is no claim of ownership")
+        XCTAssertFalse(account.verifiedByEmail)
+        XCTAssertEqual(account.runs, 0)
+        XCTAssertNil(account.firstSeenAt)
+        let plain = try JSONDecoder().decode(RunProviderAccount.self, from: Data(#"{"id":"a"}"#.utf8))
+        XCTAssertEqual(plain.status, .owned)
+        XCTAssertEqual(try JSONDecoder().decode(RunProviderAccount.self, from: JSONEncoder().encode(account)), account)
+    }
+
     func testRankedChangeCarriesTheCooldown() async throws {
         let recorder = Recorder(200, #"{"devices":[{"deviceId":"d1","name":"Studio","ranked":true,"current":true}],"rankedChangeAvailableAt":1790604800}"#)
         let change = try await client(transport: recorder.transport).setRanked(deviceId: "d1")
@@ -594,6 +739,7 @@ final class QuotaRunClientTests: XCTestCase {
         {"user":{"username":"peter","displayName":"Peter","bio":null,"region":"mars","links":{"website":"https://a.dev","github":null},"joinedAt":"2026-09-01T10:00:00Z"},
          "devices":[{"deviceId":"d1","name":"Studio","ranked":true,"lastSeenAt":1789420000000,"current":true,"appVersion":"0.6.0"},{"deviceId":"d2","name":"Air","ranked":false,"lastSeenAt":null,"current":false,"appVersion":null}],
          "identities":[{"id":"i1","provider":"github","email":"peter@example.com","name":"gentpan","linkedAt":1789000000},{"id":7,"provider":"google","email":"peter@example.com","name":"Peter Pan"},{"id":"i3","provider":"email","email":"peter@example.com","name":null}],
+         "providerAccounts":[{"id":"0123456789abcdef","provider":"codex","firstSeenAt":1789000000,"lastSeenAt":1789420000,"status":"owned","verifiedByEmail":true,"runs":3},{"id":"fedcba9876543210","provider":"cursor","status":"elsewhere","verifiedByEmail":false,"runs":0}],
          "rankedChangeAvailableAt":1790000000,"lastUploadAt":null,"projects":[{"name":"QuotaBar","url":"https://quota.bar","description":"Limits","builtWith":["codex","claude"]}]}
         """#
         let me = try await client(transport: Recorder(200, json).transport).me()
@@ -609,6 +755,8 @@ final class QuotaRunClientTests: XCTestCase {
         XCTAssertEqual(me.devices.map(\.appVersion), ["0.6.0", nil])
         XCTAssertEqual(me.identities.map(\.id), ["i1", "7", "i3"])
         XCTAssertEqual(me.identities.first?.linkedAt, Date(timeIntervalSince1970: 1_789_000_000))
+        XCTAssertEqual(me.providerAccounts.map(\.id), ["0123456789abcdef", "fedcba9876543210"])
+        XCTAssertEqual(me.providerAccounts.last?.status, .elsewhere)
         let saved = L10n.override
         defer { L10n.override = saved }
         L10n.override = .en
@@ -619,6 +767,7 @@ final class QuotaRunClientTests: XCTestCase {
         // A server from before sign-in methods: none, not a failure.
         let older = try await client(transport: Recorder(200, #"{"user":{"username":"peter"},"devices":[{"deviceId":"d1"}]}"#).transport).me()
         XCTAssertEqual(older.identities, [])
+        XCTAssertEqual(older.providerAccounts, [], "a server from before provider accounts")
         XCTAssertNil(older.devices.first?.appVersion)
 
         // And back through the state file.
@@ -687,8 +836,10 @@ final class RunUploadTests: XCTestCase {
     private let now = Date(timeIntervalSince1970: 1_790_000_000)
     private var clock: Int { Int(now.timeIntervalSince1970) }
 
-    private func reading(seq: Int, observed: Int) -> RunReading {
-        RunReading(seq: seq, provider: "codex", windowKey: "604800:", windowTitle: "Weekly window", windowSeconds: 604_800, usedPercent: 1, resetsAt: nil, observedAt: observed)
+    private let digest = RunAccountDigest.digest(provider: "codex", account: "dev@example.com")!
+
+    private func reading(seq: Int, observed: Int, digest: String? = nil) -> RunReading {
+        RunReading(seq: seq, provider: "codex", accountDigest: digest ?? self.digest, windowKey: "604800:", windowTitle: "Weekly window", windowSeconds: 604_800, usedPercent: 1, resetsAt: nil, observedAt: observed)
     }
 
     func testCursorSkipsWhatTheServerWouldRefuse() {
@@ -707,7 +858,7 @@ final class RunUploadTests: XCTestCase {
     }
 
     func testReadingsOutsideTheirWindowStayHome() {
-        let window = RunReading(seq: 1, provider: "claude", windowKey: "18000:", windowTitle: "5-hour window", windowSeconds: 18_000, usedPercent: 3, resetsAt: clock + 1_000, observedAt: clock - 100)
+        let window = RunReading(seq: 1, provider: "claude", accountDigest: digest, windowKey: "18000:", windowTitle: "5-hour window", windowSeconds: 18_000, usedPercent: 3, resetsAt: clock + 1_000, observedAt: clock - 100)
         var stale = window
         stale.seq = 2
         stale.resetsAt = clock - 500  // last period's reset, reported after the roll-over
@@ -721,6 +872,72 @@ final class RunUploadTests: XCTestCase {
         XCTAssertEqual(batch.snapshots.count, 2)
         XCTAssertEqual(batch.sentSeq, 3)
         XCTAssertEqual(RunMath.runs(from: [stale]).count, 0, "nor does it count locally")
+    }
+
+    func testReadingsWithoutAnAccountOrUnboundNeverGo() {
+        let other = RunAccountDigest.digest(provider: "codex", account: "other@example.com")!
+        var anonymous = reading(seq: 2, observed: clock - 50)
+        anonymous.accountDigest = nil
+        let readings = [
+            reading(seq: 1, observed: clock - 60),
+            anonymous,
+            reading(seq: 3, observed: clock - 40, digest: other),
+            reading(seq: 4, observed: clock - 30),
+        ]
+        let batch = RunUploadPlan.batch(readings: readings, activity: ActivityMinutes(), state: RunUploadState(), excluded: [other], now: now)
+        XCTAssertEqual(batch.snapshots.map(\.observedAt), [clock - 60, clock - 30])
+        XCTAssertTrue(batch.snapshots.allSatisfy { $0.accountDigest == digest })
+        XCTAssertEqual(batch.sentSeq, 4, "skipped readings do not hold the cursor back")
+        XCTAssertFalse(batch.hasMore)
+
+        // Only skipped readings waiting: an empty batch whose cursor still moves.
+        var state = RunUploadState()
+        state.sentSeq = 1
+        let skipped = RunUploadPlan.batch(readings: Array(readings[1...2]), activity: ActivityMinutes(), state: state, excluded: [other], now: now)
+        XCTAssertTrue(skipped.isEmpty)
+        XCTAssertEqual(skipped.sentSeq, 3)
+
+        // Bound again: the next readings go.
+        let again = RunUploadPlan.batch(readings: [reading(seq: 5, observed: clock - 10, digest: other)], activity: ActivityMinutes(), state: state, excluded: [], now: now)
+        XCTAssertEqual(again.snapshots.count, 1)
+
+        XCTAssertFalse(RunUploadPlan.isUploadable(anonymous, excluded: [], clock: clock))
+        XCTAssertFalse(RunUploadPlan.isUploadable(readings[2], excluded: [other], clock: clock))
+        XCTAssertTrue(RunUploadPlan.isUploadable(readings[2], excluded: [], clock: clock))
+    }
+
+    func testSkippedReadingsDoNotCountTowardTheLimit() {
+        var readings = (1...300).map { index -> RunReading in
+            var skipped = reading(seq: index, observed: clock - 1_000 + index)
+            skipped.accountDigest = nil
+            return skipped
+        }
+        readings += (301...900).map { reading(seq: $0, observed: clock - 1_000 + $0) }
+        let batch = RunUploadPlan.batch(readings: readings, activity: ActivityMinutes(), state: RunUploadState(), now: now)
+        XCTAssertEqual(batch.snapshots.count, 500)
+        XCTAssertEqual(batch.sentSeq, 800)
+        XCTAssertTrue(batch.hasMore)
+    }
+
+    func testAccountStandings() {
+        let bound = RunProviderAccount(id: "a1", provider: "codex", runs: 3)
+        let verified = RunProviderAccount(id: "a2", provider: "claude", verifiedByEmail: true)
+        let elsewhere = RunProviderAccount(id: "a3", provider: "cursor", status: .elsewhere, verifiedByEmail: true)
+        let lookups = ["b": bound, "v": verified, "e": elsewhere]
+        XCTAssertEqual(RunAccountStanding.of(digest: "b", lookups: lookups, excluded: []), .bound(bound))
+        XCTAssertEqual(RunAccountStanding.of(digest: "v", lookups: lookups, excluded: []), .verified(verified))
+        XCTAssertEqual(RunAccountStanding.of(digest: "e", lookups: lookups, excluded: []), .elsewhere(elsewhere), "owned elsewhere wins over the flag")
+        XCTAssertEqual(RunAccountStanding.of(digest: "n", lookups: lookups, excluded: []), .notUploaded)
+        XCTAssertEqual(RunAccountStanding.of(digest: "b", lookups: lookups, excluded: ["b"]), .unbound)
+        XCTAssertEqual(RunAccountStanding.of(digest: "b", lookups: lookups, excluded: []).account?.id, "a1")
+        XCTAssertNil(RunAccountStanding.unbound.account)
+
+        var state = RunAccountState(username: "p", displayName: "P", region: .global, deviceId: "d1", joinedAt: Date(timeIntervalSince1970: 0), ranked: true)
+        state.accountLookups = ["b": bound, "gone": verified]
+        state.apply([RunAccountLookup(digest: "gone", account: nil), RunAccountLookup(digest: "e", account: elsewhere)], at: now)
+        XCTAssertEqual(state.accountLookups, ["b": bound, "e": elsewhere], "a null answer drops what was known")
+        XCTAssertEqual(state.accountsCheckedAt, now)
+        XCTAssertEqual(state.standing(of: "gone"), .notUploaded)
     }
 
     func testSnapshotLimit() {
@@ -766,8 +983,16 @@ final class RunUploadTests: XCTestCase {
                                        me: RunMe(user: RunUser(username: "peter", displayName: "Peter"), devices: [RunDevice(deviceId: "d1", name: "Studio", ranked: true, current: true)]))
         file.upload.sentSeq = 42
         file.upload.retryAt = Date(timeIntervalSince1970: 1_790_000_000)
+        file.account?.excludedDigests = ["b1", "a2"]
+        file.account?.accountLookups = ["c3": RunProviderAccount(id: "0123456789abcdef", provider: "codex", firstSeenAt: Date(timeIntervalSince1970: 1_789_000_000), status: .owned, verifiedByEmail: true, runs: 2)]
+        file.account?.accountsCheckedAt = Date(timeIntervalSince1970: 1_789_500_000)
         file.save(to: url)
         XCTAssertEqual(RunStateFile.load(from: url), file)
+        XCTAssertTrue(String(decoding: try Data(contentsOf: url), as: UTF8.self).contains(#""excludedDigests":["a2","b1"]"#))
+        // A state file from before the exclusion list: an empty one.
+        try Data(#"{"account":{"username":"x","deviceId":"d1"}}"#.utf8).write(to: url)
+        XCTAssertEqual(RunStateFile.load(from: url).account?.excludedDigests, [])
+        XCTAssertEqual(RunStateFile.load(from: url).account?.accountLookups, [:])
         XCTAssertEqual(file.account?.profileURL.absoluteString, "https://quota.run/@peter")
         try Data(#"{"account":{"username":"x"},"upload":{"sentSeq":"many","failures":2}}"#.utf8).write(to: url)
         let damaged = RunStateFile.load(from: url)
