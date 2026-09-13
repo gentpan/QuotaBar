@@ -182,6 +182,63 @@ private struct CardHeightsKey: PreferenceKey {
     }
 }
 
+/// The AppKit scroll view behind a SwiftUI ScrollView, for reading how far
+/// it has scrolled and scrolling it from code.
+@MainActor
+final class ScrollViewHandle {
+    weak var scrollView: NSScrollView?
+
+    /// Distance scrolled from the top.
+    var offset: CGFloat {
+        guard let clip = scrollView?.contentView else { return 0 }
+        if clip.isFlipped { return clip.bounds.origin.y }
+        return (clip.documentView?.frame.height ?? 0) - clip.bounds.maxY
+    }
+
+    /// Scrolls by `delta` points (positive: further down the content),
+    /// clamped to the content. False when it was already at that end.
+    @discardableResult
+    func scroll(by delta: CGFloat) -> Bool {
+        guard let scrollView, let document = scrollView.documentView else { return false }
+        let clip = scrollView.contentView
+        let maxOffset = max(0, document.frame.height - clip.bounds.height)
+        let target = min(max(offset + delta, 0), maxOffset)
+        guard abs(target - offset) > 0.1 else { return false }
+        let y = clip.isFlipped ? target : maxOffset - target
+        clip.scroll(to: NSPoint(x: clip.bounds.origin.x, y: y))
+        scrollView.reflectScrolledClipView(clip)
+        return true
+    }
+
+    struct Reader: NSViewRepresentable {
+        let handle: ScrollViewHandle
+
+        func makeNSView(context: Context) -> Probe {
+            let probe = Probe()
+            probe.handle = handle
+            return probe
+        }
+
+        func updateNSView(_ probe: Probe, context: Context) {
+            probe.handle = handle
+            probe.attach()
+        }
+
+        final class Probe: NSView {
+            weak var handle: ScrollViewHandle?
+
+            override func viewDidMoveToWindow() {
+                super.viewDidMoveToWindow()
+                attach()
+            }
+
+            func attach() {
+                MainActor.assumeIsolated { handle?.scrollView = enclosingScrollView }
+            }
+        }
+    }
+}
+
 private struct PanelHeightKey: PreferenceKey {
     static var defaultValue: CGFloat = 0
     static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = max(value, nextValue()) }
@@ -207,12 +264,28 @@ struct MenuPanelView: View {
     /// *or is cancelled* — released outside the panel, say — which `onEnded`
     /// alone does not report, and the card was left lifted with the order unsaved.
     @GestureState private var holdingCard = false
+    /// Scrolling while a card is held near the top or bottom of the list:
+    /// the scroll view, its visible frame, how far it had scrolled when the
+    /// drag began, the drag's last translation, and the timer that scrolls.
+    @State private var scroller = ScrollViewHandle()
+    @State private var viewport: CGRect = .zero
+    @State private var dragScrollStart: CGFloat = 0
+    @State private var dragTranslation: CGFloat = 0
+    @State private var dragPointerY: CGFloat = 0
+    @State private var autoscroll: Timer?
 
     var body: some View {
         VStack(spacing: 0) {
             if scrollable {
-                ScrollView { cards }
+                ScrollView {
+                    cards.background(ScrollViewHandle.Reader(handle: scroller))
+                }
                     .scrollIndicators(.never)
+                    .background(GeometryReader { proxy in
+                        Color.clear
+                            .onAppear { viewport = proxy.frame(in: .global) }
+                            .onChange(of: proxy.frame(in: .global)) { _, frame in viewport = frame }
+                    })
                     .onPreferenceChange(PanelHeightKey.self) { height in
                         scrollHeight = height
                         MenuPanelController.shared.setContentHeight(height + footerHeight)
@@ -308,33 +381,66 @@ struct MenuPanelView: View {
                     dragging = id
                     dragOrder = store.panelProviders
                     dragShift = 0
+                    dragScrollStart = scroller.offset
+                    startAutoscroll()
                 }
-                guard dragging == id, var order = dragOrder, let index = order.firstIndex(of: id) else { return }
-                var offset = value.translation.height - dragShift
-                if offset > 0, index + 1 < order.count {
-                    let step = (cardHeights[order[index + 1]] ?? 0) + cardSpacing
-                    if step > cardSpacing, offset > step / 2 {
-                        order.swapAt(index, index + 1)
-                        dragShift += step
-                        offset -= step
-                        withAnimation(Motion.animation(Motion.spring)) { dragOrder = order }
-                    }
-                } else if offset < 0, index > 0 {
-                    let step = (cardHeights[order[index - 1]] ?? 0) + cardSpacing
-                    if step > cardSpacing, -offset > step / 2 {
-                        order.swapAt(index, index - 1)
-                        dragShift -= step
-                        offset += step
-                        withAnimation(Motion.animation(Motion.spring)) { dragOrder = order }
-                    }
-                }
-                dragOffset = offset
+                guard dragging == id else { return }
+                dragTranslation = value.translation.height
+                dragPointerY = value.location.y
+                follow()
             }
             .onEnded { _ in finishReorder() }
     }
 
+    /// Where the lifted card goes for the pointer's travel plus however far
+    /// the list has scrolled under it; neighbours it passes halfway over
+    /// trade places with it.
+    private func follow() {
+        guard let id = dragging, var order = dragOrder, let index = order.firstIndex(of: id) else { return }
+        var offset = dragTranslation + (scroller.offset - dragScrollStart) - dragShift
+        if offset > 0, index + 1 < order.count {
+            let step = (cardHeights[order[index + 1]] ?? 0) + cardSpacing
+            if step > cardSpacing, offset > step / 2 {
+                order.swapAt(index, index + 1)
+                dragShift += step
+                offset -= step
+                withAnimation(Motion.animation(Motion.spring)) { dragOrder = order }
+            }
+        } else if offset < 0, index > 0 {
+            let step = (cardHeights[order[index - 1]] ?? 0) + cardSpacing
+            if step > cardSpacing, -offset > step / 2 {
+                order.swapAt(index, index - 1)
+                dragShift -= step
+                offset += step
+                withAnimation(Motion.animation(Motion.spring)) { dragOrder = order }
+            }
+        }
+        dragOffset = offset
+    }
+
+    /// Held within 40pt of the list's top or bottom edge, the list scrolls
+    /// that way — faster the closer the pointer — and the card keeps up.
+    private func startAutoscroll() {
+        autoscroll?.invalidate()
+        let edge: CGFloat = 40
+        autoscroll = Timer.scheduledTimer(withTimeInterval: 1.0 / 60, repeats: true) { _ in
+            MainActor.assumeIsolated {
+                guard dragging != nil, viewport.height > edge * 2 else { return }
+                let fromTop = dragPointerY - viewport.minY
+                let fromBottom = viewport.maxY - dragPointerY
+                var step: CGFloat = 0
+                if fromTop < edge { step = -(edge - max(fromTop, 0)) / 3 }
+                if fromBottom < edge { step = (edge - max(fromBottom, 0)) / 3 }
+                guard step != 0, scroller.scroll(by: step) else { return }
+                follow()
+            }
+        }
+    }
+
     /// Settles the lifted card into its slot and saves the order.
     private func finishReorder() {
+        autoscroll?.invalidate()
+        autoscroll = nil
         guard dragging != nil else { return }
         if let order = dragOrder { store.arrangeProviders(order) }
         withAnimation(Motion.animation(Motion.spring)) {

@@ -50,10 +50,10 @@ English and Simplified Chinese and follows the system language unless you pick o
 <!-- changelog:start -->
 <!-- Generated from CHANGELOG.en.md by Scripts/sync_changelog.py. Do not edit by hand. -->
 
-Latest release **0.5.3** (2026-09-13) · **12** changes in development · [full changelog](CHANGELOG.en.md)
+Latest release **0.5.3** (2026-09-13) · **13** changes in development · [full changelog](CHANGELOG.en.md)
 
 <details open>
-<summary><b>2026-09-13</b> · Unreleased · 6 added · 4 style · 2 fixed</summary>
+<summary><b>2026-09-13</b> · Unreleased · 6 added · 5 style · 2 fixed</summary>
 
 **Added**
 
@@ -70,6 +70,7 @@ Latest release **0.5.3** (2026-09-13) · **12** changes in development · [full 
 - Each Settings section's title and its explanation now share one line, on a common baseline, instead of stacking; in a narrow window the explanation is cut short first, with the full text on hover.
 - "Test connection" in a provider row's header is a small chip with an icon, about as tall as the status pills, instead of a 30 pt button that made an open row taller than a closed one; in the open row, the service status text now lines up with its label, where it sat about 7 pt higher.
 - Provider cards show the limits that fit the plan: Codex shows the plan's own limits — the 5-hour and the week on plans that have a 5-hour limit, the week alone on Pro, which has none — with GPT-5.3-Codex-Spark's limits under the disclosure arrow; Claude shows the 5-hour, the week and Fable. The window the ring follows is always shown. Other providers are unchanged.
+- Dragging a provider card near the top or bottom of the panel's list scrolls the list, faster nearer the edge, with the card staying under the pointer, so a card can reach either end of a long list.
 
 **Fixed**
 
