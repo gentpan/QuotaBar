@@ -12,10 +12,11 @@ From CHANGELOG.md (Chinese), CHANGELOG.en.md (English) and `git log`:
   [[English||中文]] — and becomes web/index.html and web/zh/index.html, with the
   recent-updates block and the provider strip filled in; web/changelog.html and
   web/zh/changelog.html are the whole log as a page; site/leaderboard.html and
-  site/u.html (Quota Run's leaderboard and public profile on quota.run, drawn by web-run/run.js
-  from the public API) and site/login.html, site/account.html, site/connect.html (sign-in,
-  account and Mac connection, drawn by web-run/account.js) become pairs of pages in web-run/
-  under the same rules;
+  site/u.html (Quota Run's leaderboard and public profile on quota.run, drawn by web-run/board.js
+  and web-run/profile.js from the public API), site/rules.html, and site/login.html,
+  site/account.html, site/connect.html (sign-in, account and Mac connection, drawn by
+  web-run/account.js) become pairs of pages in web-run/ under the same rules, each with the
+  shared header and footer from site/run-nav.html and site/run-footer.html;
 - Assets/readme/activity.svg and activity.zh.svg, 26 weeks of commits;
 - the provider strip, provider count and download links, from ProviderID in
   Sources/QuotaCore/Models.swift, the app's logos and the latest release.
@@ -497,7 +498,7 @@ def png_tone(path):
         if kind == b"IHDR":
             width, height, depth, colour, _, _, interlace = struct.unpack(">IIBBBBB", chunk)
             if depth != 8 or interlace or colour not in (2, 6):
-                return False, False
+                return False, False, False
         elif kind == b"IDAT":
             idat += chunk
         pos += 12 + length
@@ -537,9 +538,11 @@ def png_tone(path):
             if hi and (hi - lo) / hi > 0.18:
                 coloured += 1
     if not sampled:
-        return False, False
+        return False, False, False
     mono = coloured / sampled <= 0.05
-    return mono, not mono and brightness / sampled < 64
+    # The third value: a monochrome mark drawn as a white glyph (Cursor's, Grok's),
+    # which quota.run's light pages invert.
+    return mono, not mono and brightness / sampled < 64, mono and brightness / sampled > 160
 
 
 def copy_logos():
@@ -558,7 +561,7 @@ def copy_logos():
         copy = target / f"{raw}.png"
         if not copy.exists() or copy.read_bytes() != source.read_bytes():
             shutil.copyfile(source, copy)
-        mono, dark = png_tone(source)
+        mono, dark, _ = png_tone(source)
         found.append((raw, en, zh, " is-mono" if mono else " is-dark" if dark else ""))
     return found
 
@@ -592,16 +595,22 @@ def site_providers(logos, count, lang, v):
     ])
 
 
-# What quota.run borrows from the product site: the stylesheet, the theme and
-# language script, the font, icons and logos. Copied, not linked, so each site
-# stands on its own; the copies are ignored by git (see .gitignore).
-RUN_SHARED = ["styles.css", "app.js", "favicon.ico", "assets/icon.png", "assets/apple-touch-icon.png",
-              "assets/og.jpg", "assets/og-zh.jpg", "assets/wallpaper-dark-1280.webp", "assets/wallpaper-light-1280.webp",
-              "assets/fonts", "assets/logos"]
+# What quota.run borrows from the product site: the font, icons, favicon and share
+# images. Copied, not linked, so each site stands on its own; the copies are ignored
+# by git (see .gitignore). quota.run is a light site with its own stylesheets, so the
+# product site's dark styles.css and its app.js are not copied.
+RUN_SHARED = ["favicon.ico", "assets/icon.png", "assets/apple-touch-icon.png",
+              "assets/og.jpg", "assets/og-zh.jpg", "assets/fonts"]
+# Copies and files from before the light redesign, removed so a deploy doesn't publish them.
+RUN_STALE = ["styles.css", "app.js", "run.css", "run.js",
+             "assets/wallpaper-dark-1280.webp", "assets/wallpaper-light-1280.webp"]
+# The pages of quota.run: template in site/ → page in web-run/ and web-run/zh/.
+RUN_PAGES = (("leaderboard.html", "index.html"), ("u.html", "u.html"), ("rules.html", "rules.html"),
+             ("login.html", "login.html"), ("account.html", "account.html"), ("connect.html", "connect.html"))
 
 
 def copy_run_assets():
-    """Copies RUN_SHARED from web/ into web-run/; returns the paths that changed."""
+    """Copies RUN_SHARED from web/ into web-run/ and drops RUN_STALE; returns the paths that changed."""
     changed = []
     for name in RUN_SHARED:
         source = ROOT / "web" / name
@@ -614,13 +623,53 @@ def copy_run_assets():
             target.parent.mkdir(parents=True, exist_ok=True)
             target.write_bytes(data)
             changed.append(str(target.relative_to(ROOT)))
+    for name in RUN_STALE:
+        stale = ROOT / "web-run" / name
+        if stale.exists():
+            stale.unlink()
+            changed.append(f"-{stale.relative_to(ROOT)}")
     return changed[:1] + ([f"…{len(changed) - 1} more"] if len(changed) > 1 else [])
 
 
+def copy_run_logos():
+    """Copies the app's logos for light surfaces into web-run/assets/logos (never the
+    -dark variants the product site uses); (raw id, en, zh, tone) for those that exist.
+    A mark drawn only as a white glyph (Cursor's, Grok's) gets the tone " is-light" and
+    the site inverts it with CSS; the files themselves are copied untouched."""
+    logos = ROOT / "Sources" / "QuotaBar" / "Resources" / "logos"
+    target = ROOT / "web-run" / "assets" / "logos"
+    target.mkdir(parents=True, exist_ok=True)
+    found = []
+    for raw, en, zh in providers():
+        source = logos / f"{raw}.png"
+        if not source.exists():
+            continue
+        copy = target / f"{raw}.png"
+        if not copy.exists() or copy.read_bytes() != source.read_bytes():
+            shutil.copyfile(source, copy)
+        _, _, light = png_tone(source)
+        found.append((raw, en, zh, " is-light" if light else ""))
+    return found
+
+
 def run_providers(logos):
-    """Provider names and logo tones for web/run.js, as JSON that is safe inside <script>."""
+    """Provider names and logo tones for web-run/common.js, as JSON that is safe inside <script>."""
     table = {raw: {"en": en, "zh": zh, "tone": tone.strip().removeprefix("is-")} for raw, en, zh, tone in logos}
     return json.dumps(table, ensure_ascii=False, separators=(",", ":")).replace("<", "\\u003c")
+
+
+def run_page_values(name, lang, values):
+    """Per-page values for the shared header: which link is current, and where the
+    language switch points (Caddy serves /rules from rules.html; profile.js gives the
+    profile its /@username address)."""
+    other = LANGS[lang]["other_url"]
+    page = {"index.html": "", "u.html": "u.html"}.get(name, name.removesuffix(".html"))
+    current = ' aria-current="page"'
+    return dict(values,
+                lang_href=other + page,
+                cur_board=current if name == "index.html" else "",
+                cur_rules=current if name == "rules.html" else "",
+                cur_login=current if name == "login.html" else "")
 
 
 def write_if_changed(path, content):
@@ -659,13 +708,14 @@ def main():
     count = len(providers())
     # Quota Run lives on its own site, quota.run (web-run/): the leaderboard is
     # its home page, u.html is the public profile Caddy serves for /@username,
-    # and login, account and connect are the signed-in pages Caddy serves for
-    # /login, /account and /connect (drawn by web-run/account.js).
-    run_pages = {out: (ROOT / "site" / name).read_text(encoding="utf-8")
-                 for name, out in (("leaderboard.html", "index.html"), ("u.html", "u.html"),
-                                   ("login.html", "login.html"), ("account.html", "account.html"),
-                                   ("connect.html", "connect.html"))}
+    # rules explains how it works, and login, account and connect are the
+    # signed-in pages Caddy serves for /login, /account and /connect (drawn by
+    # web-run/account.js). Every page gets the same header and footer.
+    run_pages = {out: (name, (ROOT / "site" / name).read_text(encoding="utf-8")) for name, out in RUN_PAGES}
+    run_nav = (ROOT / "site" / "run-nav.html").read_text(encoding="utf-8")
+    run_footer = (ROOT / "site" / "run-footer.html").read_text(encoding="utf-8")
     changed += copy_run_assets()
+    run_table = run_providers(copy_run_logos())
     latest = latest_release(releases_zh)
     version = latest["version"] if latest else "0.0.0"
     for lang, intro, releases in (("en", intro_en, releases_en), ("zh", intro_zh, releases_zh)):
@@ -684,9 +734,11 @@ def main():
         out = ROOT / "web" / info["dir"] / "changelog.html"
         if write_if_changed(out, site_page(intro, releases, lang, f"?v={stamp}", analytics.group(0) if analytics else None)):
             changed.append(str(out.relative_to(ROOT)))
-        for name, source in run_pages.items():
-            template_name = "leaderboard.html" if name == "index.html" else name
-            page = render_template(source, lang, dict(values, run_providers=run_providers(logos)), f"site/{template_name}")
+        for name, (template_name, source) in run_pages.items():
+            page_values = run_page_values(name, lang, dict(values, run_providers=run_table))
+            page_values["nav"] = render_template(run_nav, lang, page_values, "site/run-nav.html")
+            page_values["footer"] = render_template(run_footer, lang, page_values, "site/run-footer.html")
+            page = render_template(source, lang, page_values, f"site/{template_name}")
             note = (f"<!-- Built from site/{template_name} by Scripts/sync_changelog.py: edit the template, not this file. -->"
                     if lang == "en" else f"<!-- 由 Scripts/sync_changelog.py 从 site/{template_name} 生成：改模板，不要改这个文件。 -->")
             page = page.replace("<!doctype html>\n", f"<!doctype html>\n{note}\n", 1)

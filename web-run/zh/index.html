@@ -6,7 +6,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Quota Run 排行榜 — 谁先把额度用满 · QuotaBar</title>
 <meta name="description" content="Quota Run 是 QuotaBar 的自愿排行榜：看大家多快把 Codex、Claude、Cursor 的额度窗口用满。成绩由服务器根据签名读数计算。">
-<meta name="theme-color" content="#101112">
+<meta name="theme-color" content="#ffffff">
 <link rel="canonical" href="https://quota.run/zh/">
 <link rel="alternate" hreflang="en" href="https://quota.run/">
 <link rel="alternate" hreflang="zh-CN" href="https://quota.run/zh/">
@@ -28,192 +28,200 @@
 <link rel="icon" type="image/png" sizes="256x256" href="../assets/icon.png?v=9adbf67e">
 <link rel="icon" sizes="48x48" href="/favicon.ico?v=9adbf67e">
 <link rel="apple-touch-icon" sizes="180x180" href="../assets/apple-touch-icon.png?v=9adbf67e">
-<link rel="stylesheet" href="../styles.css?v=9adbf67e">
-<link rel="stylesheet" href="../run.css?v=9adbf67e">
+<link rel="stylesheet" href="../base.css?v=9adbf67e">
+<link rel="stylesheet" href="../board.css?v=9adbf67e">
 <!-- 自建统计。defer，不阻塞渲染；跨域脚本不参与本站的 ?v= 指纹。 -->
 <script defer src="https://tongji.giantaccel.com/script.js" data-website-id="8085631e-cc5d-4563-819f-ddd04c1bdcfa"></script>
 </head>
-<body class="logpage runpage" data-run-page="leaderboard">
-<a class="run-skip" href="#board">跳到排行榜</a>
-<header class="logbar">
-  <div class="shell logbar__inner">
-    <a class="logbar__brand wordmark" href="https://quota.bar/zh/"><img src="../assets/icon.png?v=9adbf67e" alt="" width="22" height="22">QuotaBar</a>
-    <nav class="logbar__links" aria-label="站点">
-      <a href="https://quota.bar/zh/">首页</a>
-      <a href="https://quota.run/zh/" aria-current="page">排行榜</a>
-      <a href="https://quota.bar/download/QuotaBar-0.5.3.dmg" download>下载</a>
-      <a class="run-lang" href="../" hreflang="en" lang="en" data-lang="en">EN</a>
-      <a class="run-account" id="runAccount" href="/zh/login" data-state="out">登录</a>
+<body data-run-page="leaderboard">
+<header class="nav">
+  <a class="skip" href="#main">跳到正文</a>
+  <div class="nav__inner">
+    <a class="nav__brand" href="./" data-local="index.html"><img src="../assets/icon.png?v=9adbf67e" alt="" width="24" height="24">Quota Run</a>
+    <nav class="nav__links" aria-label="站点">
+      <a href="./" data-local="index.html" aria-current="page">排行榜</a>
+      <a href="rules" data-local="rules.html">规则</a>
+      <a href="https://quota.bar/download/QuotaBar-0.5.3.dmg" download>下载 QuotaBar</a>
     </nav>
+    <div class="nav__right">
+      <a class="btn run-lang" href="../" hreflang="en" lang="en" data-lang="en" title="切换到英文">EN</a>
+      <a class="btn nav__account" id="runAccount" href="login" data-state="out">登录</a>
+    </div>
   </div>
 </header>
 
-<main>
-  <!-- ── 首屏：一句话 + 全站数字 ──────────────────────────────────── -->
-  <section class="shell run-hero">
-    <p class="run-eyebrow"><i aria-hidden="true"></i>Quota Run<span class="run-eyebrow__season" id="runSeason"></span></p>
-    <h1>谁先把额度用满</h1>
-    <p class="run-hero__sub">看真在写代码的人，多快能把 Codex 的一周、Claude 的五小时、Cursor 的一个月烧完。读数来自各自 Mac 上的 QuotaBar，成绩由服务器算，只有主动加入的人才上榜。</p>
-    <dl class="run-stats" id="runStats" aria-live="polite">
-      <div><dt>参赛者</dt><dd data-stat="users">—</dd></div>
-      <div><dt>记录的轮次</dt><dd data-stat="runs">—</dd></div>
-      <div><dt>已验证轮次</dt><dd data-stat="verifiedRuns">—</dd></div>
-      <div><dt>服务商</dt><dd data-stat="providers">—</dd></div>
-    </dl>
-  </section>
 
-  <!-- ── 榜单 ─────────────────────────────────────────────────────── -->
-  <section class="shell run-board" id="board" aria-labelledby="boardHeading">
-    <h2 class="sr-only" id="boardHeading">排行榜</h2>
-
-    <div class="run-picker">
-      <p class="run-label" id="boardsLabel">榜单</p>
-      <div class="run-chips" id="runBoards" role="group" aria-labelledby="boardsLabel" aria-busy="true">
-        <span class="run-chip is-skeleton" aria-hidden="true"></span>
-        <span class="run-chip is-skeleton" aria-hidden="true"></span>
-        <span class="run-chip is-skeleton" aria-hidden="true"></span>
-      </div>
+<div class="board-page">
+  <!-- ── 左栏：榜单列表 ─────────────────────────────────────────────── -->
+  <aside class="side" aria-label="榜单">
+    <div class="side__inner">
+      <h2 class="side__label" id="sideBoardsLabel" data-current="本周榜单" data-last="上周榜单" data-all="全部榜单">本周榜单</h2>
+      <nav class="side__group side__boards" id="sideBoards" aria-labelledby="sideBoardsLabel" aria-busy="true">
+        <span class="bd bd--skel" aria-hidden="true"><span class="skel skel--logo"></span><span class="bd__text"><span class="skel skel--line"></span><span class="skel skel--short"></span></span></span>
+        <span class="bd bd--skel" aria-hidden="true"><span class="skel skel--logo"></span><span class="bd__text"><span class="skel skel--line"></span><span class="skel skel--short"></span></span></span>
+        <span class="bd bd--skel" aria-hidden="true"><span class="skel skel--logo"></span><span class="bd__text"><span class="skel skel--line"></span><span class="skel skel--short"></span></span></span>
+        <span class="bd bd--skel" aria-hidden="true"><span class="skel skel--logo"></span><span class="bd__text"><span class="skel skel--line"></span><span class="skel skel--short"></span></span></span>
+      </nav>
+      <h2 class="side__label" id="sideSiteLabel">全站</h2>
+      <nav class="side__group side__site" aria-labelledby="sideSiteLabel">
+        <a class="bd" id="sideProviders" href="?view=providers">
+          <svg class="bd__icon" aria-hidden="true" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M2.5 4h7M2.5 8h11M2.5 12h5"/><circle cx="9.5" cy="4" r="0.8" fill="currentColor"/><circle cx="13.5" cy="8" r="0.8" fill="currentColor"/><circle cx="7.5" cy="12" r="0.8" fill="currentColor"/></svg>
+          <span class="bd__text"><b>服务商对比</b><small>各套餐谁更耐用</small></span>
+        </a>
+        <a class="bd" id="sideMine" href="login" data-sub-out="登录后查看">
+          <svg class="bd__icon" aria-hidden="true" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="5.5" r="2.75"/><path d="M2.75 14c.4-2.9 2.6-4.5 5.25-4.5s4.85 1.6 5.25 4.5"/></svg>
+          <span class="bd__text"><b>我的成绩</b><small id="sideMineSub">登录后查看</small></span>
+        </a>
+      </nav>
     </div>
+  </aside>
 
-    <form class="run-filters" id="runFilters" onsubmit="return false">
-      <fieldset class="run-seg">
-        <legend class="sr-only">排名依据</legend>
-        <label><input type="radio" name="metric" value="speed" checked><span>最快用满</span></label>
-        <label><input type="radio" name="metric" value="peak"><span>最高峰值</span></label>
-      </fieldset>
-      <fieldset class="run-seg">
-        <legend class="sr-only">赛季</legend>
-        <label><input type="radio" name="season" value="current" checked><span>本周</span></label>
-        <label><input type="radio" name="season" value="last"><span>上周</span></label>
-        <label><input type="radio" name="season" value="all"><span>全部</span></label>
-      </fieldset>
-      <fieldset class="run-seg">
-        <legend class="sr-only">地区</legend>
-        <label><input type="radio" name="region" value="" checked><span>全部地区</span></label>
-        <label><input type="radio" name="region" value="global"><span>国际</span></label>
-        <label><input type="radio" name="region" value="china"><span>中国</span></label>
-      </fieldset>
-      <label class="run-switch">
-        <input type="checkbox" name="verified" role="switch">
-        <span class="run-switch__track" aria-hidden="true"></span>
-        <span>只看已验证</span>
-      </label>
-    </form>
-
-    <div class="run-layout">
-      <div class="run-panel" id="runPanel">
-        <header class="run-panel__head">
-          <div class="run-panel__title" id="runTitle">
-            <span class="run-logo is-skeleton" aria-hidden="true"></span>
-            <div><h3>&nbsp;</h3><p>&nbsp;</p></div>
+  <main class="board-main" id="main">
+    <div class="board-main__inner">
+      <!-- ── 榜单：标题、筛选、数字、四个视图 ──────────────────────── -->
+      <div id="boardApp">
+        <header class="bhead">
+          <span class="bhead__logo" id="boardLogo"><span class="skel skel--logo32"></span></span>
+          <div class="bhead__text">
+            <h1 class="bhead__title" id="boardTitle"><span class="skel skel--title"></span></h1>
+            <p class="bhead__sub" id="boardSub"><span class="skel skel--line"></span></p>
           </div>
-          <button class="run-copy" type="button" id="runCopy" data-done="链接已复制">
-            <svg aria-hidden="true" width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6.5 9.5a3 3 0 0 0 4.2 0l2.3-2.3a3 3 0 0 0-4.2-4.2l-.9.9"/><path d="M9.5 6.5a3 3 0 0 0-4.2 0L3 8.8A3 3 0 0 0 7.2 13l.9-.9"/></svg>
-            <span>复制链接</span>
-          </button>
+          <div class="bhead__filters" role="group" aria-label="筛选">
+            <label class="select"><span class="sr-only">赛季</span>
+              <select id="fSeason">
+                <option value="current">本周</option>
+                <option value="last">上周</option>
+                <option value="all">全部赛季</option>
+              </select>
+            </label>
+            <label class="select"><span class="sr-only">地区</span>
+              <select id="fRegion">
+                <option value="">全部地区</option>
+                <option value="global">国际</option>
+                <option value="china">中国</option>
+              </select>
+            </label>
+            <label class="switch"><input type="checkbox" role="switch" id="fVerified"><span class="switch__track" aria-hidden="true"></span><span class="switch__label">只看已验证</span></label>
+            <button class="btn" type="button" id="copyLink" data-done="链接已复制" title="复制当前视图的链接">
+              <svg aria-hidden="true" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6.5 9.5a3 3 0 0 0 4.2 0l2.3-2.3a3 3 0 0 0-4.2-4.2l-.9.9"/><path d="M9.5 6.5a3 3 0 0 0-4.2 0L3 8.8A3 3 0 0 0 7.2 13l.9-.9"/></svg>
+              <span>复制链接</span>
+            </button>
+          </div>
         </header>
-        <div class="run-panel__body" id="runBody" aria-live="polite" aria-busy="true">
-          <div class="run-loading" role="status"><span class="sr-only">正在加载排行榜…</span>
-            <span class="run-skel"></span><span class="run-skel"></span><span class="run-skel"></span><span class="run-skel"></span><span class="run-skel"></span>
+
+        <dl class="kpis bkpis" id="kpis" aria-live="polite">
+          <div class="kpi"><dt>参赛者</dt><dd class="kpi__v" data-k="runners"><span class="skel skel--value"></span></dd><dd class="kpi__note" data-k="runnersNote"></dd></div>
+          <div class="kpi"><dt>最快用满</dt><dd class="kpi__v" data-k="fastest"><span class="skel skel--value"></span></dd><dd class="kpi__note" data-k="fastestNote"></dd></div>
+          <div class="kpi"><dt>用满中位数</dt><dd class="kpi__v" data-k="median"><span class="skel skel--value"></span></dd><dd class="kpi__note" data-k="medianNote"></dd></div>
+          <div class="kpi"><dt>用满的人</dt><dd class="kpi__v" data-k="completed"><span class="skel skel--value"></span></dd><dd class="kpi__note" data-k="completedNote"></dd></div>
+          <div class="kpi"><dt>已验证</dt><dd class="kpi__v" data-k="verified"><span class="skel skel--value"></span></dd><dd class="kpi__note" data-k="verifiedNote"></dd></div>
+        </dl>
+
+        <div class="tabsbar">
+          <div class="tabs" role="tablist" aria-label="视图">
+            <button class="tab" type="button" role="tab" id="tab-sheet" aria-controls="view-sheet" aria-selected="true" data-view="sheet">成绩单</button>
+            <button class="tab" type="button" role="tab" id="tab-track" aria-controls="view-track" aria-selected="false" tabindex="-1" data-view="track">赛道</button>
+            <button class="tab" type="button" role="tab" id="tab-compare" aria-controls="view-compare" aria-selected="false" tabindex="-1" data-view="compare">对比</button>
+            <button class="tab" type="button" role="tab" id="tab-providers" aria-controls="view-providers" aria-selected="false" tabindex="-1" data-view="providers">服务商</button>
+          </div>
+          <div class="seg" id="metricSeg" role="group" aria-label="排名依据">
+            <button type="button" data-metric="speed" aria-pressed="true">用满用时</button>
+            <button type="button" data-metric="to90" aria-pressed="false">到 90%</button>
+            <button type="button" data-metric="to50" aria-pressed="false">到 50%</button>
+            <button type="button" data-metric="peak" aria-pressed="false">最高峰值</button>
+          </div>
+          <div class="seg" id="scaleSeg" role="group" aria-label="刻度" hidden>
+            <button type="button" data-scale="share" aria-pressed="true">按窗口占比</button>
+            <button type="button" data-scale="time" aria-pressed="false">按实际时长</button>
           </div>
         </div>
+
+        <section class="view" id="view-sheet" role="tabpanel" aria-labelledby="tab-sheet" aria-busy="true">
+          <div class="podium" aria-hidden="true">
+            <div class="pod"><span class="skel skel--short"></span><span class="skel skel--line"></span><span class="skel skel--title"></span><span class="skel skel--line"></span></div>
+            <div class="pod"><span class="skel skel--short"></span><span class="skel skel--line"></span><span class="skel skel--title"></span><span class="skel skel--line"></span></div>
+            <div class="pod"><span class="skel skel--short"></span><span class="skel skel--line"></span><span class="skel skel--title"></span><span class="skel skel--line"></span></div>
+          </div>
+          <div class="rows-skel" aria-hidden="true"><span></span><span></span><span></span><span></span><span></span><span></span></div>
+          <p class="sr-only" role="status">正在加载排行榜…</p>
+        </section>
+        <section class="view" id="view-track" role="tabpanel" aria-labelledby="tab-track" hidden></section>
+        <section class="view" id="view-compare" role="tabpanel" aria-labelledby="tab-compare" hidden></section>
+        <section class="view" id="view-providers" role="tabpanel" aria-labelledby="tab-providers" hidden>
+          <p class="prov__intro" id="provIntro" data-time="换成真实时长（从一小时到一个月）来看，每个套餐旁的虚线是它自己的窗口长度。越靠左，额度越快用完。">不同套餐的窗口长短不一，按「用满时窗口已过去多少」放在一起比：越靠左，额度越不经用。</p>
+          <div id="provBody"></div>
+        </section>
+
+        <div class="tray" id="tray" role="region" aria-label="要对比的参赛者" hidden></div>
+
+        <details class="tiers" id="tiersNote">
+          <summary>成绩怎么核对</summary>
+          <div class="tiers__body">
+            <p><span class="tag tag--ok">已验证</span>读数从 50% 以内一路平稳上升，没有超过 20 分钟的空档，本地日志里确实有 token 在消耗。</p>
+            <p><span class="tag">标准</span>读数可信，但少了其中一项——比如窗口过半才加入，或者中途合盖睡了一觉。</p>
+            <p><span class="acct">账号已核实</span>服务商账号的邮箱与 quota.run 上验证过的登录邮箱一致。只是名字旁的标记，不算级别。</p>
+            <p class="hint">只有绑定了服务商账号的轮次才上榜；一个服务商账号只归一个 Quota 账号。 <a class="link" href="rules#tiers" data-local="rules.html" data-hash="tiers">看完整规则</a></p>
+          </div>
+        </details>
       </div>
 
-      <aside class="run-aside" aria-label="加入 Quota Run">
-        <div class="run-box run-join">
-          <h3>上榜只要三步</h3>
-          <ol class="run-steps">
-            <li>在 Mac 上装好 QuotaBar。</li>
-            <li>打开「设置」→「Quota Run」。个人纪录马上开始记，不用注册。</li>
-            <li>想上榜再加入：用 quota.run 账号登录，看清楚会上传什么，点同意。服务商账号在第一次上传时绑定到你名下。</li>
-          </ol>
-          <a class="btn btn--primary run-join__btn" href="https://quota.bar/download/QuotaBar-0.5.3.dmg" download>
-            <svg width="15" height="18" viewBox="0 0 15 18" fill="currentColor" aria-hidden="true"><path d="M12.3 9.5c0-2 1.6-3 1.7-3-1-1.4-2.4-1.6-2.9-1.6-1.2-.1-2.4.7-3 .7-.6 0-1.6-.7-2.6-.7C4.2 5 3 5.7 2.3 7c-1.3 2.3-.3 5.7 1 7.5.6.9 1.4 1.9 2.4 1.9.9 0 1.3-.6 2.4-.6 1.1 0 1.4.6 2.4.6 1 0 1.7-.9 2.3-1.8.7-1 1-2 1-2.1 0 0-2-.8-2-3zM10.4 3.4c.5-.6.9-1.5.8-2.4-.8 0-1.7.5-2.3 1.2-.5.6-.9 1.5-.8 2.4.9.1 1.8-.5 2.3-1.2z"/></svg>
-            下载 for Mac
+      <!-- ── 一个榜单都没有：说明 Quota Run 是什么、怎么加入 ─────────── -->
+      <section class="join" id="joinPanel" aria-labelledby="joinTitle" hidden>
+        <p class="eyebrow"><span class="eyebrow__dot" aria-hidden="true"></span><span>Quota Run</span><span aria-hidden="true">·</span><span class="mono" id="joinSeason"></span></p>
+        <h1 class="join__title" id="joinTitle">谁先把额度用满？</h1>
+        <p class="join__lede">Quota Run 是 QuotaBar 的自愿排行榜：看真在写代码的人，多快用完 Codex 的一周、Claude 的五小时、Cursor 的一个月。本周的榜单还空着，谁先跑完一个窗口，谁就是第一。</p>
+        <ol class="steps">
+          <li class="step">
+            <span class="step__n" aria-hidden="true">1</span>
+            <h2 class="step__title">装上 QuotaBar</h2>
+            <p>免费的菜单栏应用，Mac 上所有 AI 编码额度一眼看全。</p>
+          </li>
+          <li class="step">
+            <span class="step__n" aria-hidden="true">2</span>
+            <h2 class="step__title">先记自己的纪录</h2>
+            <p>打开「设置」→「Quota Run」。个人最好成绩马上开始记，只存在你的 Mac 上，不用注册。</p>
+          </li>
+          <li class="step">
+            <span class="step__n" aria-hidden="true">3</span>
+            <h2 class="step__title">加入排行榜</h2>
+            <p>用 quota.run 账号登录，看清楚会上传什么，点同意。下一个用满的窗口就会上榜。</p>
+          </li>
+        </ol>
+        <div class="join__actions">
+          <a class="btn btn--primary btn--lg" href="https://quota.bar/download/QuotaBar-0.5.3.dmg" download>
+            <svg aria-hidden="true" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2.5v8M4.5 7 8 10.5 11.5 7M3 13.5h10"/></svg>
+            下载 QuotaBar
           </a>
-          <p class="run-join__meta">0.5.3 · macOS 14+ · 免费开源</p>
+          <a class="btn btn--lg" href="rules" data-local="rules.html">规则说明</a>
+          <a class="link join__demo" id="joinDemo" href="?demo=1">用示例数据看看效果</a>
         </div>
-        <div class="run-box">
-          <h3>两种级别</h3>
-          <p class="run-tierline"><span class="badge run-tier run-tier--verified">已验证</span>读数从 50% 以内一路平稳上升，没有超过 20 分钟的空档，本地日志里确实有 token 在消耗。</p>
-          <p class="run-tierline"><span class="badge run-tier run-tier--standard">标准</span>读数可信，但少了其中一项——比如窗口过半才加入，或者中途合盖睡了一觉。</p>
-          <p class="run-tiernote">只有绑定了服务商账号的轮次才上榜。应用只上传这个账号的单向摘要，不传邮箱；一个服务商账号只归一个 Quota 账号。</p>
-          <p class="run-tierline"><span class="badge run-acctbadge"><svg aria-hidden="true" width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="5" r="2.6"/><path d="M1.5 14c0-2.6 2-4.5 4.5-4.5 1.1 0 2.1.3 2.9 1"/><path d="m9.8 11.6 1.9 1.9 3.3-3.7"/></svg>账号已核实</span>服务商账号的邮箱与 quota.run 上验证过的登录邮箱一致。只是级别旁的标记，不算级别。</p>
-        </div>
-      </aside>
+        <p class="join__meta">0.5.3 · macOS 14+ · 免费开源</p>
+        <ul class="join__facts">
+          <li><h3>只传读数，不传成绩</h3><p>应用只上传原始读数，成绩和名次都由服务器算。</p></li>
+          <li><h3>绝不上传</h3><p>凭据、提示词、代码、文件路径，以及明文的账号邮箱。</p></li>
+          <li><h3>没有奖品</h3><p>不发钱，不发奖。能赢的只有面子，和一个展示作品的主页。</p></li>
+        </ul>
+      </section>
     </div>
-  </section>
+  </main>
+</div>
 
-  <!-- ── 怎么算、怎么防作弊 ───────────────────────────────────────── -->
-  <section class="shell run-how" id="how" aria-labelledby="howHeading">
-    <div class="run-how__head">
-      <h2 id="howHeading">怎么算的，怎么防作弊</h2>
-      <p>QuotaBar 里看额度，Quota Run 上比速度。一句话：你不点头，什么都不出 Mac；谁也没法自己报成绩。</p>
-    </div>
-    <div class="run-how__grid">
-      <article class="run-box">
-        <h3>本地优先</h3>
-        <p>个人纪录不用注册。最快用满、用到 50% 和 90% 的时间、最高峰值，QuotaBar 都记在你自己的 Mac 上，加不加入都一样。</p>
-      </article>
-      <article class="run-box">
-        <h3>先说清楚，再上传</h3>
-        <p>不加入就不上传。加入时先把会传出去的内容一条条列给你看，同意了才开始。退出 Quota Run，服务器上和你有关的数据全部删除。</p>
-      </article>
-      <article class="run-box">
-        <h3>只传读数，不传成绩</h3>
-        <p>应用只上传原始读数，每一轮的成绩和名次都由服务器自己算。客户端声称「两小时用满」，服务器根本不看。</p>
-      </article>
-      <article class="run-box run-how__lists">
-        <div>
-          <h3>加入后会上传</h3>
-          <ul class="run-list run-list--yes">
-            <li>服务商和套餐名</li>
-            <li>每个额度窗口的已用百分比、重置时间、读取时间</li>
-            <li>窗口的长度和范围</li>
-            <li>服务商账号的单向摘要，不是邮箱本身</li>
-            <li>本地 CLI 日志里每分钟的 token 数，只有数字</li>
-          </ul>
-        </div>
-        <div>
-          <h3>绝不上传</h3>
-          <ul class="run-list run-list--no">
-            <li>凭据、令牌、Cookie、API Key</li>
-            <li>提示词、代码、模型的输出</li>
-            <li>文件和项目路径</li>
-            <li>明文的账号邮箱</li>
-          </ul>
-        </div>
-      </article>
-      <article class="run-box">
-        <h3>只认一台 Mac</h3>
-        <p>每台 Mac 用一把不出本机的密钥给读数签名，一个账号只计其中一台的读数。换一台计分的 Mac 要等 7 天；同一个服务商账号只能归一个人。</p>
-      </article>
-      <article class="run-box">
-        <h3>先核对，再分级</h3>
-        <p>读数得平稳、合理地往上走。有空档或者开始得晚的算「标准」；读数往回掉、突然猛跳，或者来自归别人所有的服务商账号，先扣下来复核，不上榜也不上主页。</p>
-      </article>
-      <article class="run-box">
-        <h3>没有奖品</h3>
-        <p>不发钱，不发奖。桌面客户端做不到无法作弊，只能让作弊又费劲又显眼。能赢的只有面子，和一个展示你做了什么的主页。</p>
-      </article>
-    </div>
-  </section>
-</main>
-
-<footer class="footer">
-  <div class="shell">
-    <div class="footer__links">
-      <a href="https://quota.bar/zh/">首页</a>
-      <a href="https://quota.bar/download/QuotaBar-0.5.3.dmg" download>下载</a>
+<footer class="foot">
+  <div class="foot__inner">
+    <span class="foot__brand"><img src="../assets/icon.png?v=9adbf67e" alt="" width="16" height="16">Quota Run</span>
+    <nav class="foot__links" aria-label="更多">
+      <a href="https://quota.bar/zh/">QuotaBar 官网</a>
+      <a href="https://github.com/gentpan/QuotaBar">源代码</a>
       <a href="https://quota.bar/zh/changelog.html">更新日志</a>
-      <a href="https://github.com/gentpan/QuotaBar">源码</a>
-    </div>
-    <p class="footer__fine">© 2026 QuotaBar · <a href="https://github.com/gentpan/QuotaBar/blob/main/LICENSE">MIT 许可证</a> · Quota Run 与榜上任何服务商均无关联，标志归各自所有者。</p>
+      <a href="https://github.com/gentpan/QuotaBar/blob/main/LICENSE">MIT 许可证</a>
+    </nav>
+    <p class="foot__fine">Quota Run 与页面上出现的服务商均无关联，标志归各自所有者。</p>
   </div>
 </footer>
 
-<script type="application/json" id="run-providers">{"codex":{"en":"Codex","zh":"Codex","tone":"mono"},"claude":{"en":"Claude","zh":"Claude","tone":""},"cursor":{"en":"Cursor","zh":"Cursor","tone":"mono"},"kimi":{"en":"Kimi Code","zh":"Kimi Code","tone":""},"zai":{"en":"z.ai","zh":"z.ai","tone":"mono"},"opencode-go":{"en":"OpenCode Go","zh":"OpenCode Go","tone":"mono"},"minimax":{"en":"MiniMax","zh":"MiniMax","tone":""},"gemini":{"en":"Gemini","zh":"Gemini","tone":""},"manus":{"en":"Manus","zh":"Manus","tone":"mono"},"deepseek":{"en":"DeepSeek","zh":"DeepSeek","tone":""},"grok":{"en":"Grok","zh":"Grok","tone":"mono"},"antigravity":{"en":"Antigravity","zh":"Antigravity","tone":""},"qwen":{"en":"Qwen Cloud","zh":"Qwen Cloud","tone":"mono"},"alibaba":{"en":"Alibaba Coding Plan","zh":"阿里云百炼","tone":""},"volcengine":{"en":"Volcengine Ark","zh":"火山方舟","tone":""},"zhipu":{"en":"Zhipu GLM","zh":"智谱 GLM","tone":""},"moonshot":{"en":"Moonshot API","zh":"Kimi 开放平台","tone":"mono"},"copilot":{"en":"GitHub Copilot","zh":"GitHub Copilot","tone":"mono"},"openrouter":{"en":"OpenRouter","zh":"OpenRouter","tone":"mono"},"mimo":{"en":"Xiaomi MiMo","zh":"小米 MiMo","tone":""},"qoder":{"en":"Qoder","zh":"Qoder","tone":"dark"},"windsurf":{"en":"Windsurf","zh":"Windsurf","tone":"mono"},"kiro":{"en":"Kiro","zh":"Kiro","tone":""}}</script>
-<script src="../app.js?v=9adbf67e"></script>
-<script src="../run.js?v=9adbf67e"></script>
+
+<script type="application/json" id="run-providers">{"codex":{"en":"Codex","zh":"Codex","tone":""},"claude":{"en":"Claude","zh":"Claude","tone":""},"cursor":{"en":"Cursor","zh":"Cursor","tone":"light"},"kimi":{"en":"Kimi Code","zh":"Kimi Code","tone":""},"zai":{"en":"z.ai","zh":"z.ai","tone":""},"opencode-go":{"en":"OpenCode Go","zh":"OpenCode Go","tone":""},"minimax":{"en":"MiniMax","zh":"MiniMax","tone":""},"gemini":{"en":"Gemini","zh":"Gemini","tone":""},"manus":{"en":"Manus","zh":"Manus","tone":"light"},"deepseek":{"en":"DeepSeek","zh":"DeepSeek","tone":""},"grok":{"en":"Grok","zh":"Grok","tone":"light"},"antigravity":{"en":"Antigravity","zh":"Antigravity","tone":""},"qwen":{"en":"Qwen Cloud","zh":"Qwen Cloud","tone":""},"alibaba":{"en":"Alibaba Coding Plan","zh":"阿里云百炼","tone":""},"volcengine":{"en":"Volcengine Ark","zh":"火山方舟","tone":""},"zhipu":{"en":"Zhipu GLM","zh":"智谱 GLM","tone":""},"moonshot":{"en":"Moonshot API","zh":"Kimi 开放平台","tone":""},"copilot":{"en":"GitHub Copilot","zh":"GitHub Copilot","tone":""},"openrouter":{"en":"OpenRouter","zh":"OpenRouter","tone":""},"mimo":{"en":"Xiaomi MiMo","zh":"小米 MiMo","tone":""},"qoder":{"en":"Qoder","zh":"Qoder","tone":""},"windsurf":{"en":"Windsurf","zh":"Windsurf","tone":""},"kiro":{"en":"Kiro","zh":"Kiro","tone":""}}</script>
+<script src="../common.js?v=9adbf67e"></script>
+<script src="../board.js?v=9adbf67e"></script>
 </body>
 </html>

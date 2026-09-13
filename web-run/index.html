@@ -6,7 +6,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Quota Run — who hits 100% first · QuotaBar</title>
 <meta name="description" content="Quota Run is QuotaBar's opt-in leaderboard: how fast builders burn through Codex, Claude and Cursor quota windows, worked out by the server from signed readings.">
-<meta name="theme-color" content="#101112">
+<meta name="theme-color" content="#ffffff">
 <!-- 英文在根目录。浏览器语言是中文、或者之前选过中文的，去 /zh/ 下的同一页（带上查询串，分享出来的榜单不丢）。 -->
 <script>try{var l=localStorage.getItem("qb-lang"),n=navigator.languages&&navigator.languages[0]?navigator.languages[0]:navigator.language;if(l==="zh"?true:!l&&/^zh\b/i.test(String(n)))location.replace("zh/"+location.pathname.split("/").pop()+location.search+location.hash)}catch(e){}</script>
 <link rel="canonical" href="https://quota.run/">
@@ -30,192 +30,200 @@
 <link rel="icon" type="image/png" sizes="256x256" href="assets/icon.png?v=9adbf67e">
 <link rel="icon" sizes="48x48" href="/favicon.ico?v=9adbf67e">
 <link rel="apple-touch-icon" sizes="180x180" href="assets/apple-touch-icon.png?v=9adbf67e">
-<link rel="stylesheet" href="styles.css?v=9adbf67e">
-<link rel="stylesheet" href="run.css?v=9adbf67e">
+<link rel="stylesheet" href="base.css?v=9adbf67e">
+<link rel="stylesheet" href="board.css?v=9adbf67e">
 <!-- 自建统计。defer，不阻塞渲染；跨域脚本不参与本站的 ?v= 指纹。 -->
 <script defer src="https://tongji.giantaccel.com/script.js" data-website-id="8085631e-cc5d-4563-819f-ddd04c1bdcfa"></script>
 </head>
-<body class="logpage runpage" data-run-page="leaderboard">
-<a class="run-skip" href="#board">Skip to the leaderboard</a>
-<header class="logbar">
-  <div class="shell logbar__inner">
-    <a class="logbar__brand wordmark" href="https://quota.bar/"><img src="assets/icon.png?v=9adbf67e" alt="" width="22" height="22">QuotaBar</a>
-    <nav class="logbar__links" aria-label="Site">
-      <a href="https://quota.bar/">Home</a>
-      <a href="https://quota.run/" aria-current="page">Leaderboard</a>
-      <a href="https://quota.bar/download/QuotaBar-0.5.3.dmg" download>Download</a>
-      <a class="run-lang" href="zh/" hreflang="zh-CN" lang="zh-CN" data-lang="zh">中文</a>
-      <a class="run-account" id="runAccount" href="/login" data-state="out">Sign in</a>
+<body data-run-page="leaderboard">
+<header class="nav">
+  <a class="skip" href="#main">Skip to content</a>
+  <div class="nav__inner">
+    <a class="nav__brand" href="./" data-local="index.html"><img src="assets/icon.png?v=9adbf67e" alt="" width="24" height="24">Quota Run</a>
+    <nav class="nav__links" aria-label="Site">
+      <a href="./" data-local="index.html" aria-current="page">Leaderboard</a>
+      <a href="rules" data-local="rules.html">Rules</a>
+      <a href="https://quota.bar/download/QuotaBar-0.5.3.dmg" download>Download QuotaBar</a>
     </nav>
+    <div class="nav__right">
+      <a class="btn run-lang" href="zh/" hreflang="zh-CN" lang="zh-CN" data-lang="zh" title="Read this page in Chinese">中文</a>
+      <a class="btn nav__account" id="runAccount" href="login" data-state="out">Sign in</a>
+    </div>
   </div>
 </header>
 
-<main>
-  <!-- ── 首屏：一句话 + 全站数字 ──────────────────────────────────── -->
-  <section class="shell run-hero">
-    <p class="run-eyebrow"><i aria-hidden="true"></i>Quota Run<span class="run-eyebrow__season" id="runSeason"></span></p>
-    <h1>Who hits 100% first</h1>
-    <p class="run-hero__sub">How fast real builders burn through a Codex week, a Claude five-hour window or a Cursor month — read by QuotaBar on their Mac, worked out by the server, ranked only for people who chose to join.</p>
-    <dl class="run-stats" id="runStats" aria-live="polite">
-      <div><dt>Runners</dt><dd data-stat="users">—</dd></div>
-      <div><dt>Runs recorded</dt><dd data-stat="runs">—</dd></div>
-      <div><dt>Verified runs</dt><dd data-stat="verifiedRuns">—</dd></div>
-      <div><dt>Providers</dt><dd data-stat="providers">—</dd></div>
-    </dl>
-  </section>
 
-  <!-- ── 榜单 ─────────────────────────────────────────────────────── -->
-  <section class="shell run-board" id="board" aria-labelledby="boardHeading">
-    <h2 class="sr-only" id="boardHeading">Leaderboard</h2>
-
-    <div class="run-picker">
-      <p class="run-label" id="boardsLabel">Board</p>
-      <div class="run-chips" id="runBoards" role="group" aria-labelledby="boardsLabel" aria-busy="true">
-        <span class="run-chip is-skeleton" aria-hidden="true"></span>
-        <span class="run-chip is-skeleton" aria-hidden="true"></span>
-        <span class="run-chip is-skeleton" aria-hidden="true"></span>
-      </div>
+<div class="board-page">
+  <!-- ── 左栏：榜单列表 ─────────────────────────────────────────────── -->
+  <aside class="side" aria-label="Boards">
+    <div class="side__inner">
+      <h2 class="side__label" id="sideBoardsLabel" data-current="This week's boards" data-last="Last week's boards" data-all="All boards">This week's boards</h2>
+      <nav class="side__group side__boards" id="sideBoards" aria-labelledby="sideBoardsLabel" aria-busy="true">
+        <span class="bd bd--skel" aria-hidden="true"><span class="skel skel--logo"></span><span class="bd__text"><span class="skel skel--line"></span><span class="skel skel--short"></span></span></span>
+        <span class="bd bd--skel" aria-hidden="true"><span class="skel skel--logo"></span><span class="bd__text"><span class="skel skel--line"></span><span class="skel skel--short"></span></span></span>
+        <span class="bd bd--skel" aria-hidden="true"><span class="skel skel--logo"></span><span class="bd__text"><span class="skel skel--line"></span><span class="skel skel--short"></span></span></span>
+        <span class="bd bd--skel" aria-hidden="true"><span class="skel skel--logo"></span><span class="bd__text"><span class="skel skel--line"></span><span class="skel skel--short"></span></span></span>
+      </nav>
+      <h2 class="side__label" id="sideSiteLabel">Across Quota Run</h2>
+      <nav class="side__group side__site" aria-labelledby="sideSiteLabel">
+        <a class="bd" id="sideProviders" href="?view=providers">
+          <svg class="bd__icon" aria-hidden="true" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M2.5 4h7M2.5 8h11M2.5 12h5"/><circle cx="9.5" cy="4" r="0.8" fill="currentColor"/><circle cx="13.5" cy="8" r="0.8" fill="currentColor"/><circle cx="7.5" cy="12" r="0.8" fill="currentColor"/></svg>
+          <span class="bd__text"><b>Provider comparison</b><small>Which plan lasts longest</small></span>
+        </a>
+        <a class="bd" id="sideMine" href="login" data-sub-out="Sign in to see yours">
+          <svg class="bd__icon" aria-hidden="true" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="5.5" r="2.75"/><path d="M2.75 14c.4-2.9 2.6-4.5 5.25-4.5s4.85 1.6 5.25 4.5"/></svg>
+          <span class="bd__text"><b>My results</b><small id="sideMineSub">Sign in to see yours</small></span>
+        </a>
+      </nav>
     </div>
+  </aside>
 
-    <form class="run-filters" id="runFilters" onsubmit="return false">
-      <fieldset class="run-seg">
-        <legend class="sr-only">Rank by</legend>
-        <label><input type="radio" name="metric" value="speed" checked><span>Fastest to 100%</span></label>
-        <label><input type="radio" name="metric" value="peak"><span>Highest peak</span></label>
-      </fieldset>
-      <fieldset class="run-seg">
-        <legend class="sr-only">Season</legend>
-        <label><input type="radio" name="season" value="current" checked><span>This week</span></label>
-        <label><input type="radio" name="season" value="last"><span>Last week</span></label>
-        <label><input type="radio" name="season" value="all"><span>All time</span></label>
-      </fieldset>
-      <fieldset class="run-seg">
-        <legend class="sr-only">Region</legend>
-        <label><input type="radio" name="region" value="" checked><span>Everyone</span></label>
-        <label><input type="radio" name="region" value="global"><span>Global</span></label>
-        <label><input type="radio" name="region" value="china"><span>China</span></label>
-      </fieldset>
-      <label class="run-switch">
-        <input type="checkbox" name="verified" role="switch">
-        <span class="run-switch__track" aria-hidden="true"></span>
-        <span>Verified only</span>
-      </label>
-    </form>
-
-    <div class="run-layout">
-      <div class="run-panel" id="runPanel">
-        <header class="run-panel__head">
-          <div class="run-panel__title" id="runTitle">
-            <span class="run-logo is-skeleton" aria-hidden="true"></span>
-            <div><h3>&nbsp;</h3><p>&nbsp;</p></div>
+  <main class="board-main" id="main">
+    <div class="board-main__inner">
+      <!-- ── 榜单：标题、筛选、数字、四个视图 ──────────────────────── -->
+      <div id="boardApp">
+        <header class="bhead">
+          <span class="bhead__logo" id="boardLogo"><span class="skel skel--logo32"></span></span>
+          <div class="bhead__text">
+            <h1 class="bhead__title" id="boardTitle"><span class="skel skel--title"></span></h1>
+            <p class="bhead__sub" id="boardSub"><span class="skel skel--line"></span></p>
           </div>
-          <button class="run-copy" type="button" id="runCopy" data-done="Link copied">
-            <svg aria-hidden="true" width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6.5 9.5a3 3 0 0 0 4.2 0l2.3-2.3a3 3 0 0 0-4.2-4.2l-.9.9"/><path d="M9.5 6.5a3 3 0 0 0-4.2 0L3 8.8A3 3 0 0 0 7.2 13l.9-.9"/></svg>
-            <span>Copy link</span>
-          </button>
+          <div class="bhead__filters" role="group" aria-label="Filters">
+            <label class="select"><span class="sr-only">Season</span>
+              <select id="fSeason">
+                <option value="current">This week</option>
+                <option value="last">Last week</option>
+                <option value="all">All time</option>
+              </select>
+            </label>
+            <label class="select"><span class="sr-only">Region</span>
+              <select id="fRegion">
+                <option value="">All regions</option>
+                <option value="global">Global</option>
+                <option value="china">China</option>
+              </select>
+            </label>
+            <label class="switch"><input type="checkbox" role="switch" id="fVerified"><span class="switch__track" aria-hidden="true"></span><span class="switch__label">Verified only</span></label>
+            <button class="btn" type="button" id="copyLink" data-done="Link copied" title="Copy a link to exactly this view">
+              <svg aria-hidden="true" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6.5 9.5a3 3 0 0 0 4.2 0l2.3-2.3a3 3 0 0 0-4.2-4.2l-.9.9"/><path d="M9.5 6.5a3 3 0 0 0-4.2 0L3 8.8A3 3 0 0 0 7.2 13l.9-.9"/></svg>
+              <span>Copy link</span>
+            </button>
+          </div>
         </header>
-        <div class="run-panel__body" id="runBody" aria-live="polite" aria-busy="true">
-          <div class="run-loading" role="status"><span class="sr-only">Loading the leaderboard…</span>
-            <span class="run-skel"></span><span class="run-skel"></span><span class="run-skel"></span><span class="run-skel"></span><span class="run-skel"></span>
+
+        <dl class="kpis bkpis" id="kpis" aria-live="polite">
+          <div class="kpi"><dt>Runners</dt><dd class="kpi__v" data-k="runners"><span class="skel skel--value"></span></dd><dd class="kpi__note" data-k="runnersNote"></dd></div>
+          <div class="kpi"><dt>Fastest to 100%</dt><dd class="kpi__v" data-k="fastest"><span class="skel skel--value"></span></dd><dd class="kpi__note" data-k="fastestNote"></dd></div>
+          <div class="kpi"><dt>Median to 100%</dt><dd class="kpi__v" data-k="median"><span class="skel skel--value"></span></dd><dd class="kpi__note" data-k="medianNote"></dd></div>
+          <div class="kpi"><dt>Finished</dt><dd class="kpi__v" data-k="completed"><span class="skel skel--value"></span></dd><dd class="kpi__note" data-k="completedNote"></dd></div>
+          <div class="kpi"><dt>Verified</dt><dd class="kpi__v" data-k="verified"><span class="skel skel--value"></span></dd><dd class="kpi__note" data-k="verifiedNote"></dd></div>
+        </dl>
+
+        <div class="tabsbar">
+          <div class="tabs" role="tablist" aria-label="Views">
+            <button class="tab" type="button" role="tab" id="tab-sheet" aria-controls="view-sheet" aria-selected="true" data-view="sheet">Standings</button>
+            <button class="tab" type="button" role="tab" id="tab-track" aria-controls="view-track" aria-selected="false" tabindex="-1" data-view="track">Track</button>
+            <button class="tab" type="button" role="tab" id="tab-compare" aria-controls="view-compare" aria-selected="false" tabindex="-1" data-view="compare">Compare</button>
+            <button class="tab" type="button" role="tab" id="tab-providers" aria-controls="view-providers" aria-selected="false" tabindex="-1" data-view="providers">Providers</button>
+          </div>
+          <div class="seg" id="metricSeg" role="group" aria-label="Rank by">
+            <button type="button" data-metric="speed" aria-pressed="true">To 100%</button>
+            <button type="button" data-metric="to90" aria-pressed="false">To 90%</button>
+            <button type="button" data-metric="to50" aria-pressed="false">To 50%</button>
+            <button type="button" data-metric="peak" aria-pressed="false">Highest peak</button>
+          </div>
+          <div class="seg" id="scaleSeg" role="group" aria-label="Scale" hidden>
+            <button type="button" data-scale="share" aria-pressed="true">Share of window</button>
+            <button type="button" data-scale="time" aria-pressed="false">Actual time</button>
           </div>
         </div>
+
+        <section class="view" id="view-sheet" role="tabpanel" aria-labelledby="tab-sheet" aria-busy="true">
+          <div class="podium" aria-hidden="true">
+            <div class="pod"><span class="skel skel--short"></span><span class="skel skel--line"></span><span class="skel skel--title"></span><span class="skel skel--line"></span></div>
+            <div class="pod"><span class="skel skel--short"></span><span class="skel skel--line"></span><span class="skel skel--title"></span><span class="skel skel--line"></span></div>
+            <div class="pod"><span class="skel skel--short"></span><span class="skel skel--line"></span><span class="skel skel--title"></span><span class="skel skel--line"></span></div>
+          </div>
+          <div class="rows-skel" aria-hidden="true"><span></span><span></span><span></span><span></span><span></span><span></span></div>
+          <p class="sr-only" role="status">Loading the leaderboard…</p>
+        </section>
+        <section class="view" id="view-track" role="tabpanel" aria-labelledby="tab-track" hidden></section>
+        <section class="view" id="view-compare" role="tabpanel" aria-labelledby="tab-compare" hidden></section>
+        <section class="view" id="view-providers" role="tabpanel" aria-labelledby="tab-providers" hidden>
+          <p class="prov__intro" id="provIntro" data-time="On a real time scale from one hour to a month, each plan is drawn against its own window, marked with a dashed line. The further left, the sooner the quota runs out.">Plans have windows of different lengths, so they're lined up by how much of the window had passed when people hit 100%. The further left, the sooner the quota runs out.</p>
+          <div id="provBody"></div>
+        </section>
+
+        <div class="tray" id="tray" role="region" aria-label="Runners to compare" hidden></div>
+
+        <details class="tiers" id="tiersNote">
+          <summary>How results are checked</summary>
+          <div class="tiers__body">
+            <p><span class="tag tag--ok">Verified</span>Readings climbed steadily from 50% or less, with no gap over 20 minutes, and real tokens in the local logs.</p>
+            <p><span class="tag">Standard</span>A believable run that misses one of those checks — joined mid-window, say, or the Mac slept.</p>
+            <p><span class="acct">Account verified</span>The provider account's email matches a verified sign-in on quota.run. A mark next to the name, not a tier.</p>
+            <p class="hint">Only runs bound to a provider account rank; each provider account belongs to one Quota account. <a class="link" href="rules#tiers" data-local="rules.html" data-hash="tiers">Read the rules</a></p>
+          </div>
+        </details>
       </div>
 
-      <aside class="run-aside" aria-label="Join Quota Run">
-        <div class="run-box run-join">
-          <h3>Get on the board</h3>
-          <ol class="run-steps">
-            <li>Install QuotaBar on your Mac.</li>
-            <li>Open Settings → Quota Run. Your personal records start right away, no account needed.</li>
-            <li>Join when you want a place here: sign in with quota.run, read what gets uploaded, agree. Each provider account binds to you with its first upload.</li>
-          </ol>
-          <a class="btn btn--primary run-join__btn" href="https://quota.bar/download/QuotaBar-0.5.3.dmg" download>
-            <svg width="15" height="18" viewBox="0 0 15 18" fill="currentColor" aria-hidden="true"><path d="M12.3 9.5c0-2 1.6-3 1.7-3-1-1.4-2.4-1.6-2.9-1.6-1.2-.1-2.4.7-3 .7-.6 0-1.6-.7-2.6-.7C4.2 5 3 5.7 2.3 7c-1.3 2.3-.3 5.7 1 7.5.6.9 1.4 1.9 2.4 1.9.9 0 1.3-.6 2.4-.6 1.1 0 1.4.6 2.4.6 1 0 1.7-.9 2.3-1.8.7-1 1-2 1-2.1 0 0-2-.8-2-3zM10.4 3.4c.5-.6.9-1.5.8-2.4-.8 0-1.7.5-2.3 1.2-.5.6-.9 1.5-.8 2.4.9.1 1.8-.5 2.3-1.2z"/></svg>
-            Download for Mac
+      <!-- ── 一个榜单都没有：说明 Quota Run 是什么、怎么加入 ─────────── -->
+      <section class="join" id="joinPanel" aria-labelledby="joinTitle" hidden>
+        <p class="eyebrow"><span class="eyebrow__dot" aria-hidden="true"></span><span>Quota Run</span><span aria-hidden="true">·</span><span class="mono" id="joinSeason"></span></p>
+        <h1 class="join__title" id="joinTitle">Who hits 100% first?</h1>
+        <p class="join__lede">Quota Run is QuotaBar's opt-in leaderboard: how fast real builders use up a Codex week, a Claude five-hour window or a Cursor month. The boards are empty this week — the first full window takes first place.</p>
+        <ol class="steps">
+          <li class="step">
+            <span class="step__n" aria-hidden="true">1</span>
+            <h2 class="step__title">Install QuotaBar</h2>
+            <p>The free menu-bar app that shows every AI coding limit on your Mac.</p>
+          </li>
+          <li class="step">
+            <span class="step__n" aria-hidden="true">2</span>
+            <h2 class="step__title">Keep your own records</h2>
+            <p>Open Settings → Quota Run. Personal bests start right away, on your Mac, with no account.</p>
+          </li>
+          <li class="step">
+            <span class="step__n" aria-hidden="true">3</span>
+            <h2 class="step__title">Join the board</h2>
+            <p>Sign in with quota.run, read exactly what gets uploaded, agree. Your next full window ranks.</p>
+          </li>
+        </ol>
+        <div class="join__actions">
+          <a class="btn btn--primary btn--lg" href="https://quota.bar/download/QuotaBar-0.5.3.dmg" download>
+            <svg aria-hidden="true" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2.5v8M4.5 7 8 10.5 11.5 7M3 13.5h10"/></svg>
+            Download QuotaBar
           </a>
-          <p class="run-join__meta">0.5.3 · macOS 14+ · Free and open source</p>
+          <a class="btn btn--lg" href="rules" data-local="rules.html">How it works</a>
+          <a class="link join__demo" id="joinDemo" href="?demo=1">Preview with demo data</a>
         </div>
-        <div class="run-box">
-          <h3>Two tiers</h3>
-          <p class="run-tierline"><span class="badge run-tier run-tier--verified">Verified</span>Readings climbed steadily from 50% or less, with no gap over 20 minutes, and real tokens in the local logs.</p>
-          <p class="run-tierline"><span class="badge run-tier run-tier--standard">Standard</span>A believable run that misses one of those checks — joined mid-window, say, or the Mac slept.</p>
-          <p class="run-tiernote">Only runs bound to a provider account rank. The app sends a one-way digest of that account, never the email, and each provider account belongs to one Quota account.</p>
-          <p class="run-tierline"><span class="badge run-acctbadge"><svg aria-hidden="true" width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="5" r="2.6"/><path d="M1.5 14c0-2.6 2-4.5 4.5-4.5 1.1 0 2.1.3 2.9 1"/><path d="m9.8 11.6 1.9 1.9 3.3-3.7"/></svg>Account verified</span>The provider account's email matches a verified sign-in on quota.run. A mark next to the tier, not a tier.</p>
-        </div>
-      </aside>
+        <p class="join__meta">0.5.3 · macOS 14+ · Free and open source</p>
+        <ul class="join__facts">
+          <li><h3>Readings, not results</h3><p>The app sends raw readings; the server works out every run and every rank.</p></li>
+          <li><h3>Never uploaded</h3><p>Credentials, prompts, code, file paths, or your account email in the clear.</p></li>
+          <li><h3>No prizes</h3><p>No money, no rewards — only the bragging and a profile for what you build.</p></li>
+        </ul>
+      </section>
     </div>
-  </section>
+  </main>
+</div>
 
-  <!-- ── 怎么算、怎么防作弊 ───────────────────────────────────────── -->
-  <section class="shell run-how" id="how" aria-labelledby="howHeading">
-    <div class="run-how__head">
-      <h2 id="howHeading">How it works, and how it stays honest</h2>
-      <p>Track on QuotaBar, compete on Quota Run. The short version: nothing leaves your Mac until you say so, and nobody gets to report their own score.</p>
-    </div>
-    <div class="run-how__grid">
-      <article class="run-box">
-        <h3>Local first</h3>
-        <p>Personal records need no account. QuotaBar keeps every run on your Mac — fastest to 100%, time to 50% and 90%, highest peak — whether or not you ever join.</p>
-      </article>
-      <article class="run-box">
-        <h3>Opt-in, in writing</h3>
-        <p>Upload stays off until you join, and joining shows exactly what will leave the Mac before anything does. Leave Quota Run and every row about you is deleted from the server.</p>
-      </article>
-      <article class="run-box">
-        <h3>Readings, not results</h3>
-        <p>The app sends raw readings; the server works out every run and every rank. A client that claims “100% in two hours” is simply ignored.</p>
-      </article>
-      <article class="run-box run-how__lists">
-        <div>
-          <h3>Uploaded after you join</h3>
-          <ul class="run-list run-list--yes">
-            <li>Provider and plan name</li>
-            <li>Used percent, reset time and reading time for each window</li>
-            <li>The window's length and scope</li>
-            <li>A one-way digest of the provider account, never the email</li>
-            <li>Tokens per minute from local CLI logs — counts only</li>
-          </ul>
-        </div>
-        <div>
-          <h3>Never uploaded</h3>
-          <ul class="run-list run-list--no">
-            <li>Credentials, tokens, cookies, API keys</li>
-            <li>Prompts, code, model outputs</li>
-            <li>File and project paths</li>
-            <li>Your account email in the clear</li>
-          </ul>
-        </div>
-      </article>
-      <article class="run-box">
-        <h3>One ranked Mac</h3>
-        <p>Each Mac signs its readings with a key that never leaves it, and an account ranks readings from one Mac only. Moving the ranking to another Mac waits seven days, and a provider account can belong to one runner.</p>
-      </article>
-      <article class="run-box">
-        <h3>Checked, then tiered</h3>
-        <p>Readings have to rise steadily and plausibly. Runs with a gap, or a late start, count as Standard; readings that drop or leap, or come from a provider account another runner owns, are held back for review and never shown.</p>
-      </article>
-      <article class="run-box">
-        <h3>No prizes</h3>
-        <p>No money, no rewards. A desktop client can't be made impossible to cheat, only expensive and visible — so all there is to win is the bragging and a profile to show what you built.</p>
-      </article>
-    </div>
-  </section>
-</main>
-
-<footer class="footer">
-  <div class="shell">
-    <div class="footer__links">
-      <a href="https://quota.bar/">Home</a>
-      <a href="https://quota.bar/download/QuotaBar-0.5.3.dmg" download>Download</a>
+<footer class="foot">
+  <div class="foot__inner">
+    <span class="foot__brand"><img src="assets/icon.png?v=9adbf67e" alt="" width="16" height="16">Quota Run</span>
+    <nav class="foot__links" aria-label="More">
+      <a href="https://quota.bar/">QuotaBar home</a>
+      <a href="https://github.com/gentpan/QuotaBar">Source code</a>
       <a href="https://quota.bar/changelog.html">Changelog</a>
-      <a href="https://github.com/gentpan/QuotaBar">Source</a>
-    </div>
-    <p class="footer__fine">© 2026 QuotaBar · <a href="https://github.com/gentpan/QuotaBar/blob/main/LICENSE">MIT License</a> · Quota Run is independent of every provider shown; logos belong to their owners.</p>
+      <a href="https://github.com/gentpan/QuotaBar/blob/main/LICENSE">MIT License</a>
+    </nav>
+    <p class="foot__fine">Quota Run is independent of every provider shown; logos belong to their owners.</p>
   </div>
 </footer>
 
-<script type="application/json" id="run-providers">{"codex":{"en":"Codex","zh":"Codex","tone":"mono"},"claude":{"en":"Claude","zh":"Claude","tone":""},"cursor":{"en":"Cursor","zh":"Cursor","tone":"mono"},"kimi":{"en":"Kimi Code","zh":"Kimi Code","tone":""},"zai":{"en":"z.ai","zh":"z.ai","tone":"mono"},"opencode-go":{"en":"OpenCode Go","zh":"OpenCode Go","tone":"mono"},"minimax":{"en":"MiniMax","zh":"MiniMax","tone":""},"gemini":{"en":"Gemini","zh":"Gemini","tone":""},"manus":{"en":"Manus","zh":"Manus","tone":"mono"},"deepseek":{"en":"DeepSeek","zh":"DeepSeek","tone":""},"grok":{"en":"Grok","zh":"Grok","tone":"mono"},"antigravity":{"en":"Antigravity","zh":"Antigravity","tone":""},"qwen":{"en":"Qwen Cloud","zh":"Qwen Cloud","tone":"mono"},"alibaba":{"en":"Alibaba Coding Plan","zh":"阿里云百炼","tone":""},"volcengine":{"en":"Volcengine Ark","zh":"火山方舟","tone":""},"zhipu":{"en":"Zhipu GLM","zh":"智谱 GLM","tone":""},"moonshot":{"en":"Moonshot API","zh":"Kimi 开放平台","tone":"mono"},"copilot":{"en":"GitHub Copilot","zh":"GitHub Copilot","tone":"mono"},"openrouter":{"en":"OpenRouter","zh":"OpenRouter","tone":"mono"},"mimo":{"en":"Xiaomi MiMo","zh":"小米 MiMo","tone":""},"qoder":{"en":"Qoder","zh":"Qoder","tone":"dark"},"windsurf":{"en":"Windsurf","zh":"Windsurf","tone":"mono"},"kiro":{"en":"Kiro","zh":"Kiro","tone":""}}</script>
-<script src="app.js?v=9adbf67e"></script>
-<script src="run.js?v=9adbf67e"></script>
+
+<script type="application/json" id="run-providers">{"codex":{"en":"Codex","zh":"Codex","tone":""},"claude":{"en":"Claude","zh":"Claude","tone":""},"cursor":{"en":"Cursor","zh":"Cursor","tone":"light"},"kimi":{"en":"Kimi Code","zh":"Kimi Code","tone":""},"zai":{"en":"z.ai","zh":"z.ai","tone":""},"opencode-go":{"en":"OpenCode Go","zh":"OpenCode Go","tone":""},"minimax":{"en":"MiniMax","zh":"MiniMax","tone":""},"gemini":{"en":"Gemini","zh":"Gemini","tone":""},"manus":{"en":"Manus","zh":"Manus","tone":"light"},"deepseek":{"en":"DeepSeek","zh":"DeepSeek","tone":""},"grok":{"en":"Grok","zh":"Grok","tone":"light"},"antigravity":{"en":"Antigravity","zh":"Antigravity","tone":""},"qwen":{"en":"Qwen Cloud","zh":"Qwen Cloud","tone":""},"alibaba":{"en":"Alibaba Coding Plan","zh":"阿里云百炼","tone":""},"volcengine":{"en":"Volcengine Ark","zh":"火山方舟","tone":""},"zhipu":{"en":"Zhipu GLM","zh":"智谱 GLM","tone":""},"moonshot":{"en":"Moonshot API","zh":"Kimi 开放平台","tone":""},"copilot":{"en":"GitHub Copilot","zh":"GitHub Copilot","tone":""},"openrouter":{"en":"OpenRouter","zh":"OpenRouter","tone":""},"mimo":{"en":"Xiaomi MiMo","zh":"小米 MiMo","tone":""},"qoder":{"en":"Qoder","zh":"Qoder","tone":""},"windsurf":{"en":"Windsurf","zh":"Windsurf","tone":""},"kiro":{"en":"Kiro","zh":"Kiro","tone":""}}</script>
+<script src="common.js?v=9adbf67e"></script>
+<script src="board.js?v=9adbf67e"></script>
 </body>
 </html>

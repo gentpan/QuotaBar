@@ -1,0 +1,161 @@
+<!doctype html>
+<html lang="{{lang}}">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>[[Rules · Quota Run||规则 · Quota Run]]</title>
+<meta name="description" content="[[How Quota Run works: what QuotaBar uploads and never uploads, how provider accounts are bound and claimed, tiers, seasons and privacy.||Quota Run 怎么玩：QuotaBar 会上传什么、绝不上传什么，服务商账号怎么绑定和认领，成绩级别、赛季和隐私。]]">
+<meta name="theme-color" content="#ffffff">
+[[<!-- Caddy 把 /rules 映射到这个文件。英文在根目录；浏览器语言是中文、或者之前选过中文的，去 /zh/rules。 -->
+<script>try{var l=localStorage.getItem("qb-lang"),n=navigator.languages&&navigator.languages[0]?navigator.languages[0]:navigator.language;if(l==="zh"?true:!l&&/^zh\b/i.test(String(n)))location.replace("zh/"+location.pathname.split("/").pop()+location.search+location.hash)}catch(e){}</script>
+||]]<link rel="canonical" href="{{run_url}}rules">
+<link rel="alternate" hreflang="en" href="https://quota.run/rules">
+<link rel="alternate" hreflang="zh-CN" href="https://quota.run/zh/rules">
+<link rel="alternate" hreflang="x-default" href="https://quota.run/rules">
+<meta property="og:title" content="[[Rules · Quota Run||规则 · Quota Run]]">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="QuotaBar">
+<meta property="og:image" content="https://quota.run/assets/[[og.jpg||og-zh.jpg]]?v={{v}}">
+<link rel="icon" type="image/png" sizes="256x256" href="{{root}}assets/icon.png?v={{v}}">
+<link rel="icon" sizes="48x48" href="/favicon.ico?v={{v}}">
+<link rel="apple-touch-icon" sizes="180x180" href="{{root}}assets/apple-touch-icon.png?v={{v}}">
+<link rel="stylesheet" href="{{root}}base.css?v={{v}}">
+<link rel="stylesheet" href="{{root}}rules.css?v={{v}}">
+</head>
+<body data-run-page="rules">
+{{nav}}
+
+<main class="shell doc" id="main">
+  <header class="doc__head">
+    <p class="eyebrow"><span class="eyebrow__dot" aria-hidden="true"></span>Quota Run</p>
+    <h1 class="doc__title">[[How Quota Run works||Quota Run 怎么玩]]</h1>
+    <p class="doc__lede">[[Quota Run ranks how fast people use up a subscription's quota window — a Codex week, a Claude five-hour window, a Cursor month. It is opt-in, run from QuotaBar on your Mac, and the server works out every result from signed readings. There are no prizes.||Quota Run 比的是谁更快用完一个订阅的额度窗口：Codex 的一周、Claude 的五小时、Cursor 的一个月。要自己主动加入，读数来自你 Mac 上的 QuotaBar，每一个成绩都由服务器根据签过名的读数算出来。没有奖品。]]</p>
+  </header>
+
+  <div class="doc__layout">
+    <nav class="toc" aria-label="[[On this page||本页目录]]">
+      <p class="toc__label">[[On this page||本页目录]]</p>
+      <ol>
+        <li><a href="#joining">[[Joining||怎么加入]]</a></li>
+        <li><a href="#uploaded">[[What leaves your Mac||哪些数据会离开 Mac]]</a></li>
+        <li><a href="#accounts">[[Provider accounts||服务商账号]]</a></li>
+        <li><a href="#tiers">[[Tiers||成绩级别]]</a></li>
+        <li><a href="#seasons">[[Seasons and boards||赛季和榜单]]</a></li>
+        <li><a href="#macs">[[One ranked Mac||只认一台 Mac]]</a></li>
+        <li><a href="#privacy">[[Privacy||隐私]]</a></li>
+      </ol>
+    </nav>
+
+    <article class="doc__body">
+      <section class="rule" id="joining" aria-labelledby="joiningTitle">
+        <h2 id="joiningTitle">[[Joining||怎么加入]]</h2>
+        <p>[[QuotaBar keeps personal records on your Mac with no account: every run, your fastest time to 100%, the time to 50% and 90%, and your highest peak. Nothing is uploaded for that.||不注册也有个人纪录：每一轮、最快用满的时间、到 50% 和 90% 的时间、最高峰值，QuotaBar 都记在你自己的 Mac 上，这些不上传。]]</p>
+        <ol class="rule__steps">
+          <li>[[Open QuotaBar → Settings → Quota Run and choose “Sign in with quota.run”.||打开 QuotaBar 的「设置」→「Quota Run」，点「用 quota.run 登录」。]]</li>
+          <li>[[Read the consent sheet. It lists exactly what will be uploaded, and nothing leaves the Mac until you agree.||看完同意说明。上面逐条列出会上传的内容，你点同意之前，什么都不会离开这台 Mac。]]</li>
+          <li>[[Your browser opens quota.run. Sign in with GitHub, Google or an email code — no passwords — check that the code matches the one in QuotaBar, and approve the Mac.||浏览器会打开 quota.run。用 GitHub、Google 或邮箱验证码登录（不用密码），核对连接码和 QuotaBar 里显示的一致，然后批准这台 Mac。]]</li>
+        </ol>
+        <p>[[From then on QuotaBar uploads new readings after each refresh. Leaving is one button in the app or on your account page, and it deletes everything about you on the server.||之后 QuotaBar 每次刷新完都会上传新的读数。退出只要在应用里或账号页上点一下，服务器上和你有关的数据会全部删除。]]</p>
+      </section>
+
+      <section class="rule" id="uploaded" aria-labelledby="uploadedTitle">
+        <h2 id="uploadedTitle">[[What leaves your Mac||哪些数据会离开 Mac]]</h2>
+        <p>[[The app sends readings, not results: a client that claims “100% in two hours” would simply be ignored, because the server computes every run itself.||应用只上传读数，不上传成绩。客户端声称「两小时用满」没有任何意义，因为每一轮成绩都由服务器自己算。]]</p>
+        <div class="lists">
+          <div class="list list--yes">
+            <h3>[[Uploaded after you join||加入后会上传]]</h3>
+            <ul>
+              <li>[[Provider and plan name||服务商和套餐名]]</li>
+              <li>[[Used percent, reset time and reading time for each quota window||每个额度窗口的已用百分比、重置时间和读取时间]]</li>
+              <li>[[The window's length and scope||窗口的长度和范围]]</li>
+              <li>[[A one-way digest of the provider account — never the email itself||服务商账号的单向摘要，不是邮箱本身]]</li>
+              <li>[[Tokens per minute from local CLI logs — counts only||本地 CLI 日志里每分钟的 token 数，只有数字]]</li>
+            </ul>
+          </div>
+          <div class="list list--no">
+            <h3>[[Never uploaded||绝不上传]]</h3>
+            <ul>
+              <li>[[Credentials, tokens, cookies and API keys||凭据、令牌、Cookie 和 API Key]]</li>
+              <li>[[Prompts, code and model outputs||提示词、代码和模型的输出]]</li>
+              <li>[[File and project paths||文件和项目路径]]</li>
+              <li>[[The provider account's email in the clear||明文的服务商账号邮箱]]</li>
+            </ul>
+          </div>
+        </div>
+      </section>
+
+      <section class="rule" id="accounts" aria-labelledby="accountsTitle">
+        <h2 id="accountsTitle">[[Provider accounts: binding and ownership||服务商账号：绑定和归属]]</h2>
+        <p>[[QuotaBar reads which account each provider is signed in with and uploads only a digest of it. quota.run stores a keyed hash of that digest, so the email never leaves your Mac and can't be read back from the server.||QuotaBar 会读出每个服务商当前登录的是哪个账号，只上传它的摘要；quota.run 再把摘要加密存一遍。邮箱不会离开你的 Mac，服务器上也还原不出来。]]</p>
+        <dl class="facts">
+          <div><dt>[[Binding is required to rank||绑定了才能上榜]]</dt><dd>[[Readings without a provider account don't count, so a run only ranks when every reading carries one.||不带服务商账号的读数不计成绩：一轮里每条读数都带着账号，才有资格上榜。]]</dd></div>
+          <div><dt>[[First upload binds it||第一次上传就绑定]]</dt><dd>[[Each provider account belongs to one Quota account: the first one to upload readings from it. Runs from the same provider account on anyone else's Quota account are held back.||一个服务商账号只归一个 Quota 账号，也就是最先用它上传读数的那个人。别人的 Quota 账号里再出现同一个服务商账号，那些成绩会被扣下，不上榜。]]</dd></div>
+          <div><dt>[[Claiming by email||用邮箱认领]]</dt><dd>[[If the provider account's email is one of your verified sign-in emails on quota.run, it is yours — even if someone else uploaded it first. The server checks this without any extra upload; link that email under Account → Sign-in methods to claim it. A claim made this way can't be taken over.||如果这个服务商账号的邮箱，正好是你在 quota.run 上验证过的登录邮箱，它就归你，哪怕别人先上传过。服务器不需要你额外上传任何东西就能核对；在「账号」→「登录方式」里绑定那个邮箱即可认领。这样认领的账号不会再被别人抢走。]]</dd></div>
+          <div><dt><span class="acct">[[Account verified||账号已核实]]</span></dt><dd>[[The mark next to a name when every reading of that run comes from a provider account claimed by email. It's a badge, not a tier: accounts under a different email still rank.||一轮里所有读数都来自用邮箱认领的服务商账号时，名字旁会显示这个标记。它只是标记，不是级别：邮箱不一样的账号照样上榜。]]</dd></div>
+          <div><dt>[[Unbinding||解除绑定]]</dt><dd>[[Unbinding a provider account on your account page deletes your readings and runs from it. A Mac still signed in to it binds it again on its next upload, unless you unbind it in QuotaBar too.||在账号页解除绑定，会删掉你来自这个服务商账号的读数和成绩。仍登录着它的 Mac 下次上传时会重新绑定，除非你在 QuotaBar 里也解除。]]</dd></div>
+        </dl>
+      </section>
+
+      <section class="rule" id="tiers" aria-labelledby="tiersTitle">
+        <h2 id="tiersTitle">[[Tiers||成绩级别]]</h2>
+        <p>[[Every run is checked when its readings arrive. Boards show two tiers; the “Verified only” switch hides the second.||每一轮在读数到达时都会核对一遍。榜单上有两种级别，打开「只看已验证」就只剩第一种。]]</p>
+        <div class="tiergrid">
+          <div class="tier">
+            <p class="tier__name"><span class="tag tag--ok">[[Verified||已验证]]</span></p>
+            <ul>
+              <li>[[Every reading comes from a provider account you own||每条读数都来自归你所有的服务商账号]]</li>
+              <li>[[Readings never drop more than 2 points||读数往回掉不超过 2 个点]]</li>
+              <li>[[No jump of more than 60 points within 5 minutes||5 分钟内不会猛涨超过 60 个点]]</li>
+              <li>[[The first reading is at 50% or less, with no gap over 20 minutes until 100%||第一条读数不超过 50%，到用满为止没有超过 20 分钟的空档]]</li>
+              <li>[[For Codex and Claude, real tokens in the local logs during the run||Codex 和 Claude 的轮次里，本地日志确实有 token 在消耗]]</li>
+            </ul>
+          </div>
+          <div class="tier">
+            <p class="tier__name"><span class="tag">[[Standard||标准]]</span></p>
+            <p>[[A believable run that misses the coverage or activity check — joined mid-window, say, or the Mac slept for a while.||读数可信，但少了覆盖或活跃那一项——比如窗口过半才加入，或者 Mac 中途睡了一阵。]]</p>
+          </div>
+          <div class="tier tier--hidden">
+            <p class="tier__name"><span class="tag tag--warn">[[Flagged||待复核]]</span></p>
+            <p>[[Readings that drop or leap, or a provider account owned by another Quota account. Kept for review and never shown on boards or profiles.||读数往回掉、突然猛涨，或者服务商账号归另一个 Quota 账号。先扣下来复核，不出现在榜单和个人主页上。]]</p>
+          </div>
+          <div class="tier tier--hidden">
+            <p class="tier__name"><span class="tag">[[Unranked||不计名次]]</span></p>
+            <p>[[A run with readings that carry no provider account. Stored, but never on a board, a profile best or recent runs.||有读数没带服务商账号的轮次。会保存，但不会出现在榜单、最好成绩和最近几轮里。]]</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="rule" id="seasons" aria-labelledby="seasonsTitle">
+        <h2 id="seasonsTitle">[[Seasons and boards||赛季和榜单]]</h2>
+        <dl class="facts">
+          <div><dt>[[A run||一轮]]</dt><dd>[[One reset period of one quota window for one provider account, from the window's start to its reset. Windows from 1 hour to 32 days rank.||一个服务商账号、一个额度窗口的一个重置周期：从窗口开始到重置为止。窗口长度在 1 小时到 32 天之间的才参与排名。]]</dd></div>
+          <div><dt>[[A board||一张榜]]</dt><dd>[[Everyone on the same provider, plan and window — Codex Pro 20x weekly, say. Each person appears once, with their best run.||同一个服务商、同一个套餐、同一种窗口的人比，比如 Codex Pro 20x 的周额度。每个人只出现一次，取最好的一轮。]]</dd></div>
+          <div><dt>[[Seasons||赛季]]</dt><dd>[[A season is an ISO week in UTC, counted by when the window started: 2026-W37. “This week” is the current one, “Last week” the one before, and “All time” takes each person's best from every season.||赛季就是按 UTC 算的 ISO 周，看的是窗口从哪一周开始，写作 2026-W37。「本周」是当前这一周，「上周」是前一周，「全部赛季」取每个人历来最好的一轮。]]</dd></div>
+          <div><dt>[[What's measured||比什么]]</dt><dd>[[Time from the window's start to the first reading at 100% (99.5% or more), 90% and 50%, and the highest peak. Ties on peak go to whoever got there first.||从窗口开始，到第一条达到 100%（99.5% 及以上）、90%、50% 的读数用了多久，以及最高峰值。峰值相同时，先到的排前面。]]</dd></div>
+          <div><dt>[[No prizes||没有奖品]]</dt><dd>[[No money and no rewards. A desktop client can't be made impossible to cheat, only expensive and visible — so all there is to win is the bragging, and a profile for what you build.||不发钱，也不发奖。桌面客户端没法做到无法作弊，只能让作弊又费劲又显眼。能赢的只有面子，和一个展示作品的主页。]]</dd></div>
+        </dl>
+      </section>
+
+      <section class="rule" id="macs" aria-labelledby="macsTitle">
+        <h2 id="macsTitle">[[One ranked Mac||只认一台 Mac]]</h2>
+        <p>[[Each Mac signs its readings with a key that never leaves it — in the Secure Enclave when the Mac has one. An account can connect several Macs, but only the ranked one's readings count. Moving the ranking to another Mac waits 7 days after the last change; choosing one when there is none is always allowed.||每台 Mac 用一把不出本机的密钥给读数签名，有安全隔区的 Mac 就存在安全隔区里。一个账号可以连好几台 Mac，但只计「计分 Mac」的读数。把计分换到另一台，要距离上次更换满 7 天；一台都没有时，随时可以选。]]</p>
+      </section>
+
+      <section class="rule" id="privacy" aria-labelledby="privacyTitle">
+        <h2 id="privacyTitle">[[Privacy||隐私]]</h2>
+        <dl class="facts">
+          <div><dt>[[Public||公开的]]</dt><dd>[[Your username, display name, region, bio, links and projects; your results, their times and tiers; and each ranked run's usage curve — how the percentage rose over the window.||用户名、显示名称、地区、简介、链接和项目；你的成绩、用时和级别；以及每一轮上榜成绩的用量曲线，也就是百分比在窗口里是怎么涨上去的。]]</dd></div>
+          <div><dt>[[Never shown||不公开的]]</dt><dd>[[Your sign-in email stays on quota.run to sign you in. It is never shown on a profile, a board or to anyone else. Provider account emails never reach the server at all.||登录邮箱只留在 quota.run 用来让你登录，不会出现在主页和榜单上，也不会给任何人看。服务商账号的邮箱压根不会到服务器。]]</dd></div>
+          <div><dt>[[Leaving||退出]]</dt><dd>[[Deleting your account removes your profile, projects, readings, runs, Macs and sign-in methods from quota.run. QuotaBar stops uploading and keeps its local records.||删除账号会从 quota.run 删掉你的主页、项目、读数、成绩、Mac 和登录方式。QuotaBar 停止上传，本地纪录保留。]]</dd></div>
+        </dl>
+        <p class="doc__end">[[QuotaBar is open source, and so is this site and its server.||QuotaBar 是开源的，这个网站和它的服务端也是。]] <a class="link" href="https://github.com/gentpan/QuotaBar">[[Read the code on GitHub||在 GitHub 上看代码]]</a></p>
+      </section>
+    </article>
+  </div>
+</main>
+
+{{footer}}
+
+<script src="{{root}}common.js?v={{v}}"></script>
+</body>
+</html>

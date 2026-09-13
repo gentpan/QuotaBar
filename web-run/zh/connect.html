@@ -7,58 +7,61 @@
 <title>连接 Mac · Quota Run</title>
 <meta name="description" content="批准一台运行 QuotaBar 的 Mac，让它往你的 Quota Run 账号上传读数。">
 <meta name="robots" content="noindex">
-<meta name="theme-color" content="#101112">
+<meta name="theme-color" content="#ffffff">
 <link rel="canonical" href="https://quota.run/zh/connect">
 <link rel="icon" type="image/png" sizes="256x256" href="../assets/icon.png?v=9adbf67e">
 <link rel="icon" sizes="48x48" href="/favicon.ico?v=9adbf67e">
 <link rel="apple-touch-icon" sizes="180x180" href="../assets/apple-touch-icon.png?v=9adbf67e">
-<link rel="stylesheet" href="../styles.css?v=9adbf67e">
-<link rel="stylesheet" href="../run.css?v=9adbf67e">
+<link rel="stylesheet" href="../base.css?v=9adbf67e">
 <link rel="stylesheet" href="../account.css?v=9adbf67e">
 <!-- 登录、账号、连接三页不挂统计脚本：地址里有 next 和连接码，不往第三方送。 -->
 </head>
-<body class="logpage runpage accpage" data-run-page="connect">
-<a class="run-skip" href="#connect">跳到连接请求</a>
-<header class="logbar">
-  <div class="shell logbar__inner">
-    <a class="logbar__brand wordmark" href="https://quota.bar/zh/"><img src="../assets/icon.png?v=9adbf67e" alt="" width="22" height="22">QuotaBar</a>
-    <nav class="logbar__links" aria-label="站点">
-      <a href="https://quota.bar/zh/">首页</a>
-      <a href="https://quota.run/zh/">排行榜</a>
-      <a href="https://quota.bar/download/QuotaBar-0.5.3.dmg" download>下载</a>
-      <a class="run-lang" href="/connect" hreflang="en" lang="en" data-lang="en">EN</a>
-      <a class="run-account" id="runAccount" href="/zh/login" data-state="out">登录</a>
+<body class="accpage" data-run-page="connect">
+<header class="nav">
+  <a class="skip" href="#main">跳到正文</a>
+  <div class="nav__inner">
+    <a class="nav__brand" href="./" data-local="index.html"><img src="../assets/icon.png?v=9adbf67e" alt="" width="24" height="24">Quota Run</a>
+    <nav class="nav__links" aria-label="站点">
+      <a href="./" data-local="index.html">排行榜</a>
+      <a href="rules" data-local="rules.html">规则</a>
+      <a href="https://quota.bar/download/QuotaBar-0.5.3.dmg" download>下载 QuotaBar</a>
     </nav>
+    <div class="nav__right">
+      <a class="btn run-lang" href="../connect" hreflang="en" lang="en" data-lang="en" title="切换到英文">EN</a>
+      <a class="btn nav__account" id="runAccount" href="login" data-state="out">登录</a>
+    </div>
   </div>
 </header>
 
-<main class="shell acc-main acc-main--center" id="connect">
+
+<main class="shell acc-main acc-main--center" id="main">
   <!-- account.js 按 ?code= 读 /api/v1/connect/<code>，把请求、结果或者输入框画在这里 -->
   <div class="acc-card acc-card--wide" id="connectCard" aria-live="polite" aria-busy="true">
-    <div class="run-loading acc-loading" role="status">
+    <div class="acc-loading" role="status">
       <span class="sr-only">正在读取连接请求…</span>
-      <span class="run-skel run-skel--title"></span>
-      <span class="run-skel"></span>
-      <span class="run-skel"></span>
+      <span class="skel skel--title"></span>
+      <span class="skel skel--line"></span>
+      <span class="skel skel--short"></span>
     </div>
   </div>
-  <noscript><p class="run-note">连接 Mac 需要开启 JavaScript。</p></noscript>
+  <noscript><p class="note">连接 Mac 需要开启 JavaScript。</p></noscript>
 </main>
 
-<footer class="footer">
-  <div class="shell">
-    <div class="footer__links">
-      <a href="https://quota.bar/zh/">首页</a>
-      <a href="https://quota.run/zh/">排行榜</a>
-      <a href="https://quota.bar/download/QuotaBar-0.5.3.dmg" download>下载</a>
-      <a href="https://github.com/gentpan/QuotaBar">源码</a>
-    </div>
-    <p class="footer__fine">© 2026 QuotaBar · <a href="https://github.com/gentpan/QuotaBar/blob/main/LICENSE">MIT 许可证</a> · Quota Run 与页面上任何服务商均无关联，标志归各自所有者。</p>
+<footer class="foot">
+  <div class="foot__inner">
+    <span class="foot__brand"><img src="../assets/icon.png?v=9adbf67e" alt="" width="16" height="16">Quota Run</span>
+    <nav class="foot__links" aria-label="更多">
+      <a href="https://quota.bar/zh/">QuotaBar 官网</a>
+      <a href="https://github.com/gentpan/QuotaBar">源代码</a>
+      <a href="https://quota.bar/zh/changelog.html">更新日志</a>
+      <a href="https://github.com/gentpan/QuotaBar/blob/main/LICENSE">MIT 许可证</a>
+    </nav>
+    <p class="foot__fine">Quota Run 与页面上出现的服务商均无关联，标志归各自所有者。</p>
   </div>
 </footer>
 
-<script src="../app.js?v=9adbf67e"></script>
-<script src="../run.js?v=9adbf67e"></script>
+
+<script src="../common.js?v=9adbf67e"></script>
 <script src="../account.js?v=9adbf67e"></script>
 </body>
 </html>

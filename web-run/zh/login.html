@@ -7,41 +7,43 @@
 <title>登录 · Quota Run</title>
 <meta name="description" content="用 GitHub、Google 或邮箱验证码登录 Quota Run，不用密码。">
 <meta name="robots" content="noindex">
-<meta name="theme-color" content="#101112">
+<meta name="theme-color" content="#ffffff">
 <link rel="canonical" href="https://quota.run/zh/login">
 <link rel="icon" type="image/png" sizes="256x256" href="../assets/icon.png?v=9adbf67e">
 <link rel="icon" sizes="48x48" href="/favicon.ico?v=9adbf67e">
 <link rel="apple-touch-icon" sizes="180x180" href="../assets/apple-touch-icon.png?v=9adbf67e">
-<link rel="stylesheet" href="../styles.css?v=9adbf67e">
-<link rel="stylesheet" href="../run.css?v=9adbf67e">
+<link rel="stylesheet" href="../base.css?v=9adbf67e">
 <link rel="stylesheet" href="../account.css?v=9adbf67e">
 <!-- 登录、账号、连接三页不挂统计脚本：地址里有 next 和连接码，不往第三方送。 -->
 </head>
-<body class="logpage runpage accpage" data-run-page="login">
-<a class="run-skip" href="#login">跳到登录</a>
-<header class="logbar">
-  <div class="shell logbar__inner">
-    <a class="logbar__brand wordmark" href="https://quota.bar/zh/"><img src="../assets/icon.png?v=9adbf67e" alt="" width="22" height="22">QuotaBar</a>
-    <nav class="logbar__links" aria-label="站点">
-      <a href="https://quota.bar/zh/">首页</a>
-      <a href="https://quota.run/zh/">排行榜</a>
-      <a href="https://quota.bar/download/QuotaBar-0.5.3.dmg" download>下载</a>
-      <a class="run-lang" href="/login" hreflang="en" lang="en" data-lang="en">EN</a>
-      <a class="run-account" id="runAccount" href="/zh/login" data-state="out" aria-current="page">登录</a>
+<body class="accpage" data-run-page="login">
+<header class="nav">
+  <a class="skip" href="#main">跳到正文</a>
+  <div class="nav__inner">
+    <a class="nav__brand" href="./" data-local="index.html"><img src="../assets/icon.png?v=9adbf67e" alt="" width="24" height="24">Quota Run</a>
+    <nav class="nav__links" aria-label="站点">
+      <a href="./" data-local="index.html">排行榜</a>
+      <a href="rules" data-local="rules.html">规则</a>
+      <a href="https://quota.bar/download/QuotaBar-0.5.3.dmg" download>下载 QuotaBar</a>
     </nav>
+    <div class="nav__right">
+      <a class="btn run-lang" href="../login" hreflang="en" lang="en" data-lang="en" title="切换到英文">EN</a>
+      <a class="btn nav__account" id="runAccount" href="login" data-state="out" aria-current="page">登录</a>
+    </div>
   </div>
 </header>
 
-<main class="shell acc-main acc-main--center" id="login">
+
+<main class="shell acc-main acc-main--center" id="main">
   <div class="acc-card" id="loginCard" aria-busy="true">
-    <p class="run-eyebrow"><i aria-hidden="true"></i>Quota Run</p>
+    <p class="eyebrow"><span class="eyebrow__dot" aria-hidden="true"></span>Quota Run</p>
 
     <!-- 读会话的时候先放一段骨架，不要一闪登录表单又跳走 -->
-    <div class="run-loading acc-loading" id="loginLoading" role="status">
+    <div class="acc-loading" id="loginLoading" role="status">
       <span class="sr-only">正在确认登录状态…</span>
-      <span class="run-skel run-skel--title"></span>
-      <span class="run-skel"></span>
-      <span class="run-skel"></span>
+      <span class="skel skel--title"></span>
+      <span class="skel skel--line"></span>
+      <span class="skel skel--short"></span>
     </div>
 
     <!-- ① 选登录方式 -->
@@ -52,11 +54,11 @@
 
       <div class="acc-oauth" id="oauthButtons">
         <a class="acc-btn acc-btn--oauth" id="oauthGithub" href="/api/v1/auth/github/start" data-provider="github">
-          <svg aria-hidden="true" width="18" height="18" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+          <svg aria-hidden="true" width="20" height="20" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
           <span>用 GitHub 继续</span>
         </a>
         <a class="acc-btn acc-btn--oauth" id="oauthGoogle" href="/api/v1/auth/google/start" data-provider="google">
-          <svg aria-hidden="true" width="18" height="18" viewBox="0 0 18 18"><path fill="#4285F4" d="M17.64 9.2c0-.64-.06-1.25-.16-1.84H9v3.48h4.84a4.14 4.14 0 0 1-1.8 2.72v2.26h2.92c1.7-1.57 2.68-3.88 2.68-6.62z"/><path fill="#34A853" d="M9 18c2.43 0 4.47-.8 5.96-2.18l-2.92-2.26c-.8.54-1.84.86-3.04.86-2.34 0-4.33-1.58-5.04-3.7H.96v2.33A9 9 0 0 0 9 18z"/><path fill="#FBBC05" d="M3.96 10.72A5.41 5.41 0 0 1 3.68 9c0-.6.1-1.18.28-1.72V4.95H.96A9 9 0 0 0 0 9c0 1.45.35 2.83.96 4.05l3-2.33z"/><path fill="#EA4335" d="M9 3.58c1.32 0 2.5.45 3.44 1.35l2.58-2.58A9 9 0 0 0 .96 4.95l3 2.33C4.67 5.16 6.66 3.58 9 3.58z"/></svg>
+          <svg aria-hidden="true" width="20" height="20" viewBox="0 0 18 18"><path fill="#4285F4" d="M17.64 9.2c0-.64-.06-1.25-.16-1.84H9v3.48h4.84a4.14 4.14 0 0 1-1.8 2.72v2.26h2.92c1.7-1.57 2.68-3.88 2.68-6.62z"/><path fill="#34A853" d="M9 18c2.43 0 4.47-.8 5.96-2.18l-2.92-2.26c-.8.54-1.84.86-3.04.86-2.34 0-4.33-1.58-5.04-3.7H.96v2.33A9 9 0 0 0 9 18z"/><path fill="#FBBC05" d="M3.96 10.72A5.41 5.41 0 0 1 3.68 9c0-.6.1-1.18.28-1.72V4.95H.96A9 9 0 0 0 0 9c0 1.45.35 2.83.96 4.05l3-2.33z"/><path fill="#EA4335" d="M9 3.58c1.32 0 2.5.45 3.44 1.35l2.58-2.58A9 9 0 0 0 .96 4.95l3 2.33C4.67 5.16 6.66 3.58 9 3.58z"/></svg>
           <span>用 Google 继续</span>
         </a>
       </div>
@@ -115,7 +117,7 @@
         </div>
         <fieldset class="acc-field">
           <legend class="acc-label">地区</legend>
-          <div class="run-seg acc-seg">
+          <div class="acc-seg">
             <label><input type="radio" name="region" value="global"><span>国际</span></label>
             <label><input type="radio" name="region" value="china"><span>中国</span></label>
           </div>
@@ -129,27 +131,28 @@
     </section>
 
     <p class="acc-privacy">
-      <svg aria-hidden="true" width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="7" width="10" height="7" rx="1.5"/><path d="M5.5 7V5a2.5 2.5 0 0 1 5 0v2"/></svg>
-      <span>登录邮箱只留在 quota.run 用来让你登录，不会出现在主页、排行榜上，也不会给任何人看。</span>
+      <svg aria-hidden="true" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="7" width="10" height="7" rx="1.5"/><path d="M5.5 7V5a2.5 2.5 0 0 1 5 0v2"/></svg>
+      <span>登录邮箱只留在 quota.run 用来让你登录，不会出现在主页、排行榜上，也不会给任何人看。 <a class="link" href="rules#privacy" data-local="rules.html" data-hash="privacy">隐私规则</a></span>
     </p>
   </div>
-  <noscript><p class="run-note">登录需要开启 JavaScript。</p></noscript>
+  <noscript><p class="note">登录需要开启 JavaScript。</p></noscript>
 </main>
 
-<footer class="footer">
-  <div class="shell">
-    <div class="footer__links">
-      <a href="https://quota.bar/zh/">首页</a>
-      <a href="https://quota.run/zh/">排行榜</a>
-      <a href="https://quota.bar/download/QuotaBar-0.5.3.dmg" download>下载</a>
-      <a href="https://github.com/gentpan/QuotaBar">源码</a>
-    </div>
-    <p class="footer__fine">© 2026 QuotaBar · <a href="https://github.com/gentpan/QuotaBar/blob/main/LICENSE">MIT 许可证</a> · Quota Run 与页面上任何服务商均无关联，标志归各自所有者。</p>
+<footer class="foot">
+  <div class="foot__inner">
+    <span class="foot__brand"><img src="../assets/icon.png?v=9adbf67e" alt="" width="16" height="16">Quota Run</span>
+    <nav class="foot__links" aria-label="更多">
+      <a href="https://quota.bar/zh/">QuotaBar 官网</a>
+      <a href="https://github.com/gentpan/QuotaBar">源代码</a>
+      <a href="https://quota.bar/zh/changelog.html">更新日志</a>
+      <a href="https://github.com/gentpan/QuotaBar/blob/main/LICENSE">MIT 许可证</a>
+    </nav>
+    <p class="foot__fine">Quota Run 与页面上出现的服务商均无关联，标志归各自所有者。</p>
   </div>
 </footer>
 
-<script src="../app.js?v=9adbf67e"></script>
-<script src="../run.js?v=9adbf67e"></script>
+
+<script src="../common.js?v=9adbf67e"></script>
 <script src="../account.js?v=9adbf67e"></script>
 </body>
 </html>

@@ -22,25 +22,28 @@ RUN_ROOT="${RUN_ROOT:-/var/www/quota.run}"
 # README 与官网里的更新日志、热力图都从 CHANGELOG.md 和提交记录生成，发布前先同步。
 python3 Scripts/sync_changelog.py ${CHANGELOG_FILE:+--changelog "$CHANGELOG_FILE"}
 
-# 图片也算进去：只换了截图或分享图时，指纹不变的话 CDN 会继续给旧图。
-STAMP="$( { cat web/styles.css web/replica.css web/app.js web/replica.js web-run/run.css web-run/run.js web-run/account.css web-run/account.js \
+# quota.run 的样式和脚本：共用的 base.css / common.js，各页自己的 css / js，以及只在 ?demo=1 时加载的 demo.js。
+RUN_CSS="web-run/base.css web-run/board.css web-run/profile.css web-run/rules.css web-run/account.css"
+RUN_JS="web-run/common.js web-run/board.js web-run/profile.js web-run/account.js web-run/demo.js"
+RUN_PAGES="index u rules login account connect"
+
+# 图片也算进去：只换了截图、分享图或服务商 logo 时，指纹不变的话 CDN 会继续给旧图。
+STAMP="$( { cat web/styles.css web/replica.css web/app.js web/replica.js $RUN_CSS $RUN_JS \
            | /usr/bin/sed -E 's/\?v=[A-Za-z0-9]+//g'
-           find web/assets -type f \( -name '*.png' -o -name '*.jpg' -o -name '*.webp' \) | sort | xargs cat; } \
+           find web/assets web-run/assets -type f \( -name '*.png' -o -name '*.jpg' -o -name '*.webp' \) | sort | xargs cat; } \
          | shasum -a 256 | cut -c1-8)"
 echo "内容指纹 v=$STAMP"
 
-# Rewrite every ?v=… in the HTML, and the font URL the stylesheet carries.
-# quota.run 的排行榜、个人主页（u.html）和登录、账号、连接三页同样带指纹；run.js 从自己的 ?v= 取 logo 的指纹，不用单独改。
-/usr/bin/sed -i '' -E "s/\?v=[A-Za-z0-9]+/?v=$STAMP/g" web/index.html web/changelog.html web/zh/index.html web/zh/changelog.html \
-  web-run/index.html web-run/zh/index.html web-run/u.html web-run/zh/u.html \
-  web-run/login.html web-run/zh/login.html web-run/account.html web-run/zh/account.html \
-  web-run/connect.html web-run/zh/connect.html
-/usr/bin/sed -i '' -E "s/(InstrumentSans-Variable\.ttf)\?v=[A-Za-z0-9]+/\1?v=$STAMP/" web/styles.css
+# Rewrite every ?v=… in the HTML, and the font URL the stylesheets carry.
+# quota.run 的每一页（排行榜、个人主页 u.html、规则，登录、账号、连接）同样带指纹；
+# common.js 从自己的 ?v= 取 logo 和 demo.js 的指纹，不用单独改。
+run_html=""
+for page in $RUN_PAGES; do run_html="$run_html web-run/$page.html web-run/zh/$page.html"; done
+/usr/bin/sed -i '' -E "s/\?v=[A-Za-z0-9]+/?v=$STAMP/g" web/index.html web/changelog.html web/zh/index.html web/zh/changelog.html $run_html
+/usr/bin/sed -i '' -E "s/(InstrumentSans-Variable\.ttf)\?v=[A-Za-z0-9]+/\1?v=$STAMP/" web/styles.css web-run/base.css
 /usr/bin/sed -i '' -E "s/(wallpaper-[a-z0-9-]+\.webp)\?v=[A-Za-z0-9]+/\1?v=$STAMP/g" web/styles.css
 # replica.js 里的 LOGOV 也要跟上，否则 JS 渲染出的那些 logo 拿的是旧指纹。
 /usr/bin/sed -i '' -E "s/(var LOGOV = \")\?v=[A-Za-z0-9]+/\1?v=$STAMP/" web/replica.js
-# 样式表刚改过字体指纹，quota.run 那份副本要跟着换。
-cp web/styles.css web/app.js web-run/
 
 # download/ 里是安装包的服务器副本，由 publish_release.sh 上传，不在 web/ 里——
 # 排除掉，否则 --delete 会把它们删了。
@@ -54,7 +57,7 @@ echo "已同步"
 # copy is the failure this script exists to prevent, so it is checked, not
 # assumed.
 fail=0
-for f in web/styles.css web/replica.css web/app.js web/replica.js web-run/styles.css web-run/run.css web-run/run.js web-run/account.css web-run/account.js; do
+for f in web/styles.css web/replica.css web/app.js web/replica.js $RUN_CSS $RUN_JS; do
   site=https://quota.bar; [[ $f == web-run/* ]] && site=https://quota.run
   want=$(stat -f%z "$f")
   got=$(curl -s -o /dev/null -w '%{size_download}' --max-time 20 "$site/${f#*/}?v=$STAMP")
@@ -65,9 +68,10 @@ for f in web/styles.css web/replica.css web/app.js web/replica.js web-run/styles
     fail=1
   fi
 done
-# /login、/account、/connect 走 Caddy 的 try_files，顺便验证这条映射在线上生效。
+# /rules、/login、/account、/connect 走 Caddy 的 try_files，顺便验证这条映射在线上生效。
 for page in quota.bar/ quota.bar/zh/ quota.run/ quota.run/zh/ quota.run/u.html quota.run/zh/u.html \
-            quota.run/login quota.run/zh/login quota.run/account quota.run/zh/account quota.run/connect quota.run/zh/connect; do
+            quota.run/rules quota.run/zh/rules quota.run/login quota.run/zh/login \
+            quota.run/account quota.run/zh/account quota.run/connect quota.run/zh/connect; do
   html=$(curl -s --max-time 20 "https://$page" | grep -c "?v=$STAMP" || true)
   [ "$html" -gt 0 ] && printf "  ✅ %-22s 引用 %s 处新指纹\n" "$page" "$html" \
                     || { printf "  ❌ %-22s 仍在引用旧指纹\n" "$page"; fail=1; }
