@@ -22,6 +22,7 @@ Server moves, the website, and build or release scripts don't change the app its
 #### Fixed
 
 - Switching the interface language lost the choices of what the ring follows and which limits a card shows: they are kept by window name, and window names change with the language ("周窗口" and "Weekly window"). The reread in the new language now carries each choice over to the same window's new name.
+- The local API (127.0.0.1:6736) answers only requests addressed to 127.0.0.1 or localhost and refuses cross-site origins, so a web page cannot read the figures through DNS rebinding; anything else gets 403.
 
 ## 0.5.3 · 2026-09-13
 

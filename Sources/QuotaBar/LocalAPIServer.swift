@@ -3,8 +3,9 @@ import Network
 import QuotaCore
 
 /// `http://127.0.0.1:6736/v1/limits` for other local tools, after openusage.
-/// Loopback only, off by default, never a credential or an account name, and
-/// no CORS header — a web page cannot read it.
+/// Loopback only, off by default, never a credential or an account name, no
+/// CORS header, and only requests addressed to 127.0.0.1 or localhost — a web
+/// page cannot read it, not even by rebinding its own name to this Mac.
 @MainActor
 final class LocalAPIServer {
     static let shared = LocalAPIServer()
@@ -53,7 +54,9 @@ final class LocalAPIServer {
             Task { @MainActor in
                 let request = data.flatMap { String(data: $0, encoding: .utf8) } ?? ""
                 let path = request.split(separator: " ").dropFirst().first.map(String.init) ?? "/"
-                let (status, body) = LocalAPIServer.shared.respond(to: path)
+                let (status, body) = LocalAPIRequest.isAllowed(request, port: LocalAPIServer.port)
+                    ? LocalAPIServer.shared.respond(to: path)
+                    : ("403 Forbidden", Data(#"{"error":"only requests addressed to 127.0.0.1 or localhost are answered"}"#.utf8))
                 let head = "HTTP/1.1 \(status)\r\nContent-Type: application/json; charset=utf-8\r\nContent-Length: \(body.count)\r\nConnection: close\r\nCache-Control: no-store\r\n\r\n"
                 connection.send(content: Data(head.utf8) + body, completion: .contentProcessed { _ in connection.cancel() })
             }
