@@ -17,8 +17,24 @@ public extension UsageSnapshot {
     /// follows, then the first of the other horizon.
     ///
     /// `picked` is the window the owner chose for the ring: it is always up
-    /// front, since the card marks it.
-    func upFrontWindows(for provider: ProviderID, picked: String? = nil) -> [UsageWindow] {
+    /// front, since the card marks it. `shown` is the owner's own choice from
+    /// the card's menu, used while any of it still matches a window — window
+    /// ids are the provider's titles, and a language switch renames them.
+    func upFrontWindows(for provider: ProviderID, picked: String? = nil, shown: [String]? = nil) -> [UsageWindow] {
+        let chosen: [UsageWindow]
+        if let shown, case let matching = windows.filter({ shown.contains($0.id) }), !matching.isEmpty {
+            chosen = matching
+        } else {
+            chosen = defaultUpFront(for: provider, picked: picked)
+        }
+        var ids = Set(chosen.map(\.id))
+        if let picked, !ids.contains(picked), windows.contains(where: { $0.id == picked }) {
+            ids.insert(picked)
+        }
+        return windows.filter { ids.contains($0.id) }
+    }
+
+    private func defaultUpFront(for provider: ProviderID, picked: String?) -> [UsageWindow] {
         let chosen: [UsageWindow]
         switch provider {
         case .codex, .claude:
@@ -27,11 +43,7 @@ public extension UsageSnapshot {
         default:
             chosen = twoMostUseful(picked: picked)
         }
-        var ids = Set(chosen.map(\.id))
-        if let picked, !ids.contains(picked), windows.contains(where: { $0.id == picked }) {
-            ids.insert(picked)
-        }
-        return windows.filter { ids.contains($0.id) }
+        return chosen
     }
 
     private func twoMostUseful(picked: String?) -> [UsageWindow] {

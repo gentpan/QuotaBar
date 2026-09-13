@@ -137,7 +137,8 @@ struct ProviderCardView: View {
 
     /// What the card shows before it is expanded; see `upFrontWindows`.
     private func primary(_ snapshot: UsageSnapshot) -> [UsageWindow] {
-        snapshot.upFrontWindows(for: id, picked: store.pickedHeadlineWindow(for: id))
+        snapshot.upFrontWindows(
+            for: id, picked: store.pickedHeadlineWindow(for: id), shown: store.experience.cardWindows[id.rawValue])
     }
 
     private func rest(_ snapshot: UsageSnapshot) -> [UsageWindow] {
@@ -310,11 +311,12 @@ struct ProviderCardView: View {
     private var contextItems: some View {
         Button(L10n.t("Refresh \(id.displayName)", "刷新 \(id.displayName)")) { store.refresh(id) }
         Button(L10n.t("Copy as Image", "复制为图片")) { copyImage() }
-        if store.pickedHeadlineWindow(for: id) != nil {
-            Button(L10n.t("Ring follows the fullest window", "圆环改回按最满的窗口显示")) {
-                store.setHeadlineWindow(nil, for: id)
-            }
+        Divider()
+        if let snapshot = store.states[id]?.snapshot, !snapshot.windows.isEmpty {
+            windowsMenu(snapshot)
+            ringMenu(snapshot)
         }
+        placesMenu
         Divider()
         if store.enabled.first != id {
             Button(L10n.t("Move Up", "上移")) { withAnimation(Motion.animation(Motion.spring)) { store.moveProvider(id, by: -1) } }
@@ -322,11 +324,72 @@ struct ProviderCardView: View {
         if store.enabled.last != id {
             Button(L10n.t("Move Down", "下移")) { withAnimation(Motion.animation(Motion.spring)) { store.moveProvider(id, by: 1) } }
         }
-        Button(L10n.t("Hide from Panel", "在下拉面板中隐藏")) {
-            withAnimation(Motion.animation(Motion.spring)) { store.setHidden(true, id, on: .panel) }
-        }
         Button(L10n.t("Turn off \(id.displayName)", "停用 \(id.displayName)")) { store.setEnabled(id, false) }
         Button(L10n.t("Settings…", "设置…")) { SettingsWindow.open() }
+    }
+
+    /// Which windows the card shows before it is expanded. The last one
+    /// cannot be folded away: a card with nothing on it looks broken.
+    private func windowsMenu(_ snapshot: UsageSnapshot) -> some View {
+        let upFront = Set(primary(snapshot).map(\.id))
+        return Menu(L10n.t("Limits on the Card", "卡片上显示的额度")) {
+            ForEach(snapshot.windows) { window in
+                Toggle(window.title, isOn: Binding(
+                    get: { upFront.contains(window.id) },
+                    set: { on in withAnimation(Motion.animation(Motion.spring)) { store.setCardWindow(window.id, upFront: on, for: id) } }))
+                    .disabled(upFront.count == 1 && upFront.contains(window.id))
+            }
+            Divider()
+            Button(L10n.t("Restore Default", "恢复默认")) {
+                withAnimation(Motion.animation(Motion.spring)) { store.resetCardWindows(for: id) }
+            }
+            .disabled(store.experience.cardWindows[id.rawValue] == nil)
+        }
+    }
+
+    /// The window the ring, the island and the menu bar follow for this
+    /// provider — the same choice as double-clicking a window.
+    private func ringMenu(_ snapshot: UsageSnapshot) -> some View {
+        let picked = store.pickedHeadlineWindow(for: id)
+        return Menu(L10n.t("Ring Follows", "圆环跟随的额度")) {
+            Toggle(L10n.t("Automatic (fullest)", "自动（用得最满的）"), isOn: Binding(
+                get: { picked == nil },
+                set: { if $0 { store.setHeadlineWindow(nil, for: id) } }))
+            Divider()
+            ForEach(snapshot.windows.filter { $0.usedPercent != nil }) { window in
+                Toggle(window.title, isOn: Binding(
+                    get: { picked == window.id },
+                    set: { if $0 { store.setHeadlineWindow(window.id, for: id) } }))
+            }
+        }
+    }
+
+    /// Where this provider appears: the same switches as Settings → What
+    /// each place shows, then the menu bar and a desktop card of its own.
+    private var placesMenu: some View {
+        Menu(L10n.t("Show In", "显示位置")) {
+            ForEach(DisplaySurface.allCases) { surface in
+                Toggle(placeName(surface), isOn: Binding(
+                    get: { !store.experience.isHidden(id, on: surface) },
+                    set: { on in withAnimation(Motion.animation(Motion.spring)) { store.setHidden(!on, id, on: surface) } }))
+            }
+            Divider()
+            Toggle(L10n.t("Menu Bar Shows Only \(id.displayName)", "菜单栏只显示 \(id.displayName)"), isOn: Binding(
+                get: { store.selected == id },
+                set: { store.selected = $0 ? id : nil }))
+            Button(L10n.t("Add a \(id.displayName) Desktop Card", "添加一张 \(id.displayName) 桌面卡片")) {
+                store.addDeskCard(for: id)
+            }
+        }
+    }
+
+    private func placeName(_ surface: DisplaySurface) -> String {
+        switch surface {
+        case .panel: L10n.t("Panel", "下拉面板")
+        case .dock: L10n.t("Dock (screen edge)", "停靠条（屏幕边缘）")
+        case .island: L10n.t("Notch Island", "刘海岛")
+        case .desktop: L10n.t("Desktop Cards", "桌面卡片")
+        }
     }
 
     private func copyImage() {

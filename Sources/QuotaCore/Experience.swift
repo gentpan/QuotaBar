@@ -244,6 +244,10 @@ public struct ExperiencePrefs: Codable, Equatable, Sendable {
     /// Providers hidden per surface, by raw value: still enabled, still read,
     /// only not shown there.
     public var hiddenProviders: [String: [String]] = [:]
+    /// Provider raw value → the ids of the windows its card shows before it
+    /// is expanded, where the owner chose them from the card's menu. Absent
+    /// means the card's own choice (`UsageSnapshot.upFrontWindows`).
+    public var cardWindows: [String: [String]] = [:]
     /// Serve 127.0.0.1:6736/v1/limits for other local tools.
     public var localAPI: Bool = false
     /// "http://host:port" or "socks5://host:port"; empty = direct.
@@ -264,7 +268,7 @@ public struct ExperiencePrefs: Codable, Equatable, Sendable {
         case reduceMotion, islandGlow, lowPowerGlow, islandAutoPeek, islandChart, widgetSortsByUrgency
         case deskCards, deskCardsMigrated
         case hideWhenSharing, hotkey, paceAlerts, localAPI, proxy, betaUpdates
-        case resetEffects, resetNotify, hiddenProviders
+        case resetEffects, resetNotify, hiddenProviders, cardWindows
         case shareSignature, shareShowsSignature, shareCardShownForVersion
     }
 
@@ -307,6 +311,7 @@ public struct ExperiencePrefs: Codable, Equatable, Sendable {
         resetEffects = value(.resetEffects, d.resetEffects)
         resetNotify = choice(.resetNotify, d.resetNotify)
         hiddenProviders = value(.hiddenProviders, d.hiddenProviders)
+        cardWindows = value(.cardWindows, d.cardWindows)
         localAPI = value(.localAPI, d.localAPI)
         proxy = value(.proxy, d.proxy)
         betaUpdates = value(.betaUpdates, d.betaUpdates)

@@ -214,6 +214,40 @@ extension UsageStore {
         widgetRevision &+= 1
     }
 
+    // MARK: A card's menu
+
+    /// The windows a provider's card shows before it is expanded, the owner's
+    /// choice applied.
+    func upFrontWindows(for id: ProviderID) -> [UsageWindow] {
+        states[id]?.snapshot?.upFrontWindows(
+            for: id, picked: pickedHeadlineWindow(for: id), shown: experience.cardWindows[id.rawValue]) ?? []
+    }
+
+    /// Shows a window on the card or folds it away. The first change starts
+    /// from what the card showed, so ticking one window keeps the others.
+    func setCardWindow(_ windowID: String, upFront: Bool, for id: ProviderID) {
+        var list = upFrontWindows(for: id).map(\.id)
+        list.removeAll { $0 == windowID }
+        if upFront { list.append(windowID) }
+        guard !list.isEmpty else { return }
+        updateExperience { $0.cardWindows[id.rawValue] = list }
+    }
+
+    func resetCardWindows(for id: ProviderID) {
+        updateExperience { $0.cardWindows[id.rawValue] = nil }
+    }
+
+    /// A big-figure card for one provider, shown on the desktop even if the
+    /// provider had been hidden there.
+    func addDeskCard(for id: ProviderID) {
+        if experience.isHidden(id, on: .desktop) { setHidden(false, id, on: .desktop) }
+        updateExperience { prefs in
+            prefs.deskCards.append(DeskCard(style: .focus, provider: id, x: 0.8, y: 0.1))
+        }
+        if !widgetEnabled { setWidgetEnabled(true) }
+        widgetRevision &+= 1
+    }
+
     /// A new big-figure card, offset from the one it was asked from.
     func addDeskCard(style: DeskCardStyle = .focus, near card: DeskCard? = nil) {
         updateExperience { prefs in

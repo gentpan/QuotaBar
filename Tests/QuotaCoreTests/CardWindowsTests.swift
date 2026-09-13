@@ -53,4 +53,28 @@ final class CardWindowsTests: XCTestCase {
         ])
         XCTAssertEqual(snapshot.upFrontWindows(for: .cursor).count, 2)
     }
+
+    /// Chosen from the card's menu: Spark's week up front, the plan's week folded.
+    func testTheOwnersChoiceWins() {
+        let week = window("Week", 604_800)
+        let spark = window("Week", 604_800, scope: "GPT-5.3-Codex-Spark")
+        let snapshot = UsageSnapshot(planName: "Pro 20x", account: nil, windows: [week, spark])
+        XCTAssertEqual(ids(snapshot.upFrontWindows(for: .codex, shown: [spark.id])), ["Week · GPT-5.3-Codex-Spark"])
+    }
+
+    /// Window ids are titles: after a language switch the saved choice
+    /// matches nothing, and the card falls back to its own choice.
+    func testAChoiceThatMatchesNothingFallsBack() {
+        let snapshot = UsageSnapshot(planName: "Pro 20x", account: nil, windows: [window("周窗口", 604_800)])
+        XCTAssertEqual(ids(snapshot.upFrontWindows(for: .codex, shown: ["Week"])), ["周窗口"])
+    }
+
+    func testTheChoiceSurvivesCoding() throws {
+        var prefs = ExperiencePrefs()
+        prefs.cardWindows["codex"] = ["周窗口"]
+        let back = try JSONDecoder().decode(ExperiencePrefs.self, from: JSONEncoder().encode(prefs))
+        XCTAssertEqual(back.cardWindows["codex"], ["周窗口"])
+        let odd = try JSONDecoder().decode(ExperiencePrefs.self, from: Data(#"{"cardWindows":7}"#.utf8))
+        XCTAssertTrue(odd.cardWindows.isEmpty)
+    }
 }
