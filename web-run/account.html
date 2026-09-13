@@ -5,7 +5,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Your account · Quota Run</title>
-<meta name="description" content="Manage your Quota Run profile, projects, Macs and sign-in methods.">
+<meta name="description" content="Manage your Quota Run profile, projects, Macs, provider accounts and sign-in methods.">
 <meta name="robots" content="noindex">
 <meta name="theme-color" content="#101112">
 <!-- Caddy 把 /account 映射到这个文件。英文在根目录；浏览器语言是中文、或者之前选过中文的，去 /zh/account。 -->
@@ -71,6 +71,7 @@
         <a href="#profile-settings">Public profile</a>
         <a href="#projects">Projects</a>
         <a href="#macs">Macs</a>
+        <a href="#provider-accounts">Provider accounts</a>
         <a href="#sign-in">Sign-in methods</a>
         <a href="#danger">Sign out and delete</a>
       </nav>
@@ -149,6 +150,17 @@
           <div class="acc-alert acc-alert--error" id="macsError" role="alert" hidden></div>
           <ul class="acc-list" id="macsList"></ul>
           <p class="acc-foot">To add a Mac, open QuotaBar on it, go to Settings → Quota Run and choose “Sign in with quota.run”.</p>
+        </section>
+
+        <!-- 服务商账号：读数来自哪个 Codex / Claude / Cursor 账号。服务端只有摘要，没有邮箱，所以这里从不显示邮箱 -->
+        <section class="acc-sec" id="provider-accounts" aria-labelledby="providerAccountsHeading">
+          <header class="acc-sec__head">
+            <h2 id="providerAccountsHeading">Provider accounts</h2>
+            <p>The accounts at Codex, Claude, Cursor and the rest that your readings come from. Only runs bound to one of them rank, and each belongs to one Quota account. quota.run keeps a one-way digest, never the email.</p>
+          </header>
+          <div class="acc-alert acc-alert--error" id="providerAccountsError" role="alert" hidden></div>
+          <ul class="acc-list" id="providerAccountList"></ul>
+          <p class="acc-foot">Account verified: the provider account's email matches a verified sign-in on quota.run. Link that email under Sign-in methods to verify or claim an account.</p>
         </section>
 
         <!-- 登录方式 -->

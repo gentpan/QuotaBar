@@ -7,7 +7,8 @@
  *   login.html?demo=1               三种登录方式
  *   login.html?demo=1&step=code     填验证码（邮箱填 limit@example.com 可以看限流倒计时）
  *   login.html?demo=1&step=signup   新账号起用户名（peter、mika 已被占用，admin 是保留名）
- *   account.html?demo=1             已登录：两台 Mac、两种登录方式、两个项目（&cooldown=0 去掉换计分冷却）
+ *   account.html?demo=1             已登录：两台 Mac、四个服务商账号（核实、绑定、归别人）、两种登录方式、两个项目
+ *                                   （&cooldown=0 去掉换计分冷却，&accounts=0 看没有服务商账号时的样子）
  *   connect.html?demo=1&code=K7PM-4XQD  待批准的连接请求（&state=expired|used|denied|invalid 看其他状态）
  * 没有依赖，没有构建步骤。
  */
@@ -50,6 +51,7 @@
     invalid_links: ["Links must be https:// addresses; GitHub and X also take a username.", "链接必须是 https:// 地址；GitHub 和 X 也可以只填用户名。"],
     too_many_projects: ["At most 12 projects.", "最多 12 个项目。"],
     device_not_found: ["That Mac is no longer on your account.", "这台 Mac 已经不在你的账号里了。"],
+    account_not_found: ["That provider account is no longer bound to your account.", "这个服务商账号已经不在你的账号里了。"],
     body_too_large: ["That's too much to save at once.", "一次保存的内容太多了。"],
     oauth_denied: ["Sign-in was cancelled, so nothing was shared. Pick a method to try again.", "登录已取消，没有共享任何信息。可以再选一种方式试试。"],
     oauth_state: ["That sign-in took too long or was opened in another browser. Please try again.", "这次登录超时了，或者是在另一个浏览器里打开的，请再试一次。"],
@@ -849,6 +851,93 @@
       });
     });
 
+    // ── 服务商账号 ──
+    // 契约里的 providerAccount：{id, provider, firstSeenAt, lastSeenAt, status: owned|elsewhere, verifiedByEmail, runs}。
+    // 服务端只有账号摘要，没有邮箱：同一个服务商绑了几个账号时，用 id 的前 8 位区分
+    var accountList = $("providerAccountList");
+    var confirmAccount = null;
+
+    function renderProviderAccounts(focus) {
+      var list = me.providerAccounts || [];
+      if (!list.length) {
+        accountList.innerHTML = '<li class="acc-empty">' + t("No provider accounts yet. They appear after QuotaBar uploads its first readings.", "还没有服务商账号。QuotaBar 第一次上传读数后，它们会出现在这里。") + "</li>";
+        return;
+      }
+      var perProvider = {};
+      list.forEach(function (a) { perProvider[a.provider] = (perProvider[a.provider] || 0) + 1; });
+      accountList.innerHTML = list.map(function (a) {
+        var id = esc(a.id);
+        var name = Q.providerName(a.provider);
+        var elsewhere = a.status === "elsewhere";
+        var verified = !elsewhere && a.verifiedByEmail;
+        var badge = elsewhere
+          ? '<span class="badge acc-badge-elsewhere">' + t("Owned by another Quota account", "归另一个 Quota 账号") + "</span>"
+          : verified
+            ? '<span class="badge run-acctbadge" title="' + esc(Q.accountVerifiedText()) + '">' + Q.ACCOUNT_ICON + t("Account verified", "账号已核实") + "</span>"
+            : '<span class="badge acc-badge-bound">' + t("Bound", "已绑定") + "</span>";
+        var meta = [];
+        var since = dayOf(a.firstSeenAt);
+        if (since) meta.push(ZH ? esc(since) + " 绑定" : "Bound since " + esc(since));
+        var seen = Q.toDate(a.lastSeenAt);
+        if (seen) meta.push(t("last upload ", "最近上传 ") + Q.timeTag(seen));
+        var runs = Number(a.runs) || 0;
+        meta.push(ZH ? Q.number(runs) + " 轮成绩" : Q.number(runs) + (runs === 1 ? " run" : " runs"));
+        var label = name + (perProvider[a.provider] > 1 ? " " + String(a.id || "").slice(0, 8) : "");
+        var actions;
+        if (confirmAccount === a.id) {
+          actions = '<div class="acc-confirm" role="group" aria-label="' + esc(t("Confirm unbinding ", "确认解除绑定 ") + label) + '">' +
+            '<span class="acc-confirm__text">' + esc(ZH
+              ? "解除绑定 " + name + "？你在 quota.run 上来自这个账号的读数和成绩会被删除。仍登录着它的 Mac 下次上传时会重新绑定，除非也在 QuotaBar 里解除绑定。"
+              : "Unbind " + name + "? Your readings and runs from this account are deleted from quota.run. A Mac still signed in to it binds it again on its next upload, unless you unbind it in QuotaBar too.") + "</span>" +
+            '<button type="button" class="acc-btn acc-btn--sm acc-btn--danger" data-act="unbind-yes" data-id="' + id + '">' + t("Unbind", "解除绑定") + "</button>" +
+            '<button type="button" class="acc-btn acc-btn--sm acc-btn--quiet" data-act="unbind-no" data-id="' + id + '">' + t("Cancel", "取消") + "</button></div>";
+        } else {
+          actions = '<button type="button" class="acc-btn acc-btn--sm acc-btn--quiet" data-act="unbind" data-id="' + id + '" aria-label="' + esc(t("Unbind ", "解除绑定 ") + label) + '">' + t("Unbind", "解除绑定") + "</button>";
+        }
+        return '<li class="acc-row acc-row--account' + (verified ? " is-verified" : elsewhere ? " is-elsewhere" : "") + '" data-id="' + id + '">' +
+          '<span class="acc-row__icon acc-row__icon--logo">' + Q.logo(a.provider, 24) + "</span>" +
+          '<div class="acc-row__main">' +
+            '<p class="acc-row__title"><span class="acc-row__name">' + esc(name) + "</span>" +
+              (perProvider[a.provider] > 1 ? '<span class="acc-row__tag" title="' + esc(t("Account id", "账号编号")) + '">' + esc(String(a.id || "").slice(0, 8)) + "</span>" : "") +
+              badge + "</p>" +
+            '<p class="acc-row__meta">' + meta.join(" · ") + "</p>" +
+            (elsewhere ? '<p class="acc-row__note">' + t("Runs from it don't count. Sign in with the email of that provider account to claim it.", "它的成绩不计入。用这个服务商账号的邮箱登录 quota.run，就能认领。") + "</p>" : "") +
+          "</div>" +
+          '<div class="acc-row__actions">' + actions + "</div></li>";
+      }).join("");
+      if (focus) {
+        var el = accountList.querySelector(focus);
+        if (el) el.focus();
+      }
+    }
+
+    accountList.addEventListener("click", function (event) {
+      var button = event.target.closest("button[data-act]");
+      if (!button) return;
+      var id = button.getAttribute("data-id");
+      var act = button.getAttribute("data-act");
+      var sel = function (a) { return 'button[data-act="' + a + '"][data-id="' + CSS.escape(id) + '"]'; };
+      say($("providerAccountsError"), "");
+      if (act === "unbind") { confirmAccount = id; renderProviderAccounts(sel("unbind-no")); return; }
+      if (act === "unbind-no") { confirmAccount = null; renderProviderAccounts(sel("unbind")); return; }
+      busy(button, true);
+      call("DELETE", "/accounts/" + encodeURIComponent(id)).then(function (result) {
+        confirmAccount = null;
+        me.providerAccounts = (result && result.providerAccounts) || (me.providerAccounts || []).filter(function (a) { return a.id !== id; });
+        renderProviderAccounts();
+        $("providerAccountsHeading").focus();
+      }, function (error) {
+        busy(button, false);
+        if (lostSession(error)) return;
+        confirmAccount = null;
+        if (error.code === "account_not_found") {
+          me.providerAccounts = (me.providerAccounts || []).filter(function (a) { return a.id !== id; });
+        }
+        renderProviderAccounts();
+        say($("providerAccountsError"), explain(error));
+      });
+    });
+
     // ── 登录方式 ──
     var identityList = $("identityList");
 
@@ -1009,6 +1098,7 @@
         return call("GET", "/me").then(function (data) {
           me = data;
           renderIdentities();
+          renderProviderAccounts();   // 绑了新邮箱，服务端会重新核对哪些服务商账号的邮箱对得上
         }, function () { /* 已经绑上了，列表下次刷新再更新 */ });
       }).then(function () {
         linkBox.hidden = true;
@@ -1093,7 +1183,7 @@
     });
 
     // ── 起步 ──
-    each(["macsHeading", "signinHeading"], function (id) { $(id).setAttribute("tabindex", "-1"); });
+    each(["macsHeading", "providerAccountsHeading", "signinHeading"], function (id) { $(id).setAttribute("tabindex", "-1"); });
 
     var bannerCode = params.get("error");
     if (bannerCode) {
@@ -1114,6 +1204,7 @@
         fillProfile();
         renderProjects();
         renderMacs();
+        renderProviderAccounts();
         renderIdentities();
         Q.renderAccountLink({ signedIn: true, needsSignup: false, user: me.user });
         $("accLoading").hidden = true;
@@ -1394,6 +1485,13 @@
           { id: "idn_gh01", provider: "github", email: "peter@example.com", name: "Peter", linkedAt: NOW - 38 * 86400 },
           { id: "idn_em02", provider: "email", email: "peter@example.com", name: null, linkedAt: NOW - 12 * 86400 },
         ],
+        // 和 run.js 的示例主页对得上：Codex、Cursor 核实过，Claude 只绑定；第二个 Codex 账号（工作账号）归别人
+        providerAccounts: params.get("accounts") === "0" ? [] : [
+          { id: "3f9a2c71d04be815", provider: "codex", firstSeenAt: NOW - 37 * 86400, lastSeenAt: NOW - 240, status: "owned", verifiedByEmail: true, runs: 41 },
+          { id: "b27e5d0c9a61f344", provider: "claude", firstSeenAt: NOW - 36 * 86400, lastSeenAt: NOW - 3 * 3600, status: "owned", verifiedByEmail: false, runs: 38 },
+          { id: "0c4d81e6f2a97b53", provider: "cursor", firstSeenAt: NOW - 20 * 86400, lastSeenAt: NOW - 4 * 86400, status: "owned", verifiedByEmail: true, runs: 7 },
+          { id: "e81b36a4c7d0f229", provider: "codex", firstSeenAt: NOW - 6 * 86400, lastSeenAt: NOW - 2 * 86400 - 3600, status: "elsewhere", verifiedByEmail: false, runs: 0 },
+        ],
       },
       connect: { status: params.get("state") || "pending", deviceName: "Mac mini", platform: "macos", appVersion: "0.5.3", createdAt: NOW - 48, expiresAt: NOW + 552 },
     };
@@ -1493,6 +1591,13 @@
           signedIn();
           state.me.devices = state.me.devices.filter(function (d) { return d.deviceId !== decodeURIComponent(m[1]); });
           return { devices: state.me.devices };
+        }
+        if (method === "DELETE" && (m = /^\/accounts\/(.+)$/.exec(path))) {
+          signedIn();
+          var accountId = decodeURIComponent(m[1]);
+          if (!state.me.providerAccounts.some(function (a) { return a.id === accountId; })) fail(404, "account_not_found", "No provider account with that id.");
+          state.me.providerAccounts = state.me.providerAccounts.filter(function (a) { return a.id !== accountId; });
+          return { providerAccounts: state.me.providerAccounts };
         }
         if (method === "DELETE" && (m = /^\/identities\/(.+)$/.exec(path))) {
           signedIn();

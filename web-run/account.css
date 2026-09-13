@@ -272,6 +272,14 @@
 .acc-confirm__text { flex-basis: 100%; font-size: 13px; line-height: 1.45; color: var(--ink); text-align: right; }
 .acc-foot { margin: var(--s-3) 0 0; font-size: 13px; line-height: 1.55; color: var(--muted); }
 
+/* 服务商账号的行：图标位放服务商 logo；核实过的蓝徽章，只绑定的灰徽章，归别人的琥珀徽章 */
+.acc-row__icon--logo .run-logo { width: 24px; height: 24px; }
+.acc-row__icon--logo .run-logo.is-dark { width: 26px; height: 26px; }
+.acc-row__tag { padding: 0 6px; border-radius: var(--r-sm); background: rgba(255, 255, 255, 0.06); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; line-height: 20px; color: var(--body); }
+.acc-badge-bound { --badge: #a1a7b0; }
+.acc-badge-elsewhere { --badge: #f5a524; white-space: normal; height: auto; min-height: 20px; line-height: 1.3; }
+.acc-row--account .run-acctbadge { cursor: help; }
+
 .acc-link-methods { display: grid; gap: var(--s-2); margin-top: var(--s-6); }
 .acc-link-row { display: flex; flex-wrap: wrap; gap: var(--s-2); }
 .acc-subform { padding: var(--s-4); border: 1px solid var(--line); border-radius: var(--r-lg); background: rgba(255, 255, 255, 0.015); }

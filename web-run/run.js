@@ -166,6 +166,24 @@
       : '<span class="badge run-tier run-tier--standard">' + t("Standard", "标准") + "</span>";
   }
 
+  // 「账号已核实」：服务商账号的邮箱和这个人在 quota.run 上验证过的登录邮箱一致（accountVerified）。
+  // 不是级别，只是级别旁边一枚小图标；名字给读屏，一句话放在 title 里当提示
+  var ACCOUNT_ICON = '<svg aria-hidden="true" width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="5" r="2.6"/><path d="M1.5 14c0-2.6 2-4.5 4.5-4.5 1.1 0 2.1.3 2.9 1"/><path d="m9.8 11.6 1.9 1.9 3.3-3.7"/></svg>';
+
+  function accountVerifiedText() {
+    return t("The provider account's email matches a verified sign-in on quota.run", "服务商账号的邮箱与 quota.run 上验证过的登录邮箱一致");
+  }
+
+  function accountMark(verified, inline) {
+    if (!verified) return "";
+    return '<span class="run-acct' + (inline ? " run-acct--inline" : "") + '" role="img" aria-label="' + esc(t("Account verified", "账号已核实")) +
+      '" title="' + esc(accountVerifiedText()) + '">' + ACCOUNT_ICON + "</span>";
+  }
+
+  function tierCell(tier, verified) {
+    return '<span class="run-tiercell">' + tierBadge(tier) + accountMark(verified) + "</span>";
+  }
+
   function regionLabel(region) {
     return region === "china" ? t("China", "中国") : region === "global" ? t("Global", "国际") : "";
   }
@@ -517,10 +535,10 @@
           '<td class="lb-runner"><a class="run-runner" href="' + esc(profileHref(e.username)) + '">' + avatar(e) +
           '<span class="run-runner__names"><span class="run-runner__name">' + esc(e.displayName || e.username) + "</span>" +
           '<span class="run-runner__handle">@' + esc(e.username) + "</span>" +
-          '<span class="run-runner__handle run-narrow">' + (e.tier === "verified" ? t("Verified", "已验证") : t("Standard", "标准")) + " · " + esc(relative(date)) + "</span></span></a></td>" +
+          '<span class="run-runner__handle run-narrow">' + (e.tier === "verified" ? t("Verified", "已验证") : t("Standard", "标准")) + accountMark(e.accountVerified, true) + " · " + esc(relative(date)) + "</span></span></a></td>" +
           '<td class="lb-value"><span class="run-value">' + esc(isPercent ? percent(v) : duration(v)) + "</span>" +
           '<span class="run-meter" aria-hidden="true"><i style="width:' + Math.max(3, Math.min(100, share)).toFixed(1) + '%"></i></span></td>' +
-          '<td class="lb-tier">' + tierBadge(e.tier) + "</td>" +
+          '<td class="lb-tier">' + tierCell(e.tier, e.accountVerified) + "</td>" +
           '<td class="lb-when">' + timeTag(date) + "</td></tr>";
       }).join("");
 
@@ -714,7 +732,7 @@
       '<span><b>' + esc(boardName(best)) + "</b><small>" + esc(windowLabel(best.windowSeconds, best.windowKey, best.windowTitle)) + " · " + esc(metricLabel(best.metric)) + "</small></span></span>" +
       '<span class="run-best__value">' + esc(peak ? percent(best.value) : duration(best.value)) + "</span>" +
       '<span class="run-best__rank">' + rankLine + "</span>" +
-      '<span class="run-best__foot">' + tierBadge(best.tier) + '<span class="run-dim">' + (achieved ? timeTag(achieved) : esc(seasonLabel(best.season))) + "</span></span></a>";
+      '<span class="run-best__foot">' + tierCell(best.tier, best.accountVerified) + '<span class="run-dim">' + (achieved ? timeTag(achieved) : esc(seasonLabel(best.season))) + "</span></span></a>";
   }
 
   function projectCard(project) {
@@ -748,7 +766,7 @@
         '<td class="rr-peak"><span class="run-value">' + (run.peakPercent == null ? "—" : esc(percent(run.peakPercent))) + "</span></td>" +
         '<td class="rr-full">' + (live ? '<span class="run-live"><i aria-hidden="true"></i>' + t("In progress", "进行中") + "</span>"
           : run.secondsTo100 == null ? '<span class="run-dim">—</span>' : '<span class="run-value">' + esc(duration(run.secondsTo100)) + "</span>") + "</td>" +
-        '<td class="rr-tier">' + tierBadge(run.tier) + "</td>" +
+        '<td class="rr-tier">' + tierCell(run.tier, run.accountVerified) + "</td>" +
         '<td class="rr-when">' + timeTag(when) + "</td></tr>";
     }).join("");
     return '<div class="run-panel"><div class="run-table-wrap"><table class="run-table run-table--runs"><thead><tr>' +
@@ -890,6 +908,10 @@
       return { provider: b.provider, plan: b.plan, planLabel: b.planLabel, windowKey: b.windowKey, windowSeconds: b.windowSeconds, windowTitle: b.windowTitle, runners: Math.round(b.runners * share), season: isoWeek(Date.now()) };
     }
 
+    function accountVerified(username, provider) {
+      return username === "peter" ? provider !== "claude" : hue(username + ":" + provider) % 3 !== 0;
+    }
+
     function findBoard(o) {
       return BOARDS.filter(function (b) { return b.provider === o.provider && b.plan === o.plan && b.windowKey === o.window; })[0];
     }
@@ -926,6 +948,8 @@
         }
         e.tier = p[0] === "peter" || rand() < 0.7 ? "verified" : "standard";
         e.achievedAt = Math.round(from + rand() * span);
+        // 不动随机序列（别的数字保持原样）：按人名和服务商定下来；peter 的 Claude 账号只绑定、没核实，和示例账号页一致
+        e.accountVerified = accountVerified(p[0], b.provider);
         return e;
       });
       // 峰值并列时，先到的排前面
@@ -953,17 +977,17 @@
         provider: b.provider, plan: b.plan, planLabel: b.planLabel, windowKey: b.windowKey, windowSeconds: b.windowSeconds,
         peakPercent: peak, secondsTo50: to100 ? Math.round(to100 * 0.46) : null, secondsTo90: to100 ? Math.round(to100 * 0.88) : null,
         secondsTo100: to100, tier: tier, completedAt: to100 ? NOW - endAgo : null, lastObservedAt: NOW - endAgo,
-        resetsAt: NOW - endAgo + (to100 ? 0 : 3600), season: isoWeek((NOW - endAgo) * 1000),
+        resetsAt: NOW - endAgo + (to100 ? 0 : 3600), season: isoWeek((NOW - endAgo) * 1000), accountVerified: false,
       }, extra || {});
     }
 
-    function best(board, metric, value, rank, tier) {
+    function best(board, metric, value, rank, tier, verified) {
       var b = BOARDS[board];
       var runners = b.runners;
       return {
         provider: b.provider, plan: b.plan, planLabel: b.planLabel, windowKey: b.windowKey, windowSeconds: b.windowSeconds, windowTitle: b.windowTitle,
         metric: metric, unit: metric === "peak" ? "percent" : "seconds", value: value, rank: rank, runners: runners,
-        percentile: Math.max(1, Math.ceil(rank / runners * 100)), tier: tier, season: isoWeek(Date.now()),
+        percentile: Math.max(1, Math.ceil(rank / runners * 100)), tier: tier, accountVerified: !!verified, season: isoWeek(Date.now()),
       };
     }
 
@@ -973,7 +997,7 @@
       // 主页上的名次跨赛季算，对应「全部时间」那张榜
       var rows = leaderboard({ provider: b.provider, plan: b.plan, window: b.windowKey, metric: metric, season: "all", region: "", tier: "all" }).entries;
       var e = rows.filter(function (row) { return row.username === "peter"; })[0];
-      return Object.assign(best(board, metric, e.value, e.rank, e.tier), { achievedAt: e.achievedAt });
+      return Object.assign(best(board, metric, e.value, e.rank, e.tier, e.accountVerified), { achievedAt: e.achievedAt });
     }
 
     function user(username) {
@@ -985,12 +1009,13 @@
           links: { website: "https://quota.bar", github: "gentpan", x: "" },
           stats: { runs: 86, verifiedRuns: 71, providers: 3, activeDays: 41 },
           bests: bests,
+          // Codex 和 Cursor 账号核实过，Claude 账号只绑定（见 account.js 的示例账号）
           recent: [
-            run(0, 64, null, "verified", 1800, { resetsAt: NOW + 3 * 86400 + 7200, completedAt: null }),
+            run(0, 64, null, "verified", 1800, { resetsAt: NOW + 3 * 86400 + 7200, completedAt: null, accountVerified: true }),
             run(1, 100, Math.round(bests[1].value * 1.09), "verified", 3 * 3600 + 600),
             run(1, 100, Math.round(bests[1].value * 1.24), "verified", 26 * 3600),
             run(1, 91, null, "standard", 2 * 86400 + 5400),
-            run(3, 100, bests[3].value, "verified", 4 * 86400),
+            run(3, 100, bests[3].value, "verified", 4 * 86400, { accountVerified: true }),
             run(2, 100, 412300, "verified", 6 * 86400 + 3600),
           ],
           projects: [
@@ -1011,13 +1036,13 @@
         bio: "", links: {},
         stats: { runs: 12 + Math.floor(rand() * 60), verifiedRuns: 8 + Math.floor(rand() * 30), providers: 2, activeDays: 6 + Math.floor(rand() * 30) },
         bests: [
-          best(first, "speed", Math.round(BOARDS[first].fastest * (1.05 + r1 * 0.04)), r1, rand() < 0.7 ? "verified" : "standard"),
-          best(second, "peak", 100 - (r2 > 10 ? 1.5 : 0), r2, "verified"),
+          best(first, "speed", Math.round(BOARDS[first].fastest * (1.05 + r1 * 0.04)), r1, rand() < 0.7 ? "verified" : "standard", accountVerified(username, BOARDS[first].provider)),
+          best(second, "peak", 100 - (r2 > 10 ? 1.5 : 0), r2, "verified", accountVerified(username, BOARDS[second].provider)),
         ],
         recent: [
-          run(first, 100, Math.round(BOARDS[first].fastest * 1.2), "verified", 5 * 3600),
-          run(second, 97.5, null, "standard", 2 * 86400),
-          run(first, 100, Math.round(BOARDS[first].fastest * 1.31), "verified", 5 * 86400),
+          run(first, 100, Math.round(BOARDS[first].fastest * 1.2), "verified", 5 * 3600, { accountVerified: accountVerified(username, BOARDS[first].provider) }),
+          run(second, 97.5, null, "standard", 2 * 86400, { accountVerified: accountVerified(username, BOARDS[second].provider) }),
+          run(first, 100, Math.round(BOARDS[first].fastest * 1.31), "verified", 5 * 86400, { accountVerified: accountVerified(username, BOARDS[first].provider) }),
         ],
         projects: [],
       };
@@ -1033,7 +1058,7 @@
     providerName: providerName, logo: logo, avatar: avatar, regionLabel: regionLabel, safeLink: safeLink,
     stateBox: stateBox, copyText: copyText, request: request, pageHref: pageHref, homeHref: homeHref,
     profileHref: profileHref, currentPath: currentPath, session: session, renderAccountLink: renderAccountLink, demoSession: demoSession,
-    FULL_FORMAT: FULL_FORMAT, YEAR_FORMAT: YEAR_FORMAT, ICONS: ICONS,
+    FULL_FORMAT: FULL_FORMAT, YEAR_FORMAT: YEAR_FORMAT, ICONS: ICONS, ACCOUNT_ICON: ACCOUNT_ICON, accountVerifiedText: accountVerifiedText,
   };
 
   accountLink();
