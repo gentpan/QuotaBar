@@ -25,6 +25,8 @@ struct UsagePane: View {
     }
 
     var body: some View {
+        ResetCalendarCard(store: store)
+
         HStack {
             GlassSegmented(
                 options: Tab.allCases.map { (value: $0, label: $0.label) },
@@ -683,5 +685,88 @@ private struct VolumeCards: View {
                 .font(.system(size: 15, weight: .semibold, design: .monospaced))
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+/// The resets coming up over the next seven days, by day: which window of
+/// which provider starts again, at what time, and how much of it is used.
+struct ResetCalendarCard: View {
+    @ObservedObject var store: UsageStore
+    /// The clock the week is counted from; fixed for off-screen renders.
+    var now: Date?
+
+    private var days: [ResetSchedule.Day] {
+        let readings = store.enabled.compactMap { id in store.states[id]?.snapshot.map { (id, $0) } }
+        return ResetSchedule.upcoming(readings, now: now ?? Date())
+    }
+
+    var body: some View {
+        SettingsCard(L10n.t("Resets in the next 7 days", "接下来 7 天的额度重置")) {
+            let days = days
+            if days.isEmpty {
+                Text(L10n.t("No limits reset in the next seven days.", "接下来 7 天没有额度重置。"))
+                    .font(.system(size: 12))
+                    .foregroundStyle(.secondary)
+            } else {
+                VStack(alignment: .leading, spacing: Design.space3) {
+                    ForEach(days) { day in
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text(dayTitle(day.day))
+                                .font(.system(size: 11, weight: .semibold))
+                                .foregroundStyle(.secondary)
+                            ForEach(day.entries) { entry in row(entry) }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private func row(_ entry: ResetSchedule.Entry) -> some View {
+        HStack(spacing: Design.space2) {
+            Text(time(entry.at))
+                .font(.system(size: 12, design: .monospaced))
+                .frame(width: 64, alignment: .leading)
+            ProviderGlyph(id: entry.provider, size: 14)
+                .frame(width: 16)
+            Text(entry.provider.displayName)
+                .font(.system(size: 12, weight: .medium))
+            Text(entry.window.title)
+                .font(.system(size: 12))
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+                .truncationMode(.tail)
+            Spacer(minLength: Design.space2)
+            if let used = entry.window.usedPercent {
+                let shown = QuotaFormat.percent(store.meterMode.shownPercent(fromUsed: used))
+                Text(store.meterMode == .remaining ? L10n.t("\(shown) left", "剩余 \(shown)") : L10n.t("\(shown) used", "已用 \(shown)"))
+                    .font(.system(size: 11, design: .monospaced))
+                    .foregroundStyle(used >= 90 ? Color(hex: "E5484D") : used >= 70 ? Color(hex: "F5A524") : .secondary)
+            }
+        }
+    }
+
+    private func dayTitle(_ day: Date) -> String {
+        let calendar = Calendar.current
+        let format = DateFormatter()
+        format.locale = L10n.locale
+        format.setLocalizedDateFormatFromTemplate("MMMdEEE")
+        let date = format.string(from: day)
+        let reference = now ?? Date()
+        if calendar.isDate(day, inSameDayAs: reference) { return L10n.t("Today · \(date)", "今天 · \(date)") }
+        if let tomorrow = calendar.date(byAdding: .day, value: 1, to: reference), calendar.isDate(day, inSameDayAs: tomorrow) {
+            return L10n.t("Tomorrow · \(date)", "明天 · \(date)")
+        }
+        return date
+    }
+
+    private func time(_ date: Date) -> String {
+        let format = DateFormatter()
+        switch store.experience.clockStyle {
+        case .automatic: format.timeStyle = .short
+        case .twelveHour: format.dateFormat = "h:mm a"
+        case .twentyFourHour: format.dateFormat = "HH:mm"
+        }
+        return format.string(from: date)
     }
 }

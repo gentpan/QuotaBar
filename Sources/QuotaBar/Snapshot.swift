@@ -461,6 +461,18 @@ enum Snapshot {
                 dark: false)
         }
 
+        for language in [L10n.Language.zhHans, .en] {
+            L10n.override = language
+            write(
+                ResetCalendarCard(store: store, now: referenceDate)
+                    .environment(\.glassDisabled, true)
+                    .frame(width: 620)
+                    .padding(Design.space4),
+                to: base,
+                name: "usage-resets-\(language == .en ? "en" : "zh")",
+                dark: false)
+        }
+
         // The update card: found, and downloaded and verified.
         let notes = """
         ### 2026-09-14
