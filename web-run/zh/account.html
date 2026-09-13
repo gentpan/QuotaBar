@@ -1,0 +1,251 @@
+<!doctype html>
+<!-- 由 Scripts/sync_changelog.py 从 site/account.html 生成：改模板，不要改这个文件。 -->
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>我的账号 · Quota Run</title>
+<meta name="description" content="管理 Quota Run 的主页、项目、Mac 和登录方式。">
+<meta name="robots" content="noindex">
+<meta name="theme-color" content="#101112">
+<link rel="canonical" href="https://quota.run/zh/account">
+<link rel="icon" type="image/png" sizes="256x256" href="../assets/icon.png?v=544371bc">
+<link rel="icon" sizes="48x48" href="/favicon.ico?v=544371bc">
+<link rel="apple-touch-icon" sizes="180x180" href="../assets/apple-touch-icon.png?v=544371bc">
+<link rel="stylesheet" href="../styles.css?v=544371bc">
+<link rel="stylesheet" href="../run.css?v=544371bc">
+<link rel="stylesheet" href="../account.css?v=544371bc">
+<!-- 登录、账号、连接三页不挂统计脚本：地址里有 next 和连接码，不往第三方送。 -->
+</head>
+<body class="logpage runpage accpage" data-run-page="account">
+<a class="run-skip" href="#account">跳到账号设置</a>
+<header class="logbar">
+  <div class="shell logbar__inner">
+    <a class="logbar__brand wordmark" href="https://quota.bar/zh/"><img src="../assets/icon.png?v=544371bc" alt="" width="22" height="22">QuotaBar</a>
+    <nav class="logbar__links" aria-label="站点">
+      <a href="https://quota.bar/zh/">首页</a>
+      <a href="https://quota.run/zh/">排行榜</a>
+      <a href="https://quota.bar/download/QuotaBar-0.5.3.dmg" download>下载</a>
+      <a class="run-lang" href="/account" hreflang="en" lang="en" data-lang="en">EN</a>
+      <a class="run-account" id="runAccount" href="/zh/login" data-state="out">登录</a>
+    </nav>
+  </div>
+</header>
+
+<main class="shell acc-main" id="account" aria-busy="true">
+  <div class="run-loading run-loading--profile" id="accLoading" role="status">
+    <span class="sr-only">正在加载账号…</span>
+    <span class="run-skel run-skel--avatar"></span>
+    <span class="run-skel run-skel--title"></span>
+    <span class="run-skel"></span>
+    <span class="run-skel"></span>
+  </div>
+  <div id="accProblem" hidden></div>
+  <noscript><p class="run-note">账号页需要开启 JavaScript。</p></noscript>
+
+  <div class="acc-app" id="accApp" hidden>
+    <section class="acc-head" aria-labelledby="accName">
+      <div class="acc-head__id">
+        <span id="accAvatar"></span>
+        <div class="acc-head__names">
+          <p class="run-eyebrow"><i aria-hidden="true"></i>我的 Quota Run 账号</p>
+          <h1 id="accName"></h1>
+          <p class="run-me__meta" id="accMeta"></p>
+        </div>
+      </div>
+      <div class="acc-head__actions">
+        <a class="acc-btn" id="accProfileLink" href="#">
+          <svg aria-hidden="true" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9.5 2.5h4v4M13.5 2.5 7.5 8.5M12 9.5v3a1 1 0 0 1-1 1H3.5a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1h3"/></svg>
+          <span>查看公开主页</span>
+        </a>
+        <button class="acc-btn acc-btn--quiet" type="button" data-signout>退出登录</button>
+      </div>
+    </section>
+
+    <div class="acc-alert acc-alert--error" id="accBanner" role="alert" hidden></div>
+
+    <div class="acc-layout">
+      <nav class="acc-nav" aria-label="账号设置分区">
+        <a href="#profile-settings">公开主页</a>
+        <a href="#projects">项目</a>
+        <a href="#macs">Mac</a>
+        <a href="#sign-in">登录方式</a>
+        <a href="#danger">退出与删除</a>
+      </nav>
+
+      <div class="acc-sections">
+        <!-- 公开主页 -->
+        <section class="acc-sec" id="profile-settings" aria-labelledby="profileHeading">
+          <header class="acc-sec__head">
+            <h2 id="profileHeading">公开主页</h2>
+            <p>别人打开你的主页时看到的内容。登录邮箱不会出现在上面。</p>
+          </header>
+          <form class="acc-form" id="profileForm" novalidate>
+            <div class="acc-grid">
+              <div class="acc-field">
+                <label class="acc-label" for="pfName">显示名称</label>
+                <input class="acc-input" id="pfName" name="displayName" type="text" maxlength="40" autocomplete="nickname">
+              </div>
+              <fieldset class="acc-field">
+                <legend class="acc-label">地区</legend>
+                <div class="run-seg acc-seg">
+                  <label><input type="radio" name="region" value="global"><span>国际</span></label>
+                  <label><input type="radio" name="region" value="china"><span>中国</span></label>
+                </div>
+              </fieldset>
+            </div>
+            <div class="acc-field">
+              <div class="acc-label-row"><label class="acc-label" for="pfBio">简介</label><span class="acc-count" id="pfBioCount" aria-hidden="true">0 / 160</span></div>
+              <textarea class="acc-input acc-textarea" id="pfBio" name="bio" rows="3" maxlength="160" placeholder="一两句话，说说你在做什么"></textarea>
+            </div>
+            <div class="acc-grid acc-grid--3">
+              <div class="acc-field">
+                <label class="acc-label" for="pfWebsite">网站</label>
+                <input class="acc-input" id="pfWebsite" name="website" type="url" inputmode="url" autocomplete="url" spellcheck="false" placeholder="https://">
+              </div>
+              <div class="acc-field">
+                <label class="acc-label" for="pfGithub">GitHub</label>
+                <input class="acc-input" id="pfGithub" name="github" type="text" autocapitalize="off" spellcheck="false" placeholder="用户名或链接">
+              </div>
+              <div class="acc-field">
+                <label class="acc-label" for="pfX">X</label>
+                <input class="acc-input" id="pfX" name="x" type="text" autocapitalize="off" spellcheck="false" placeholder="@账号或链接">
+              </div>
+            </div>
+            <div class="acc-actions">
+              <button class="acc-btn acc-btn--primary" type="submit">保存主页</button>
+              <p class="acc-status" role="status" aria-live="polite"></p>
+            </div>
+          </form>
+        </section>
+
+        <!-- 项目 -->
+        <section class="acc-sec" id="projects" aria-labelledby="projectsHeading">
+          <header class="acc-sec__head">
+            <h2 id="projectsHeading">项目 <span class="acc-sec__count" id="projectsCount"></span></h2>
+            <p>最多 12 个，在主页上显示成卡片。链接必须以 https:// 开头。</p>
+          </header>
+          <form class="acc-form" id="projectsForm" novalidate>
+            <div class="acc-projects" id="projectsList"></div>
+            <button class="acc-btn acc-btn--dashed" type="button" id="projectAdd">
+              <svg aria-hidden="true" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M8 3v10M3 8h10"/></svg>
+              <span>添加项目</span>
+            </button>
+            <div class="acc-actions">
+              <button class="acc-btn acc-btn--primary" type="submit">保存项目</button>
+              <p class="acc-status" role="status" aria-live="polite"></p>
+            </div>
+          </form>
+        </section>
+
+        <!-- Mac -->
+        <section class="acc-sec" id="macs" aria-labelledby="macsHeading">
+          <header class="acc-sec__head">
+            <h2 id="macsHeading">Mac</h2>
+            <p>只有计分那台 Mac 的读数算成绩。把计分换到另一台 Mac，要距离上次更换满 7 天。</p>
+          </header>
+          <div class="acc-alert acc-alert--error" id="macsError" role="alert" hidden></div>
+          <ul class="acc-list" id="macsList"></ul>
+          <p class="acc-foot">要添加一台 Mac：在那台 Mac 上打开 QuotaBar，进「设置」→「Quota Run」，点「用 quota.run 登录」。</p>
+        </section>
+
+        <!-- 登录方式 -->
+        <section class="acc-sec" id="sign-in" aria-labelledby="signinHeading">
+          <header class="acc-sec__head">
+            <h2 id="signinHeading">登录方式</h2>
+            <p>下面任何一种都能登录这个账号，至少要留一种。</p>
+          </header>
+          <div class="acc-alert acc-alert--error" id="identitiesError" role="alert" hidden></div>
+          <ul class="acc-list" id="identityList"></ul>
+          <div class="acc-link-methods">
+            <p class="acc-label">添加登录方式</p>
+            <div class="acc-link-row">
+              <a class="acc-btn" id="linkGithub" href="/api/v1/auth/github/start?link=1">
+                <svg aria-hidden="true" width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+                <span>绑定 GitHub</span>
+              </a>
+              <a class="acc-btn" id="linkGoogle" href="/api/v1/auth/google/start?link=1">
+                <svg aria-hidden="true" width="16" height="16" viewBox="0 0 18 18"><path fill="#4285F4" d="M17.64 9.2c0-.64-.06-1.25-.16-1.84H9v3.48h4.84a4.14 4.14 0 0 1-1.8 2.72v2.26h2.92c1.7-1.57 2.68-3.88 2.68-6.62z"/><path fill="#34A853" d="M9 18c2.43 0 4.47-.8 5.96-2.18l-2.92-2.26c-.8.54-1.84.86-3.04.86-2.34 0-4.33-1.58-5.04-3.7H.96v2.33A9 9 0 0 0 9 18z"/><path fill="#FBBC05" d="M3.96 10.72A5.41 5.41 0 0 1 3.68 9c0-.6.1-1.18.28-1.72V4.95H.96A9 9 0 0 0 0 9c0 1.45.35 2.83.96 4.05l3-2.33z"/><path fill="#EA4335" d="M9 3.58c1.32 0 2.5.45 3.44 1.35l2.58-2.58A9 9 0 0 0 .96 4.95l3 2.33C4.67 5.16 6.66 3.58 9 3.58z"/></svg>
+                <span>绑定 Google</span>
+              </a>
+              <button class="acc-btn" type="button" id="linkEmailToggle" aria-expanded="false" aria-controls="linkEmail">
+                <svg aria-hidden="true" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="1.75" y="3.25" width="12.5" height="9.5" rx="1.5"/><path d="m2.25 4.25 5.75 4.5 5.75-4.5"/></svg>
+                <span>绑定邮箱</span>
+              </button>
+            </div>
+            <div class="acc-subform" id="linkEmail" hidden>
+              <form class="acc-form" id="linkEmailForm" novalidate>
+                <div class="acc-field">
+                  <label class="acc-label" for="linkEmailInput">邮箱地址</label>
+                  <div class="acc-inline">
+                    <input class="acc-input" id="linkEmailInput" type="email" inputmode="email" autocomplete="email" autocapitalize="off" spellcheck="false" maxlength="254" placeholder="you@example.com">
+                    <button class="acc-btn acc-btn--primary" type="submit">发送验证码</button>
+                  </div>
+                </div>
+              </form>
+              <form class="acc-form" id="linkCodeForm" novalidate hidden>
+                <div class="acc-field">
+                  <label class="acc-label" for="linkCodeInput">6 位验证码，已发到 <b class="acc-email" id="linkCodeEmail"></b></label>
+                  <div class="acc-inline">
+                    <input class="acc-input acc-input--code acc-input--code-sm" id="linkCodeInput" type="text" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6}" maxlength="6" spellcheck="false">
+                    <button class="acc-btn acc-btn--primary" type="submit">绑定邮箱</button>
+                  </div>
+                </div>
+                <div class="acc-inline-actions">
+                  <button class="acc-link" type="button" id="linkResend" data-label="重新发送" data-wait="重新发送（" data-unit="秒）">重新发送</button>
+                  <button class="acc-link" type="button" id="linkCancel">取消</button>
+                </div>
+              </form>
+              <p class="acc-status" id="linkStatus" role="status" aria-live="polite"></p>
+            </div>
+          </div>
+        </section>
+
+        <!-- 退出与删除 -->
+        <section class="acc-sec acc-sec--danger" id="danger" aria-labelledby="dangerHeading">
+          <header class="acc-sec__head">
+            <h2 id="dangerHeading">退出与删除</h2>
+          </header>
+          <div class="acc-split">
+            <div>
+              <h3>退出登录</h3>
+              <p>只让这个浏览器退出 quota.run，Mac 照常上传。</p>
+            </div>
+            <button class="acc-btn" type="button" data-signout>退出登录</button>
+          </div>
+          <form class="acc-delete" id="deleteForm" novalidate>
+            <h3>删除账号</h3>
+            <p>从 quota.run 删除你的主页、项目、成绩、Mac 和登录方式，所有榜单上的名次一起消失。Mac 上的 QuotaBar 停止上传，本地纪录保留。删除后无法恢复。</p>
+            <div class="acc-field">
+              <label class="acc-label" for="deleteInput">输入用户名 <b class="acc-mono" id="deleteUsername"></b> 以确认</label>
+              <div class="acc-inline">
+                <input class="acc-input" id="deleteInput" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" maxlength="20">
+                <button class="acc-btn acc-btn--danger" type="submit" id="deleteSubmit" disabled>删除账号</button>
+              </div>
+            </div>
+            <p class="acc-status" role="status" aria-live="polite"></p>
+          </form>
+        </section>
+      </div>
+    </div>
+  </div>
+</main>
+
+<footer class="footer">
+  <div class="shell">
+    <div class="footer__links">
+      <a href="https://quota.bar/zh/">首页</a>
+      <a href="https://quota.run/zh/">排行榜</a>
+      <a href="https://quota.bar/download/QuotaBar-0.5.3.dmg" download>下载</a>
+      <a href="https://github.com/gentpan/QuotaBar">源码</a>
+    </div>
+    <p class="footer__fine">© 2026 QuotaBar · <a href="https://github.com/gentpan/QuotaBar/blob/main/LICENSE">MIT 许可证</a> · Quota Run 与页面上任何服务商均无关联，标志归各自所有者。</p>
+  </div>
+</footer>
+
+<script type="application/json" id="run-providers">{"codex":{"en":"Codex","zh":"Codex","tone":"mono"},"claude":{"en":"Claude","zh":"Claude","tone":""},"cursor":{"en":"Cursor","zh":"Cursor","tone":"mono"},"kimi":{"en":"Kimi Code","zh":"Kimi Code","tone":""},"zai":{"en":"z.ai","zh":"z.ai","tone":"mono"},"opencode-go":{"en":"OpenCode Go","zh":"OpenCode Go","tone":"mono"},"minimax":{"en":"MiniMax","zh":"MiniMax","tone":""},"gemini":{"en":"Gemini","zh":"Gemini","tone":""},"manus":{"en":"Manus","zh":"Manus","tone":"mono"},"deepseek":{"en":"DeepSeek","zh":"DeepSeek","tone":""},"grok":{"en":"Grok","zh":"Grok","tone":"mono"},"antigravity":{"en":"Antigravity","zh":"Antigravity","tone":""},"qwen":{"en":"Qwen Cloud","zh":"Qwen Cloud","tone":"mono"},"alibaba":{"en":"Alibaba Coding Plan","zh":"阿里云百炼","tone":""},"volcengine":{"en":"Volcengine Ark","zh":"火山方舟","tone":""},"zhipu":{"en":"Zhipu GLM","zh":"智谱 GLM","tone":""},"moonshot":{"en":"Moonshot API","zh":"Kimi 开放平台","tone":"mono"},"copilot":{"en":"GitHub Copilot","zh":"GitHub Copilot","tone":"mono"},"openrouter":{"en":"OpenRouter","zh":"OpenRouter","tone":"mono"},"mimo":{"en":"Xiaomi MiMo","zh":"小米 MiMo","tone":""},"qoder":{"en":"Qoder","zh":"Qoder","tone":"dark"},"windsurf":{"en":"Windsurf","zh":"Windsurf","tone":"mono"},"kiro":{"en":"Kiro","zh":"Kiro","tone":""}}</script>
+<script src="../app.js?v=544371bc"></script>
+<script src="../run.js?v=544371bc"></script>
+<script src="../account.js?v=544371bc"></script>
+</body>
+</html>

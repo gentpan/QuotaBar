@@ -16,7 +16,7 @@
 # ---- END quota.bar ----
 
 # ---- BEGIN quota.run ----
-# Quota Run：排行榜、个人主页和 API。页面在 /var/www/quota.run（Scripts/deploy_site.sh 从 web-run/ 同步），
+# Quota Run：排行榜、个人主页、登录与账号页和 API。页面在 /var/www/quota.run（Scripts/deploy_site.sh 从 web-run/ 同步），
 # API 由 quotabar-run.service 在本机 8788 接收。
 quota.run {
 	encode zstd gzip
@@ -49,6 +49,10 @@ quota.run {
 		rewrite @profile /u.html
 		@profileZh path_regexp profileZh ^/zh/@[A-Za-z0-9][A-Za-z0-9_-]+/?$
 		rewrite @profileZh /zh/u.html
+		# 登录、账号、连接 Mac：/login → /login.html，/zh/account → /zh/account.html，以此类推。
+		# 查询串（next、code）原样带着。try_files 本身也是一次 rewrite，和上面两条互斥：
+		# /@username 不对应任何文件，只会走个人页那条；已有的文件和目录（/、/zh/、*.css）原样命中。
+		try_files {path} {path}.html
 		file_server
 	}
 }

@@ -42,6 +42,28 @@
 }
 
 .logbar__links a[aria-current="page"] { color: #fff; }
+.runpage .logbar__links { align-items: center; }
+
+/* 顶栏最右：没登录是「登录」，登录了是「@username」，都是一枚描边小胶囊 */
+.runpage .logbar__links .run-account {
+  display: inline-flex;
+  align-items: center;
+  max-width: 180px;
+  height: 32px;
+  padding-inline: var(--s-3);
+  overflow: hidden;
+  border-radius: var(--r-full);
+  box-shadow: inset 0 0 0 1px var(--line-strong);
+  color: var(--ink);
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  transition: background-color 150ms ease-out, color 150ms ease-out;
+}
+.runpage .logbar__links .run-account:hover { background: rgba(255, 255, 255, 0.06); color: #fff; }
+.runpage .logbar__links .run-account[data-state="in"] { color: var(--brand); box-shadow: inset 0 0 0 1px rgba(110, 224, 43, 0.3); }
+.runpage .logbar__links .run-account[aria-current="page"] { background: rgba(255, 255, 255, 0.06); }
+
 /* styles.css 在 900 以下藏掉更新日志页顶栏的第 3 个链接（「在 GitHub 上查看」）；
    这两页的第 3 个是「下载」，要留着 */
 @media (max-width: 900px) {
@@ -50,6 +72,11 @@
 @media (max-width: 560px) {
   .runpage .logbar__links { gap: var(--s-4); }
   .runpage .logbar__links a:first-child { display: none; }
+}
+/* 最窄的屏上顶栏放不下五项：「下载」也收掉，留排行榜、语言和账号 */
+@media (max-width: 420px) {
+  .runpage .logbar__links a:nth-child(3) { display: none; }
+  .runpage .logbar__links .run-account { max-width: 120px; }
 }
 
 .run-dim { color: var(--muted); }
