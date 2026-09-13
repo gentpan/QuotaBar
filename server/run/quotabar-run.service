@@ -4,7 +4,9 @@ After=network.target
 
 [Service]
 Type=simple
-# 默认值写在这里；/etc/quotabar-run.env 里的同名变量会覆盖它们
+# 默认值写在这里；/etc/quotabar-run.env 里的同名变量会覆盖它们。
+# 登录相关的配置（QUOTA_RUN_ORIGIN、GitHub / Google 的 client id 与 secret、SMTP）只写在那个文件里
+# （640 root:quotabar-run），不写进这个单元：单元文件对所有用户可读。
 Environment=QUOTA_RUN_PORT=8788
 Environment=QUOTA_RUN_DB=/var/lib/quotabar-run/run.db
 Environment=QUOTA_RUN_SECRET_FILE=/etc/quotabar-run.secret
