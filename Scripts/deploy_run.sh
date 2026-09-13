@@ -1,6 +1,6 @@
 #!/bin/bash
 # Installs the Quota Run API on the quota.bar host and wires Caddy: quota.run serves
-# the pages (synced by deploy_site.sh) and /api/*; quota.bar only redirects old addresses.
+# the pages (synced by deploy_site.sh) and /api/*; quota.bar carries nothing of Quota Run.
 # Idempotent: re-running updates the code and restarts the service; the database,
 # the login settings in /etc/quotabar-run.env (created empty once, never overwritten)
 # and the HMAC secret are left as they are; the Caddy blocks are replaced.
@@ -54,6 +54,7 @@ if [ ! -e /etc/quotabar-run.env ]; then
 # QUOTA_RUN_SMTP_USER=
 # QUOTA_RUN_SMTP_PASSWORD=
 # QUOTA_RUN_MAIL_FROM=
+# QUOTA_RUN_GITHUB_TOKEN=
 ENVTEMPLATE
   )
   echo "已生成 /etc/quotabar-run.env（空模板）"
@@ -66,8 +67,8 @@ systemctl daemon-reload
 systemctl enable quotabar-run >/dev/null
 systemctl restart quotabar-run
 
-# Caddy：quota.run 是完整站点（页面 + /api/*），整份覆盖；quota.bar 站点块里只留旧地址的跳转，
-# 放在「# >>> quota-run」「# <<< quota-run」之间，重跑时整段替换。早先没有标记的那段（/api/run/ 反代和改写）一并删掉。
+# Caddy：quota.run 是完整站点（页面 + /api/*），整份覆盖。quota.bar 站点块里早先放过的 Quota Run 配置
+# （无标记的 /api/run/ 反代和改写、「# >>> quota-run」「# <<< quota-run」之间的旧地址跳转）都删掉，不再放任何东西。
 site=/etc/caddy/sites/quota.bar.caddy
 run_site=/etc/caddy/sites/quota.run.caddy
 snippet=/opt/quotabar-run/caddy-snippet.caddy
@@ -89,16 +90,6 @@ text = open(site_path).read()
 # 早先的无标记版本：从「# Quota Run API」到最后一条 leaderboard 改写。
 text = re.sub(r"\t# Quota Run API.*?rewrite @quotaRunBoardZh /zh/leaderboard\.html\n", "", text, flags=re.S)
 text = re.sub(r"\t# >>> quota-run\n.*?\t# <<< quota-run\n", "", text, flags=re.S)
-block = "\t# >>> quota-run\n" + part("quota.bar") + "\t# <<< quota-run\n"
-match = re.search(r"(?m)^quota\.bar\s*\{", text)
-depth = 0
-for i in range(match.start(), len(text)):
-    if text[i] == "{": depth += 1
-    elif text[i] == "}":
-        depth -= 1
-        if depth == 0:
-            text = text[:i] + block + text[i:]
-            break
 open(site_path, "w").write(text)
 open(run_path, "w").write(part("quota.run"))
 print("已更新", site_path, "与", run_path)
@@ -124,5 +115,4 @@ echo "== 公网验证 =="
 curl -s --max-time 20 https://quota.run/api/v1/stats; echo
 curl -s --max-time 20 https://quota.run/api/v1/auth/providers; echo
 curl -s -o /dev/null --max-time 20 -w 'POST /register → %{http_code}（应为 404）\n' -X POST https://quota.run/api/v1/register
-curl -s -o /dev/null --max-time 20 -w 'quota.bar/leaderboard → %{http_code} %{redirect_url}\n' https://quota.bar/leaderboard
 curl -s -o /dev/null --max-time 20 -w 'quota.bar/api/run/v1/stats → %{http_code}\n' https://quota.bar/api/run/v1/stats

@@ -1,19 +1,6 @@
-# Quota Run 的 Caddy 配置（Caddy v2）。Scripts/deploy_run.sh 按下面的 BEGIN/END 标记取用：
-#   第一段放进 /etc/caddy/sites/quota.bar.caddy 的 `quota.bar { … }` 站点块，前后带
-#   「# >>> quota-run」「# <<< quota-run」两行，重跑时整段替换；
-#   第二段是 quota.run 的完整站点，每次部署整份覆盖 /etc/caddy/sites/quota.run.caddy。
-# 手工添加时照抄两段标记之间的内容即可。
-
-# ---- BEGIN quota.bar ----
-	# quota.bar 只做产品发布。Quota Run 早先挂在这里的排行榜和个人主页已经搬到 quota.run，
-	# 旧地址永久跳过去；/api/run/ 不再反代。
-	@quotaRunProfile path_regexp quotaRunProfile ^/(zh/)?@([A-Za-z0-9][A-Za-z0-9_-]+)/?$
-	redir @quotaRunProfile https://quota.run/{re.quotaRunProfile.1}@{re.quotaRunProfile.2} 301
-	@quotaRunBoard path /leaderboard /leaderboard/ /leaderboard.html
-	redir @quotaRunBoard https://quota.run/ 301
-	@quotaRunBoardZh path /zh/leaderboard /zh/leaderboard/ /zh/leaderboard.html
-	redir @quotaRunBoardZh https://quota.run/zh/ 301
-# ---- END quota.bar ----
+# Quota Run 的 Caddy 配置（Caddy v2）。Scripts/deploy_run.sh 取 BEGIN/END 标记之间的内容，
+# 每次部署整份覆盖 /etc/caddy/sites/quota.run.caddy；quota.bar 只做产品发布，不含任何 Quota Run 配置。
+# 手工添加时照抄标记之间的内容即可。
 
 # ---- BEGIN quota.run ----
 # Quota Run：排行榜、个人主页、登录与账号页和 API。页面在 /var/www/quota.run（Scripts/deploy_site.sh 从 web-run/ 同步），
@@ -49,9 +36,6 @@ quota.run {
 
 	handle {
 		root * /var/www/quota.run
-		# 早先的排行榜地址。
-		redir /leaderboard / 301
-		redir /zh/leaderboard /zh/ 301
 		# 公开个人页：/@username → /u.html，/zh/@username → /zh/u.html。
 		# 内部改写，地址栏不变，页面从 location.pathname 取用户名；用户名不存在由页面显示 404 状态。
 		@profile path_regexp profile ^/@[A-Za-z0-9][A-Za-z0-9_-]+/?$
