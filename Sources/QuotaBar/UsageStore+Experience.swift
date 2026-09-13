@@ -263,3 +263,66 @@ extension UsageStore {
         widgetRevision &+= 1
     }
 }
+
+// MARK: - Budgets and the weekly digest
+
+extension UsageStore {
+    /// After each re-read of the logs: a budget crossed since the last
+    /// notification, and last week's digest once it is due.
+    func evaluateSpendNotices() {
+        guard logsReady else { return }
+        let budget = experience.spendBudget
+        let alerts = BudgetCheck.alerts(
+            budget: budget, daily: cost.daily,
+            rate: CurrencyRates.shared.rate(for: budget.currency),
+            notified: experience.budgetNotified)
+        if !alerts.isEmpty {
+            updateExperience { $0.budgetNotified = Array(($0.budgetNotified + alerts.map(\.key)).suffix(24)) }
+            if notificationsReady {
+                for alert in alerts { post(budget: alert, currency: budget.currency) }
+            }
+        }
+
+        if experience.weeklyDigest, let week = WeeklyDigest.dueWeek(lastSent: experience.weeklyDigestSent) {
+            updateExperience { $0.weeklyDigestSent = week.key }
+            let summary = archive.summary(from: week.start, to: week.end, counting: experience.tokenCounting)
+            if summary.hasData, notificationsReady { post(digest: summary) }
+        }
+    }
+
+    private func post(budget alert: BudgetAlert, currency: String) {
+        let spent = QuotaFormat.amount(alert.spent, code: currency)
+        let limit = QuotaFormat.amount(alert.limit, code: currency)
+        let share = Int((alert.spent / alert.limit * 100).rounded())
+        let content = UNMutableNotificationContent()
+        content.title = L10n.t("Spend budget", "花费预算")
+        switch (alert.period, alert.level) {
+        case (.day, 100):
+            content.body = L10n.t("Today's spend is \(spent), over the daily budget of \(limit).", "今天已花费 \(spent)，超出每日预算 \(limit)。")
+        case (.day, _):
+            content.body = L10n.t("Today's spend is \(spent), \(share)% of the daily budget of \(limit).", "今天已花费 \(spent)，达到每日预算 \(limit) 的 \(share)%。")
+        case (.month, 100):
+            content.body = L10n.t("This month's spend is \(spent), over the monthly budget of \(limit).", "本月已花费 \(spent)，超出每月预算 \(limit)。")
+        case (.month, _):
+            content.body = L10n.t("This month's spend is \(spent), \(share)% of the monthly budget of \(limit).", "本月已花费 \(spent)，达到每月预算 \(limit) 的 \(share)%。")
+        }
+        content.threadIdentifier = "bar.quota.budget"
+        UNUserNotificationCenter.current().add(UNNotificationRequest(identifier: "bar.quota.budget.\(alert.key)", content: content, trigger: nil))
+    }
+
+    private func post(digest summary: ArchiveSummary) {
+        let content = UNMutableNotificationContent()
+        content.title = L10n.t("Last week", "上周用量")
+        var parts = [
+            L10n.t("\(QuotaFormat.money(summary.usd)) spent", "花费 \(QuotaFormat.money(summary.usd))"),
+            "\(QuotaFormat.compact(summary.tokens)) tokens",
+        ]
+        if let top = summary.sources.first, summary.usd > 0 {
+            let share = Int((top.usd / summary.usd * 100).rounded())
+            parts.append(L10n.t("\(top.source.displayName) \(share)%", "\(top.source.displayName) 占 \(share)%"))
+        }
+        content.body = parts.joined(separator: " · ")
+        content.threadIdentifier = "bar.quota.digest"
+        UNUserNotificationCenter.current().add(UNNotificationRequest(identifier: "bar.quota.digest.\(summary.start.timeIntervalSince1970)", content: content, trigger: nil))
+    }
+}

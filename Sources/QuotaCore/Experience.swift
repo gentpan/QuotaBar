@@ -248,6 +248,13 @@ public struct ExperiencePrefs: Codable, Equatable, Sendable {
     /// is expanded, where the owner chose them from the card's menu. Absent
     /// means the card's own choice (`UsageSnapshot.upFrontWindows`).
     public var cardWindows: [String: [String]] = [:]
+    /// Spend limits per day and per month, and the crossings already notified.
+    public var spendBudget: SpendBudget = SpendBudget()
+    public var budgetNotified: [String] = []
+    /// A notification each Monday morning with last week's spend.
+    public var weeklyDigest: Bool = true
+    /// The week (`2026-W37`) whose digest was last sent.
+    public var weeklyDigestSent: String = ""
     /// Serve 127.0.0.1:6736/v1/limits for other local tools.
     public var localAPI: Bool = false
     /// "http://host:port" or "socks5://host:port"; empty = direct.
@@ -269,6 +276,7 @@ public struct ExperiencePrefs: Codable, Equatable, Sendable {
         case deskCards, deskCardsMigrated
         case hideWhenSharing, hotkey, paceAlerts, localAPI, proxy, betaUpdates
         case resetEffects, resetNotify, hiddenProviders, cardWindows
+        case spendBudget, budgetNotified, weeklyDigest, weeklyDigestSent
         case shareSignature, shareShowsSignature, shareCardShownForVersion
     }
 
@@ -312,6 +320,10 @@ public struct ExperiencePrefs: Codable, Equatable, Sendable {
         resetNotify = choice(.resetNotify, d.resetNotify)
         hiddenProviders = value(.hiddenProviders, d.hiddenProviders)
         cardWindows = value(.cardWindows, d.cardWindows)
+        spendBudget = value(.spendBudget, d.spendBudget)
+        budgetNotified = value(.budgetNotified, d.budgetNotified)
+        weeklyDigest = value(.weeklyDigest, d.weeklyDigest)
+        weeklyDigestSent = value(.weeklyDigestSent, d.weeklyDigestSent)
         localAPI = value(.localAPI, d.localAPI)
         proxy = value(.proxy, d.proxy)
         betaUpdates = value(.betaUpdates, d.betaUpdates)

@@ -447,6 +447,20 @@ enum Snapshot {
                     dark: false)
             }
         }
+        // The Alerts page in full — the window's height clips it — for the
+        // spend card at its foot.
+        for language in [L10n.Language.zhHans, .en] {
+            L10n.override = language
+            write(
+                VStack(alignment: .leading, spacing: Design.space3) { AlertsPane(store: store) }
+                    .environment(\.glassDisabled, true)
+                    .frame(width: 620)
+                    .padding(Design.space4),
+                to: base,
+                name: "settings-alerts-full-\(language == .en ? "en" : "zh")",
+                dark: false)
+        }
+
         // The update card: found, and downloaded and verified.
         let notes = """
         ### 2026-09-14

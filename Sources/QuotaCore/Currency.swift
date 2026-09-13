@@ -134,6 +134,11 @@ extension QuotaFormat {
         }
     }
 
+    /// An amount already in `code`: "¥1,000.00", "$250.00".
+    public static func amount(_ value: Double, code: String) -> String {
+        converted(value, code: code)
+    }
+
     static func converted(_ value: Double, code: String) -> String {
         let formatter = NumberFormatter()
         formatter.numberStyle = .decimal

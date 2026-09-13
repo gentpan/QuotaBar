@@ -1488,12 +1488,87 @@ struct AlertsPane: View {
                 "QuotaBar reads a provider again just after its window resets, so this happens on time rather than at the next refresh.",
                 "QuotaBar 会在窗口重置后立刻重新读取该服务商，不用等下一次定时刷新。"))
         }
+
+        SettingsCard(L10n.t("Spend", "花费")) {
+            SettingRow(L10n.t("Daily budget", "每日预算")) {
+                BudgetField(store: store, period: .day)
+            }
+            SettingRow(L10n.t("Monthly budget", "每月预算")) {
+                BudgetField(store: store, period: .month)
+            }
+            SettingToggle(
+                L10n.t("Weekly digest", "每周用量周报"),
+                caption: L10n.t("Monday morning: last week's spend, tokens and the busiest CLI.", "每周一上午推送上周的花费、token 和用得最多的 CLI。"),
+                isOn: Binding(
+                    get: { store.experience.weeklyDigest },
+                    set: { value in store.updateExperience { $0.weeklyDigest = value } }))
+            SettingFootnote(L10n.t(
+                "A budget notifies once at 80% and once when it is passed, per day and per calendar month. Spend is estimated from this Mac's CLI logs at public prices — not a bill. Leave a budget empty to turn it off.",
+                "预算在用到 80% 和超出时各通知一次，按天和按自然月分别计算。花费按本机 CLI 日志和公开价格估算，不是账单。留空即不设预算。"))
+        }
     }
 
     private func paceToggle(_ title: String, _ caption: String, _ key: WritableKeyPath<PaceAlertPrefs, Bool>) -> some View {
         SettingToggle(title, caption: caption, isOn: Binding(
             get: { store.experience.paceAlerts[keyPath: key] },
             set: { value in store.updateExperience { $0.paceAlerts[keyPath: key] = value } }))
+    }
+}
+
+/// A budget amount in the currency it is kept in: typed, then saved on
+/// Return or when the field loses focus. Empty turns the budget off.
+private struct BudgetField: View {
+    @ObservedObject var store: UsageStore
+    let period: BudgetPeriod
+    @State private var text = ""
+    @FocusState private var focused: Bool
+
+    private var budget: SpendBudget { store.experience.spendBudget }
+
+    private var stored: Double? {
+        period == .day ? budget.daily : budget.monthly
+    }
+
+    /// A budget keeps its own currency; a new one takes the display currency.
+    private var currency: String {
+        budget.isSet ? budget.currency : store.experience.currency
+    }
+
+    var body: some View {
+        HStack(spacing: Design.space2) {
+            Text(CurrencyRates.symbol(for: currency).trimmingCharacters(in: .whitespaces))
+                .font(.system(size: 13, weight: .medium))
+                .foregroundStyle(.secondary)
+                .frame(minWidth: 18)
+            GlassTextField(placeholder: L10n.t("No budget", "不设置"), text: $text, onSubmit: save)
+                .focused($focused)
+                .frame(maxWidth: 160)
+            Text(CurrencyRates.displayName(for: currency))
+                .font(.system(size: 11))
+                .foregroundStyle(.tertiary)
+            Spacer(minLength: 0)
+        }
+        .onAppear { text = stored.map(Self.format) ?? "" }
+        .onChange(of: focused) { _, isFocused in if !isFocused { save() } }
+        // Leaving the page with an unsaved figure still keeps it.
+        .onDisappear(perform: save)
+    }
+
+    private static func format(_ value: Double) -> String {
+        value.rounded() == value ? String(Int(value)) : String(format: "%.2f", value)
+    }
+
+    private func save() {
+        let cleaned = text.replacingOccurrences(of: ",", with: "").trimmingCharacters(in: .whitespaces)
+        let value = Double(cleaned).flatMap { $0 > 0 ? $0 : nil }
+        guard value != stored else { return }
+        let code = currency
+        store.updateExperience { prefs in
+            if period == .day { prefs.spendBudget.daily = value } else { prefs.spendBudget.monthly = value }
+            prefs.spendBudget.currency = code
+        }
+        text = value.map(Self.format) ?? ""
+        store.evaluateSpendNotices()
     }
 }
 

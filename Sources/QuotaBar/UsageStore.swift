@@ -807,6 +807,7 @@ final class UsageStore: ObservableObject {
         guard archive.fullScanDone else { return }
         cost = archive.costSummary()
         ledger = archive.ledger()
+        evaluateSpendNotices()
     }
 
     /// True once the logs have been read in full at least once; until then a
