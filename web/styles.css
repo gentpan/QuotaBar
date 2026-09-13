@@ -118,6 +118,8 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
 .btn--primary:active { transform: translateY(1px); }
 
 .btn__meta { font-size: 12px; color: rgba(255, 255, 255, 0.5); font-weight: 400; }
+.btn__meta a { color: inherit; text-decoration: underline; text-underline-offset: 2px; text-decoration-color: rgba(255, 255, 255, 0.3); }
+.btn__meta a:hover { color: rgba(255, 255, 255, 0.85); }
 
 /* ── 首屏：整屏就是一台 Mac ──────────────────────────────────────────
  * 不是页面里放一张桌面图 —— 视口本身就是桌面。页面顶栏就是 macOS 菜单

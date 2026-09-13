@@ -35,7 +35,9 @@ echo "内容指纹 v=$STAMP"
 # replica.js 里的 LOGOV 也要跟上，否则 JS 渲染出的那些 logo 拿的是旧指纹。
 /usr/bin/sed -i '' -E "s/(var LOGOV = \")\?v=[A-Za-z0-9]+/\1?v=$STAMP/" web/replica.js
 
-rsync -az --delete -e "ssh -i $KEY -o BatchMode=yes" web/ "$HOST:$ROOT/"
+# download/ 里是安装包的服务器副本，由 publish_release.sh 上传，不在 web/ 里——
+# 排除掉，否则 --delete 会把它们删了。
+rsync -az --delete --exclude /download/ -e "ssh -i $KEY -o BatchMode=yes" web/ "$HOST:$ROOT/"
 ssh -i "$KEY" -o BatchMode=yes "$HOST" "chown -R www-data:www-data $ROOT"
 echo "已同步"
 

@@ -53,17 +53,31 @@ public enum Updater {
         currentVersion: String,
         includePrereleases: Bool = false) async -> UpdateRelease?
     {
+        var release = await latest(feed: feed, includePrereleases: includePrereleases)
+        if feed.isMirrored {
+            // GitHub unreachable — common enough on some networks that the
+            // copy on quota.bar is where those users get updates at all.
+            if release == nil { release = await latest(feed: .mirror, includePrereleases: false) }
+            if let found = release, found.mirrorURL == nil, found.downloadURL != UpdateFeed.mirrorDownload(version: found.version) {
+                release?.mirrorURL = UpdateFeed.mirrorDownload(version: found.version)
+            }
+        }
+        guard let release, UpdateCheck.compare(release.version, isNewerThan: currentVersion) else { return nil }
+        return release
+    }
+
+    /// The newest release a feed offers, whatever its version; nil when the
+    /// feed cannot be read.
+    private static func latest(feed: UpdateFeed, includePrereleases: Bool) async -> UpdateRelease? {
         let url = includePrereleases ? feed.listURL ?? feed.requestURL : feed.requestURL
         guard let response = try? await HTTP.get(url, headers: [
             "Accept": "application/vnd.github+json",
             "User-Agent": "QuotaBar",
         ]), response.status == 200
         else { return nil }
-        let release = includePrereleases && feed.listURL != nil
+        return includePrereleases && feed.listURL != nil
             ? UpdateFeed.newest(in: response.data, page: feed.fallbackPage)
             : feed.parse(response.data)
-        guard let release, UpdateCheck.compare(release.version, isNewerThan: currentVersion) else { return nil }
-        return release
     }
 
     // MARK: Download and verify
@@ -76,13 +90,11 @@ public enum Updater {
         try FileManager.default.createDirectory(at: work, withIntermediateDirectories: true)
 
         let archive = work.appendingPathComponent("update.zip")
-        guard let response = try? await HTTP.get(release.downloadURL),
-              response.status == 200, !response.data.isEmpty
-        else {
+        guard let data = await download([release.downloadURL, release.mirrorURL].compactMap { $0 }) else {
             try? FileManager.default.removeItem(at: work)
             throw UpdateError.downloadFailed
         }
-        try response.data.write(to: archive)
+        try data.write(to: archive)
 
         let unpacked = work.appendingPathComponent("unpacked")
         guard run("/usr/bin/ditto", ["-x", "-k", archive.path, unpacked.path]).ok,
@@ -101,6 +113,17 @@ public enum Updater {
             throw error
         }
         return bundle
+    }
+
+    /// The first of the addresses that answers. Which one served the zip does
+    /// not matter to safety: `verify` checks the bundle, not where it came from.
+    private static func download(_ urls: [URL]) async -> Data? {
+        for url in urls {
+            if let response = try? await HTTP.get(url), response.status == 200, !response.data.isEmpty {
+                return response.data
+            }
+        }
+        return nil
     }
 
     /// Refuses anything not signed by our own team and notarized.

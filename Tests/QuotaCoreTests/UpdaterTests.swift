@@ -37,6 +37,26 @@ final class UpdateFeedTests: XCTestCase {
         XCTAssertEqual(release.pageURL, page, "falls back to the feed's own page")
     }
 
+    /// latest.json as Scripts/publish_release.sh writes it: the extra fields
+    /// are for people and scripts, the app reads version and url.
+    func testParsesTheQuotaBarMirrorFeed() throws {
+        let json = """
+        {"version":"0.5.0","url":"https://quota.bar/download/QuotaBar-0.5.0.zip","sha256":"620f",
+         "dmg":"https://quota.bar/download/QuotaBar-0.5.0.dmg","page":"https://quota.bar/changelog.html",
+         "github":"https://github.com/gentpan/QuotaBar/releases/tag/v0.5.0"}
+        """
+        let release = try XCTUnwrap(UpdateFeed.mirror.parse(Data(json.utf8)))
+        XCTAssertEqual(release.downloadURL, UpdateFeed.mirrorDownload(version: "0.5.0"))
+        XCTAssertEqual(release.pageURL.absoluteString, "https://quota.bar/changelog.html")
+    }
+
+    func testOnlyThisProjectsReleasesAreMirrored() {
+        XCTAssertTrue(UpdateFeed.default.isMirrored)
+        XCTAssertTrue(UpdateFeed.github(repo: "gentpan/QuotaBar").isMirrored, "the repository was renamed in case only")
+        XCTAssertFalse(UpdateFeed.github(repo: "someone/fork").isMirrored)
+        XCTAssertFalse(UpdateFeed.mirror.isMirrored)
+    }
+
     func testCustomFeedNeedsBothFields() {
         XCTAssertNil(UpdateFeed.parseCustom(Data(#"{"version":"1.0"}"#.utf8), page: page))
         XCTAssertNil(UpdateFeed.parseCustom(Data(#"{"url":"https://x/a.zip"}"#.utf8), page: page))

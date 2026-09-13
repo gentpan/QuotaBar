@@ -542,6 +542,9 @@ def main():
     updated = re.sub(r"等 \d+ 个 AI 编码服务", f"等 {count} 个 AI 编码服务", updated)
     if latest:
         updated = re.sub(r'(<span class="latest-version">)[\d.]+(</span>)', lambda m: f"{m.group(1)}{latest['version']}{m.group(2)}", updated)
+        # 下载链接跟着最新版本走：服务器副本和 GitHub 上的同名文件。
+        updated = re.sub(r"QuotaBar-[\d.]+\.dmg", f"QuotaBar-{latest['version']}.dmg", updated)
+        updated = re.sub(r"releases/download/v[\d.]+/", f"releases/download/v{latest['version']}/", updated)
     if updated != text:
         index.write_text(updated, encoding="utf-8")
         site_changed = True

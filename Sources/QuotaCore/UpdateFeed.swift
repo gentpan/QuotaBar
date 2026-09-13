@@ -8,12 +8,15 @@ public struct UpdateRelease: Sendable, Equatable {
     /// Page to send the user to when installing in place is not appropriate.
     public let pageURL: URL
     public let notes: String?
+    /// The same zip on quota.bar, tried when `downloadURL` cannot be reached.
+    public var mirrorURL: URL?
 
-    public init(version: String, downloadURL: URL, pageURL: URL, notes: String? = nil) {
+    public init(version: String, downloadURL: URL, pageURL: URL, notes: String? = nil, mirrorURL: URL? = nil) {
         self.version = version
         self.downloadURL = downloadURL
         self.pageURL = pageURL
         self.notes = notes
+        self.mirrorURL = mirrorURL
     }
 }
 
@@ -26,6 +29,22 @@ public enum UpdateFeed: Sendable, Equatable {
     case custom(URL)
 
     public static let `default` = UpdateFeed.github(repo: "gentpan/quotabar")
+
+    /// The copy of every release on quota.bar, uploaded by
+    /// Scripts/publish_release.sh — for networks where GitHub is slow or
+    /// blocked. A custom feed in its own right.
+    public static let mirror = UpdateFeed.custom(URL(string: "https://quota.bar/download/latest.json")!)
+
+    static func mirrorDownload(version: String) -> URL {
+        URL(string: "https://quota.bar/download/QuotaBar-\(version).zip")!
+    }
+
+    /// This project's own releases, which quota.bar mirrors. Someone else's
+    /// repository or server has no copy there.
+    var isMirrored: Bool {
+        if case let .github(repo) = self { return repo.lowercased() == "gentpan/quotabar" }
+        return false
+    }
 
     var requestURL: URL {
         switch self {
