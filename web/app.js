@@ -8,17 +8,26 @@
   var motion = window.matchMedia("(prefers-reduced-motion: reduce)");
   function reduced() { return motion.matches; }
 
+  /* 页面语言（英文在根目录，中文在 /zh/）和站点根目录。中文页在下一层，
+     脚本里拼的图片路径要从脚本自己的地址算，不能写死相对路径。 */
+  var ZH = /^zh/i.test(document.documentElement.lang);
+  var script = document.currentScript;
+  var ROOT = script ? script.src.replace(/app\.js(\?.*)?$/, "") : "";
+
   /* ── 菜单栏时钟 ───────────────────────────────────────────────────
-   * 访客自己的本地时间，按其系统语言排版：zh-CN 得到「9月13日 周日 05:48」，
-   * en-US 得到「Sun Sep 13 05:48」——就是 macOS 菜单栏右上角那一行。每分钟
+   * 访客自己的本地时间，按页面语言排版：中文页得到「9月13日 周日 05:48」，
+   * 英文页得到「Sun Sep 13 05:48」——就是 macOS 菜单栏右上角那一行。浏览器
+   * 语言和页面同属一种时沿用浏览器的地区写法（en-GB 是「Sun 13 Sep」）。每分钟
    * 对齐一次，不用每秒重排。写死的时间和访客手表对不上，比没有更糟。
    */
   var clock = document.getElementById("menubarClock");
   if (clock) {
     var format;
+    var locale = navigator.language || "";
+    if (ZH !== /^zh/i.test(locale)) locale = ZH ? "zh-CN" : "en-US";
     try {
-      format = new Intl.DateTimeFormat(navigator.language || "zh-CN", {
-        month: /^zh|^ja|^ko/.test(navigator.language || "zh") ? "long" : "short",
+      format = new Intl.DateTimeFormat(locale, {
+        month: ZH ? "long" : "short",
         day: "numeric", weekday: "short", hour: "2-digit", minute: "2-digit", hour12: false,
       });
     } catch (e) {
@@ -128,7 +137,7 @@
   var glyphOptions = document.querySelectorAll(".mb-glyph-option");
   function useGlyph(name) {
     if (!glyph) return;
-    glyph.style.setProperty("--glyph", "url(assets/glyphs/glyph-" + name + "@3x.png)");
+    glyph.style.setProperty("--glyph", "url(" + ROOT + "assets/glyphs/glyph-" + name + "@3x.png)");
     Array.prototype.forEach.call(glyphOptions, function (o) {
       o.setAttribute("aria-checked", o.getAttribute("data-glyph") === name ? "true" : "false");
     });
@@ -145,6 +154,14 @@
       try { localStorage.setItem("qb-glyph", name); } catch (e) { /* 忽略 */ }
     });
   });
+  /* 切换语言：记住选择（首页据此决定进哪种语言），并停在同一个章节 */
+  Array.prototype.forEach.call(document.querySelectorAll("a[data-lang]"), function (link) {
+    link.addEventListener("click", function () {
+      try { localStorage.setItem("qb-lang", link.getAttribute("data-lang")); } catch (e) { /* 忽略 */ }
+      if (location.hash) link.setAttribute("href", link.getAttribute("href").replace(/#.*$/, "") + location.hash);
+    });
+  });
+
   document.addEventListener("keydown", function (event) {
     if (event.key === "Escape" && openMenu) {
       var title = openMenu.querySelector(".mb-title");

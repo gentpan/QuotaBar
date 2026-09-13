@@ -29,7 +29,7 @@ STAMP="$( { cat web/styles.css web/replica.css web/app.js web/replica.js \
 echo "内容指纹 v=$STAMP"
 
 # Rewrite every ?v=… in the HTML, and the font URL the stylesheet carries.
-/usr/bin/sed -i '' -E "s/\?v=[A-Za-z0-9]+/?v=$STAMP/g" web/index.html web/changelog.html
+/usr/bin/sed -i '' -E "s/\?v=[A-Za-z0-9]+/?v=$STAMP/g" web/index.html web/changelog.html web/zh/index.html web/zh/changelog.html
 /usr/bin/sed -i '' -E "s/(InstrumentSans-Variable\.ttf)\?v=[A-Za-z0-9]+/\1?v=$STAMP/" web/styles.css
 /usr/bin/sed -i '' -E "s/(wallpaper-[a-z0-9-]+\.webp)\?v=[A-Za-z0-9]+/\1?v=$STAMP/g" web/styles.css
 # replica.js 里的 LOGOV 也要跟上，否则 JS 渲染出的那些 logo 拿的是旧指纹。
@@ -55,7 +55,9 @@ for f in styles.css replica.css app.js replica.js; do
     fail=1
   fi
 done
-html=$(curl -s --max-time 20 "https://quota.bar/" | grep -c "?v=$STAMP" || true)
-[ "$html" -gt 0 ] && printf "  ✅ %-14s 引用 %s 处新指纹\n" "index.html" "$html" \
-                  || { printf "  ❌ %-14s 仍在引用旧指纹\n" "index.html"; fail=1; }
+for page in "" zh/; do
+  html=$(curl -s --max-time 20 "https://quota.bar/$page" | grep -c "?v=$STAMP" || true)
+  [ "$html" -gt 0 ] && printf "  ✅ %-14s 引用 %s 处新指纹\n" "/${page}" "$html" \
+                    || { printf "  ❌ %-14s 仍在引用旧指纹\n" "/${page}"; fail=1; }
+done
 exit $fail

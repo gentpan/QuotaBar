@@ -1,17 +1,20 @@
 #!/usr/bin/env python3
-"""Puts CHANGELOG.md where people look, and draws the commit calendar.
+"""Puts the changelogs where people look, builds the website, draws the commit calendar.
 
     python3 Scripts/sync_changelog.py
 
-Rewrites, from CHANGELOG.md and `git log`:
+From CHANGELOG.md (Chinese), CHANGELOG.en.md (English) and `git log`:
 
-- the "recent updates" block in README.md and README.zh-CN.md, between
+- the "recent updates" block in README.md (English) and README.zh-CN.md, between
   <!-- changelog:start --> and <!-- changelog:end -->;
-- the same block on the website's home page, web/index.html;
-- web/changelog.html, the whole log as a page;
+- the website in both languages: English at the root, Chinese under /zh/.
+  site/index.html is the template — every piece of copy is written there as
+  [[English||中文]] — and becomes web/index.html and web/zh/index.html, with the
+  recent-updates block and the provider strip filled in; web/changelog.html and
+  web/zh/changelog.html are the whole log as a page;
 - Assets/readme/activity.svg and activity.zh.svg, 26 weeks of commits;
-- the website's provider strip, provider count and download version, from
-  ProviderID in Sources/QuotaCore/Models.swift and the app's logos.
+- the provider strip, provider count and download links, from ProviderID in
+  Sources/QuotaCore/Models.swift, the app's logos and the latest release.
 
 Run it after every CHANGELOG edit; deploy_site.sh runs it before publishing.
 Standard library only, so it runs on a stock Mac and in CI.
@@ -36,8 +39,20 @@ WEEKS = 26
 
 KIND_EN = {"新增": "Added", "样式": "Style", "修复": "Fixed", "删除": "Removed", "移除": "Removed"}
 # Badge colour per kind on the website: added green, style blue, fixed amber,
-# removed red; anything else neutral.
-KIND_CLASS = {"新增": "add", "样式": "style", "修复": "fix", "删除": "remove", "移除": "remove"}
+# removed red; anything else neutral. Both changelogs' headings map.
+KIND_CLASS = {"新增": "add", "样式": "style", "修复": "fix", "删除": "remove", "移除": "remove",
+              "Added": "add", "Style": "style", "Fixed": "fix", "Removed": "remove"}
+DOWNLOAD = "https://quota.bar/download/QuotaBar-{version}.dmg"
+GITHUB_DOWNLOAD = "https://github.com/gentpan/QuotaBar/releases/download/v{version}/QuotaBar-{version}.dmg"
+
+# The two languages of the website. English lives at the root, Chinese under
+# /zh/, so every page-relative asset path in the Chinese copy climbs one level.
+LANGS = {
+    "en": {"lang": "en", "dir": "", "root": "", "url": "https://quota.bar/",
+           "en_url": "./", "zh_url": "zh/", "other_url": "zh/"},
+    "zh": {"lang": "zh-CN", "dir": "zh/", "root": "../", "url": "https://quota.bar/zh/",
+           "en_url": "../", "zh_url": "./", "other_url": "../"},
+}
 
 
 def kind_class(kind):
@@ -140,7 +155,7 @@ def readme_block(releases, en):
     pending = unreleased(releases)
     pending_count = sum(item_count(d) for d in pending["days"]) if pending else 0
     lines = ["<!-- changelog:start -->"]
-    lines.append("<!-- Generated from CHANGELOG.md by Scripts/sync_changelog.py. Do not edit by hand. -->"
+    lines.append("<!-- Generated from CHANGELOG.en.md by Scripts/sync_changelog.py. Do not edit by hand. -->"
                  if en else "<!-- 由 Scripts/sync_changelog.py 从 CHANGELOG.md 生成，请勿手改。 -->")
     head = []
     if latest:
@@ -149,7 +164,7 @@ def readme_block(releases, en):
     if pending_count:
         head.append(f"**{pending_count}** changes in development" if en
                     else f"开发中 **{pending_count}** 项改动尚未发布")
-    head.append("[full changelog](CHANGELOG.md) (kept in Chinese)" if en else "[完整更新日志](CHANGELOG.md)")
+    head.append("[full changelog](CHANGELOG.en.md)" if en else "[完整更新日志](CHANGELOG.md)")
     lines += ["", " · ".join(head), ""]
     for index, (release, day) in enumerate(day_entries(releases)[:RECENT_DAYS]):
         label = release["version"] or ("Unreleased" if en else "未发布")
@@ -187,27 +202,35 @@ def inline(text):
     return re.sub(r"`([^`]+)`", r"<code>\1</code>", html.escape(text, quote=False))
 
 
-def site_block(releases):
+def pick(en, zh, lang):
+    return en if lang == "en" else zh
+
+
+def site_block(releases, lang):
+    t = lambda en, zh: pick(en, zh, lang)
     latest = latest_release(releases)
     days = day_entries(releases)
     newest = days[0][1]["date"] if days else ""
+    version = latest["version"] if latest else "—"
     lines = [
         "<!-- changelog:start -->",
-        "  <!-- 由 Scripts/sync_changelog.py 从 CHANGELOG.md 生成，请勿手改。 -->",
+        "  " + t("<!-- Generated from CHANGELOG.en.md by Scripts/sync_changelog.py. Do not edit by hand. -->",
+                 "<!-- 由 Scripts/sync_changelog.py 从 CHANGELOG.md 生成，请勿手改。 -->"),
         '  <section id="changelog" class="band" style="padding-top:0">',
         '    <div class="shell">',
         '      <div class="section-head">',
-        "        <h2>更新日志</h2>",
-        f"        <p>当前版本 {latest['version'] if latest else '—'} · 最近更新于 {newest}。每天改了什么，都记在这里。</p>",
+        "        <h2>" + t("Changelog", "更新日志") + "</h2>",
+        "        <p>" + t(f"Current version {version} · last updated {newest}. What changed, day by day.",
+                          f"当前版本 {version} · 最近更新于 {newest}。每天改了什么，都记在这里。") + "</p>",
         "      </div>",
         '      <div class="log">',
     ]
     for release, day in days[:RECENT_DAYS]:
-        label = release["version"] or "未发布"
+        label = release["version"] or t("Unreleased", "未发布")
         lines.append('        <article class="log__day">')
         lines.append(f'          <header class="log__head"><time datetime="{day["date"]}">{day["date"]}</time>'
                      f'<span class="log__tag">{html.escape(label)}</span></header>')
-        lines.append(f'          <p class="log__counts">{html.escape(counts(day, en=False))}</p>')
+        lines.append(f'          <p class="log__counts">{html.escape(counts(day, en=lang == "en"))}</p>')
         lines.append('          <ul class="log__list">')
         shown = 0
         for g in day["groups"]:
@@ -219,11 +242,12 @@ def site_block(releases):
         lines.append("          </ul>")
         rest = item_count(day) - shown
         if rest > 0:
-            lines.append(f'          <a class="log__more" href="changelog.html#d-{day["date"]}">还有 {rest} 项 →</a>')
+            more = t(f"{rest} more →", f"还有 {rest} 项 →")
+            lines.append(f'          <a class="log__more" href="changelog.html#d-{day["date"]}">{more}</a>')
         lines.append("        </article>")
     lines += [
         "      </div>",
-        '      <p class="log__all"><a href="changelog.html">查看完整更新日志 →</a></p>',
+        '      <p class="log__all"><a href="changelog.html">' + t("Full changelog →", "查看完整更新日志 →") + "</a></p>",
         "    </div>",
         "  </section>",
         "  <!-- changelog:end -->",
@@ -231,49 +255,64 @@ def site_block(releases):
     return "\n".join(lines)
 
 
-def site_page(intro, releases, index_html):
-    """web/changelog.html, borrowing the home page's asset token and head tags."""
-    token = re.search(r"styles\.css\?v=([A-Za-z0-9]+)", index_html)
-    v = f"?v={token.group(1)}" if token else ""
-    analytics = re.search(r'<script defer src="https://tongji[^"]*"[^>]*></script>', index_html)
+def site_page(intro, releases, lang, v, analytics):
+    """The whole changelog as a page, in one language."""
+    t = lambda en, zh: pick(en, zh, lang)
+    info = LANGS[lang]
+    root = info["root"]
     latest = latest_release(releases)
+    download = DOWNLOAD.format(version=latest["version"]) if latest else f"{REPO}/releases/latest"
+    source = "CHANGELOG.en.md" if lang == "en" else "CHANGELOG.md"
     out = [
         "<!doctype html>",
-        '<html lang="zh-CN">',
+        f'<html lang="{info["lang"]}">',
         "<head>",
         '<meta charset="utf-8">',
         '<meta name="viewport" content="width=device-width, initial-scale=1">',
-        "<title>更新日志 — QuotaBar</title>",
-        '<meta name="description" content="QuotaBar 每个版本、每一天的功能新增、样式调整和问题修复。">',
+        "<title>" + t("Changelog — QuotaBar", "更新日志 — QuotaBar") + "</title>",
+        '<meta name="description" content="' + t("Every QuotaBar version, day by day: new features, style changes and fixes.",
+                                                  "QuotaBar 每个版本、每一天的功能新增、样式调整和问题修复。") + '">',
         '<meta name="theme-color" content="#101112">',
-        '<link rel="canonical" href="https://quota.bar/changelog.html">',
-        f'<link rel="icon" type="image/png" sizes="256x256" href="assets/icon.png{v}">',
+    ]
+    if lang == "en":
+        out.append('<script>try{var l=localStorage.getItem("qb-lang"),n=navigator.languages&&navigator.languages[0]?navigator.languages[0]:navigator.language;'
+                   'if(l==="zh"?true:!l&&/^zh\\b/i.test(String(n)))location.replace("zh/changelog.html"+location.hash)}catch(e){}</script>')
+    out += [
+        f'<link rel="canonical" href="{info["url"]}changelog.html">',
+        '<link rel="alternate" hreflang="en" href="https://quota.bar/changelog.html">',
+        '<link rel="alternate" hreflang="zh-CN" href="https://quota.bar/zh/changelog.html">',
+        '<link rel="alternate" hreflang="x-default" href="https://quota.bar/changelog.html">',
+        f'<link rel="icon" type="image/png" sizes="256x256" href="{root}assets/icon.png{v}">',
         f'<link rel="icon" sizes="48x48" href="/favicon.ico{v}">',
-        f'<link rel="apple-touch-icon" sizes="180x180" href="assets/apple-touch-icon.png{v}">',
-        f'<link rel="stylesheet" href="styles.css{v}">',
+        f'<link rel="apple-touch-icon" sizes="180x180" href="{root}assets/apple-touch-icon.png{v}">',
+        f'<link rel="stylesheet" href="{root}styles.css{v}">',
     ]
     if analytics:
-        out.append(analytics.group(0))
+        out.append(analytics)
     out += [
-        "<!-- 由 Scripts/sync_changelog.py 从 CHANGELOG.md 生成，请勿手改。 -->",
+        "<!-- " + t(f"Generated from {source} by Scripts/sync_changelog.py. Do not edit by hand.",
+                    f"由 Scripts/sync_changelog.py 从 {source} 生成，请勿手改。") + " -->",
         "</head>",
         '<body class="logpage">',
         '<header class="logbar">',
         '  <div class="shell logbar__inner">',
-        f'    <a class="logbar__brand wordmark" href="./"><img src="assets/icon.png{v}" alt="" width="22" height="22">QuotaBar</a>',
+        f'    <a class="logbar__brand wordmark" href="./"><img src="{root}assets/icon.png{v}" alt="" width="22" height="22">QuotaBar</a>',
         '    <nav class="logbar__links">',
-        '      <a href="./">首页</a>',
-        f'      <a href="{REPO}/releases/latest">下载</a>',
-        f'      <a href="{REPO}/blob/main/CHANGELOG.md">在 GitHub 上查看</a>',
+        '      <a href="./">' + t("Home", "首页") + "</a>",
+        f'      <a href="{download}" download>' + t("Download", "下载") + "</a>",
+        f'      <a href="{REPO}/blob/main/{source}">' + t("View on GitHub", "在 GitHub 上查看") + "</a>",
+        f'      <a href="{info["other_url"]}changelog.html" hreflang="{t("zh-CN", "en")}" lang="{t("zh-CN", "en")}" data-lang="{t("zh", "en")}">'
+        + t("简体中文", "English") + "</a>",
         "    </nav>",
         "  </div>",
         "</header>",
         '<main class="shell logdoc">',
         '  <header class="logdoc__head">',
-        "    <h1>更新日志</h1>",
-        f"    <p class=\"logdoc__intro\">{html.escape(''.join(intro))}</p>",
+        "    <h1>" + t("Changelog", "更新日志") + "</h1>",
+        f"    <p class=\"logdoc__intro\">{html.escape(' '.join(intro) if lang == 'en' else ''.join(intro))}</p>",
         '    <p class="logdoc__legend">' + "".join(
-            f'<span class="badge badge--{c}">{k}</span>' for k, c in (("新增", "add"), ("样式", "style"), ("修复", "fix"), ("删除", "remove"))) + "</p>",
+            f'<span class="badge badge--{c}">{t(en, zh)}</span>'
+            for en, zh, c in (("Added", "新增", "add"), ("Style", "样式", "style"), ("Fixed", "修复", "fix"), ("Removed", "删除", "remove"))) + "</p>",
         "  </header>",
         '  <ol class="tl">',
     ]
@@ -287,11 +326,13 @@ def site_page(intro, releases, index_html):
             out.append(f'        <time datetime="{release["date"]}">{release["date"]}</time>')
             short, full = release_commit(release["version"])
             if short:
-                out.append(f'        <a class="tl__hash" href="{REPO}/commit/{full}" title="在 GitHub 上查看这次发布的提交">{short}</a>')
+                tip = t("View this release's commit on GitHub", "在 GitHub 上查看这次发布的提交")
+                out.append(f'        <a class="tl__hash" href="{REPO}/commit/{full}" title="{tip}">{short}</a>')
         else:
             out.append(f'        <a class="tl__version" href="#{anchor}">{html.escape(release["title"])}</a>')
             out.append(f'        <time datetime="{newest}">{newest}</time>')
-            out.append(f'        <a class="tl__hash is-live" href="{REPO}/commits/main" title="还没发布，看 main 分支上的最新提交">开发中</a>')
+            tip = t("Not released yet — see the latest commits on main", "还没发布，看 main 分支上的最新提交")
+            out.append(f'        <a class="tl__hash is-live" href="{REPO}/commits/main" title="{tip}">' + t("In progress", "开发中") + "</a>")
         out.append("      </div>")
         out.append('      <div class="tl__body">')
         for day in release["days"]:
@@ -299,7 +340,7 @@ def site_page(intro, releases, index_html):
             if not release["version"] or len(release["days"]) > 1:
                 out.append(f'          <h3><time datetime="{day["date"]}">{day["date"]}</time></h3>')
             for g in day["groups"]:
-                out.append(f'          <div class="tl__group">')
+                out.append('          <div class="tl__group">')
                 out.append(f'            <span class="badge badge--{kind_class(g["kind"])}">{html.escape(g["kind"])}</span>')
                 out.append("            <ul>")
                 out += [f"              <li>{inline(item)}</li>" for item in g["items"]]
@@ -309,19 +350,47 @@ def site_page(intro, releases, index_html):
         out.append("      </div>")
         out.append("    </li>")
     out.append("  </ol>")
+    current = (t(f" · Current version {latest['version']}", f" · 当前版本 {latest['version']}") if latest else "")
     out += [
         "</main>",
         '<footer class="footer">',
         '  <div class="shell">',
-        f'    <p class="footer__fine">© {datetime.date.today().year} QuotaBar · <a href="{REPO}/blob/main/LICENSE">MIT 许可证</a>'
-        + (f" · 当前版本 {latest['version']}" if latest else "") + "</p>",
+        f'    <p class="footer__fine">© {datetime.date.today().year} QuotaBar · <a href="{REPO}/blob/main/LICENSE">'
+        + t("MIT License", "MIT 许可证") + "</a>" + current + "</p>",
         "  </div>",
         "</footer>",
+        f'<script src="{root}app.js{v}"></script>',
         "</body>",
         "</html>",
         "",
     ]
     return "\n".join(out)
+
+
+def render_template(template, lang, values):
+    """[[English||中文]] picks a side, then {{name}} fills in a value.
+
+    A block holds exactly one ||: a script inside one has to do without the
+    operator, or the split lands in the wrong place — checked, not trusted."""
+    def choose(match):
+        body = match.group(1)
+        if body.count("||") != 1:
+            line = template[:match.start()].count("\n") + 1
+            raise SystemExit(f"site/index.html:{line}: a [[…||…]] block needs exactly one ||")
+        en, zh = body.split("||")
+        return en if lang == "en" else zh
+    text = re.sub(r"\[\[((?:(?!\[\[|\]\]).)*)\]\]", choose, template, flags=re.S)
+    for leftover in ("[[", "]]"):
+        if leftover in text:
+            line = text[:text.index(leftover)].count("\n") + 1
+            raise SystemExit(f"site/index.html: unbalanced {leftover} (line {line} of the {lang} page)")
+
+    def fill(match):
+        name = match.group(1)
+        if name not in values:
+            raise SystemExit(f"site/index.html: no value for {{{{{name}}}}}")
+        return str(values[name])
+    return re.sub(r"\{\{(\w+)\}\}", fill, text)
 
 
 # ── Commit calendar ───────────────────────────────────────────────────────
@@ -394,7 +463,7 @@ def activity_svg(per_day, today, en):
 # ── Providers ─────────────────────────────────────────────────────────────
 
 def providers():
-    """(raw id, Chinese display name) in ProviderID's order."""
+    """(raw id, English name, Chinese name) in ProviderID's order."""
     models = (ROOT / "Sources" / "QuotaCore" / "Models.swift").read_text(encoding="utf-8")
     body = re.search(r"public enum ProviderID\b[^{]*\{(.*?)\n    public var ", models, re.S).group(1)
     cases = []
@@ -406,8 +475,8 @@ def providers():
     block = block[:block.index("\n    }\n")]
     for name, value in re.findall(r"case \.(\w+): (.+)", block):
         pair = re.findall(r'"([^"]*)"', value)
-        names[name] = pair[-1] if pair else name
-    return [(raw, names.get(name, name)) for name, raw in cases]
+        names[name] = (pair[0], pair[-1]) if pair else (name, name)
+    return [(raw, *names.get(name, (name, name))) for name, raw in cases]
 
 
 def png_tone(path):
@@ -468,15 +537,13 @@ def png_tone(path):
     return mono, not mono and brightness / sampled < 64
 
 
-def site_providers(index_html):
-    """Copies the logos into web/assets/logos and renders the strip."""
-    token = re.search(r"styles\.css\?v=([A-Za-z0-9]+)", index_html)
-    v = f"?v={token.group(1)}" if token else ""
+def copy_logos():
+    """Copies the app's logos into web/assets/logos; (raw id, en, zh, tone) for those that exist."""
     logos = ROOT / "Sources" / "QuotaBar" / "Resources" / "logos"
     target = ROOT / "web" / "assets" / "logos"
     target.mkdir(parents=True, exist_ok=True)
-    items = []
-    for raw, name in providers():
+    found = []
+    for raw, en, zh in providers():
         # A mark cut for dark surfaces wins where there is one (Kimi's).
         source = logos / f"{raw}-dark.png"
         if not source.exists():
@@ -487,15 +554,24 @@ def site_providers(index_html):
         if not copy.exists() or copy.read_bytes() != source.read_bytes():
             shutil.copyfile(source, copy)
         mono, dark = png_tone(source)
-        tone = " is-mono" if mono else " is-dark" if dark else ""
-        items.append(f'<li class="prov"><img class="prov__logo{tone}" src="assets/logos/{raw}.png{v}" alt="" width="24" height="24" loading="lazy" decoding="async"><span>{html.escape(name)}</span></li>')
-    count = len(providers())
+        found.append((raw, en, zh, " is-mono" if mono else " is-dark" if dark else ""))
+    return found
+
+
+def site_providers(logos, count, lang, v):
+    """The scrolling strip of provider logos, in one language."""
+    root = LANGS[lang]["root"]
+    t = lambda en, zh: pick(en, zh, lang)
+    items = [f'<li class="prov"><img class="prov__logo{tone}" src="{root}assets/logos/{raw}.png{v}" alt="" width="24" height="24" loading="lazy" decoding="async"><span>{html.escape(t(en, zh))}</span></li>'
+             for raw, en, zh, tone in logos]
     strip = "\n".join(f"          {item}" for item in items)
-    block = "\n".join([
+    return "\n".join([
         "<!-- providers:start -->",
-        "  <!-- 由 Scripts/sync_changelog.py 从 ProviderID 与应用内的 logo 生成，请勿手改。 -->",
-        '  <section id="providers" class="providers" aria-label="支持的服务商">',
-        '    <p class="providers__head">支持 <b class="provider-count">' + str(count) + "</b> 个 AI 编码服务</p>",
+        "  " + t("<!-- Generated by Scripts/sync_changelog.py from ProviderID and the app's logos. Do not edit by hand. -->",
+                 "<!-- 由 Scripts/sync_changelog.py 从 ProviderID 与应用内的 logo 生成，请勿手改。 -->"),
+        f'  <section id="providers" class="providers" aria-label="{t("Supported providers", "支持的服务商")}">',
+        '    <p class="providers__head">' + t(f'<b class="provider-count">{count}</b> AI coding services supported',
+                                                f'支持 <b class="provider-count">{count}</b> 个 AI 编码服务') + "</p>",
         '    <div class="providers__track">',
         # The list twice, for a loop with no seam; the copy is hidden from
         # assistive tech.
@@ -509,7 +585,6 @@ def site_providers(index_html):
         "  </section>",
         "  <!-- providers:end -->",
     ])
-    return block, count
 
 
 def write_if_changed(path, content):
@@ -522,36 +597,48 @@ def write_if_changed(path, content):
 
 def main():
     import argparse
-    parser = argparse.ArgumentParser(description="Sync CHANGELOG.md into the READMEs, the website and the activity chart.")
+    parser = argparse.ArgumentParser(description="Sync the changelogs into the READMEs, build the website, draw the activity chart.")
     parser.add_argument("--changelog", default=str(ROOT / "CHANGELOG.md"),
-                        help="read this file instead, e.g. the committed copy while other edits are pending")
+                        help="read this Chinese changelog instead, e.g. the committed copy while other edits are pending")
+    parser.add_argument("--changelog-en", default=str(ROOT / "CHANGELOG.en.md"),
+                        help="read this English changelog instead")
     args = parser.parse_args()
-    intro, releases = parse(pathlib.Path(args.changelog).read_text(encoding="utf-8"))
+    intro_zh, releases_zh = parse(pathlib.Path(args.changelog).read_text(encoding="utf-8"))
+    intro_en, releases_en = parse(pathlib.Path(args.changelog_en).read_text(encoding="utf-8"))
     changed = []
-    if replace_block(ROOT / "README.md", readme_block(releases, en=True)):
+    if replace_block(ROOT / "README.md", readme_block(releases_en, en=True)):
         changed.append("README.md")
-    if replace_block(ROOT / "README.zh-CN.md", readme_block(releases, en=False)):
+    if replace_block(ROOT / "README.zh-CN.md", readme_block(releases_zh, en=False)):
         changed.append("README.zh-CN.md")
-    index = ROOT / "web" / "index.html"
-    site_changed = replace_block(index, site_block(releases))
-    strip, count = site_providers(index.read_text(encoding="utf-8"))
-    site_changed |= replace_block(index, strip, "<!-- providers:start -->", "<!-- providers:end -->")
-    text = index.read_text(encoding="utf-8")
-    latest = latest_release(releases)
-    updated = re.sub(r'(<[a-z]+ class="provider-count">)\d+(</[a-z]+>)', lambda m: f"{m.group(1)}{count}{m.group(2)}", text)
-    updated = re.sub(r"等 \d+ 个 AI 编码服务", f"等 {count} 个 AI 编码服务", updated)
-    if latest:
-        updated = re.sub(r'(<span class="latest-version">)[\d.]+(</span>)', lambda m: f"{m.group(1)}{latest['version']}{m.group(2)}", updated)
-        # 下载链接跟着最新版本走：服务器副本和 GitHub 上的同名文件。
-        updated = re.sub(r"QuotaBar-[\d.]+\.dmg", f"QuotaBar-{latest['version']}.dmg", updated)
-        updated = re.sub(r"releases/download/v[\d.]+/", f"releases/download/v{latest['version']}/", updated)
-    if updated != text:
-        index.write_text(updated, encoding="utf-8")
-        site_changed = True
-    if site_changed:
-        changed.append("web/index.html")
-    if write_if_changed(ROOT / "web" / "changelog.html", site_page(intro, releases, index.read_text(encoding="utf-8"))):
-        changed.append("web/changelog.html")
+
+    # The asset token deploy_site.sh last stamped, kept so a local run doesn't
+    # churn every URL back to a stale value.
+    home = ROOT / "web" / "index.html"
+    current = home.read_text(encoding="utf-8") if home.exists() else ""
+    token = re.search(r"styles\.css\?v=([A-Za-z0-9]+)", current)
+    stamp = token.group(1) if token else "dev"
+    template = (ROOT / "site" / "index.html").read_text(encoding="utf-8")
+    analytics = re.search(r'<script defer src="https://tongji[^"]*"[^>]*></script>', template)
+    logos = copy_logos()
+    count = len(providers())
+    latest = latest_release(releases_zh)
+    version = latest["version"] if latest else "0.0.0"
+    for lang, intro, releases in (("en", intro_en, releases_en), ("zh", intro_zh, releases_zh)):
+        info = LANGS[lang]
+        values = dict(info, v=stamp, count=count, version=version,
+                      dmg=DOWNLOAD.format(version=version), github_dmg=GITHUB_DOWNLOAD.format(version=version),
+                      providers=site_providers(logos, count, lang, f"?v={stamp}"),
+                      changelog=site_block(releases, lang))
+        page = render_template(template, lang, values)
+        note = ("<!-- Built from site/index.html by Scripts/sync_changelog.py: edit the template, not this file. -->"
+                if lang == "en" else "<!-- 由 Scripts/sync_changelog.py 从 site/index.html 生成：改模板，不要改这个文件。 -->")
+        page = page.replace("<!doctype html>\n", f"<!doctype html>\n{note}\n", 1)
+        out = ROOT / "web" / info["dir"] / "index.html"
+        if write_if_changed(out, page):
+            changed.append(str(out.relative_to(ROOT)))
+        out = ROOT / "web" / info["dir"] / "changelog.html"
+        if write_if_changed(out, site_page(intro, releases, lang, f"?v={stamp}", analytics.group(0) if analytics else None)):
+            changed.append(str(out.relative_to(ROOT)))
     # The calendar runs through yesterday: a finished day does not change, so
     # running this again after today's commits leaves the chart alone rather
     # than redrawing it with every commit that records the redraw.

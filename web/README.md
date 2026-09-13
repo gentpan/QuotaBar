@@ -1,19 +1,26 @@
 # QuotaBar 官网
 
-静态站，无构建步骤 —— 三个文件加一个 assets 目录，直接丢给任何静态托管即可。
+静态站，中英双语：英文在根目录，中文在 `zh/`。两种语言的首页都从同一个模板
+`site/index.html` 生成，文案在模板里写成 `[[English||中文]]`；改文案、改版式都改
+模板，然后运行 `python3 Scripts/sync_changelog.py`（`deploy_site.sh` 部署前会自动跑）。
 
 ```
 web/
-  index.html
-  styles.css
-  app.js
-  assets/          真机截图 + 应用图标 + Instrument Sans 字体
+  index.html       英文首页（生成）
+  changelog.html   英文更新日志，来自 CHANGELOG.en.md（生成）
+  zh/index.html    中文首页（生成）
+  zh/changelog.html 中文更新日志，来自 CHANGELOG.md（生成）
+  styles.css  replica.css  app.js  replica.js    两种语言共用；脚本按 <html lang> 取文案
+  assets/          真机截图（settings.png / settings-zh.png）、分享图（og.jpg / og-zh.jpg）、
+                   应用图标、服务商 logo、Instrument Sans 字体
 ```
+
+安装包不在这里：服务器上的 `download/` 由 `Scripts/publish_release.sh` 上传，部署时排除。
 
 本地预览：
 
 ```bash
-python3 -m http.server 8080 --directory web
+python3 -m http.server 8080 --directory web   # 然后打开 http://localhost:8080/ 与 /zh/
 ```
 
 ## 关于视觉

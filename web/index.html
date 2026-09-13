@@ -1,28 +1,36 @@
 <!doctype html>
-<html lang="zh-CN">
+<!-- Built from site/index.html by Scripts/sync_changelog.py: edit the template, not this file. -->
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>QuotaBar — 每个 AI 编码额度，抬眼就看见</title>
-<meta name="description" content="QuotaBar 把 Codex、Claude、Cursor 等 23 个 AI 编码服务的额度、重置时间和花费放到 macOS 的菜单栏、刘海、屏幕边缘和桌面卡片上。用量在本机读取和计算。">
+<title>QuotaBar — Every AI coding limit, at a glance</title>
+<meta name="description" content="QuotaBar puts the limits, reset times and spend of 23 AI coding services — Codex, Claude, Cursor and more — in the macOS menu bar, the notch, the screen edge and desktop cards. Usage is read and worked out on your Mac.">
 <meta name="theme-color" content="#101112">
 <!-- 外观选择在首帧之前就套上，免得先闪一下另一张壁纸 -->
 <script>try{var t=localStorage.getItem("qb-theme");if(t==="light"||t==="dark")document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+<!-- 英文在根目录。浏览器语言是中文、或者之前在语言菜单里选过中文的，第一眼就去 /zh/；
+     手动选过 English 的留在这里。/zh/ 本身不跳：打开中文链接就是想看中文。 -->
+<script>try{var l=localStorage.getItem("qb-lang"),n=navigator.languages&&navigator.languages[0]?navigator.languages[0]:navigator.language;if(l==="zh"?true:!l&&/^zh\b/i.test(String(n)))location.replace("zh/"+location.hash)}catch(e){}</script>
 <link rel="canonical" href="https://quota.bar/">
-<meta property="og:title" content="QuotaBar — 每个 AI 编码额度，抬眼就看见">
-<meta property="og:description" content="用了多少、什么时候重置，一眼看完。本地读取，数据不出本机。">
+<link rel="alternate" hreflang="en" href="https://quota.bar/">
+<link rel="alternate" hreflang="zh-CN" href="https://quota.bar/zh/">
+<link rel="alternate" hreflang="x-default" href="https://quota.bar/">
+<meta property="og:title" content="QuotaBar — Every AI coding limit, at a glance">
+<meta property="og:description" content="How much you've used and when it resets, at a glance. Read on your Mac; your data stays there.">
 <meta property="og:type" content="website">
 <meta property="og:url" content="https://quota.bar/">
 <meta property="og:site_name" content="QuotaBar">
-<meta property="og:locale" content="zh_CN">
-<!-- 1200×630 首屏截图。没有这张，分享到微信 / Slack / X 全是纯文字卡片。 -->
+<meta property="og:locale" content="en_US">
+<meta property="og:locale:alternate" content="zh_CN">
+<!-- 1200×630 首屏截图，每种语言一张。没有这张，分享到微信 / Slack / X 全是纯文字卡片。 -->
 <meta property="og:image" content="https://quota.bar/assets/og.jpg?v=18e715a1">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
-<meta property="og:image:alt" content="QuotaBar 的刘海岛面板、边缘停靠条与桌面卡片">
+<meta property="og:image:alt" content="QuotaBar's notch island panel, edge dock and desktop card">
 <meta name="twitter:card" content="summary_large_image">
-<meta name="twitter:title" content="QuotaBar — 每个 AI 编码额度，抬眼就看见">
-<meta name="twitter:description" content="用了多少、什么时候重置，一眼看完。本地读取，数据不出本机。">
+<meta name="twitter:title" content="QuotaBar — Every AI coding limit, at a glance">
+<meta name="twitter:description" content="How much you've used and when it resets, at a glance. Read on your Mac; your data stays there.">
 <meta name="twitter:image" content="https://quota.bar/assets/og.jpg?v=18e715a1">
 <link rel="icon" type="image/png" sizes="256x256" href="assets/icon.png?v=18e715a1">
 <link rel="icon" sizes="48x48" href="/favicon.ico?v=18e715a1">
@@ -43,53 +51,53 @@
   <div class="desktop__wall"></div>
 
   <!-- 这一条既是「桌面」的菜单栏，也是本站唯一的导航 -->
-  <nav class="menubar" aria-label="站点导航">
+  <nav class="menubar" aria-label="Site navigation">
     <svg class="menubar__apple" viewBox="0 0 14 17" fill="currentColor" aria-hidden="true">
       <path d="M11.5 9c0-1.9 1.5-2.8 1.6-2.9-.9-1.3-2.2-1.5-2.7-1.5-1.1-.1-2.2.7-2.8.7-.6 0-1.5-.7-2.4-.6-1.2 0-2.4.7-3 1.8-1.3 2.2-.3 5.4 1 7.2.6.8 1.3 1.8 2.2 1.7.9 0 1.2-.6 2.2-.6 1 0 1.3.6 2.2.5.9 0 1.5-.8 2.1-1.7.7-1 .9-1.9.9-1.9s-1.8-.7-1.8-2.7zM9.7 3.2c.5-.6.8-1.4.7-2.2-.7 0-1.6.5-2.1 1.1-.5.6-.9 1.4-.8 2.2.8.1 1.7-.4 2.2-1.1z"/>
     </svg>
     <div class="mb-menu">
       <a class="menubar__app wordmark mb-title" href="#top" aria-haspopup="menu" aria-expanded="false">QuotaBar</a>
       <div class="mb-drop" role="menu">
-        <a role="menuitem" href="#top">关于 QuotaBar</a>
-        <a role="menuitem" href="#providers">支持的服务商</a>
+        <a role="menuitem" href="#top">About QuotaBar</a>
+        <a role="menuitem" href="#providers">Supported Providers</a>
         <hr>
-        <a role="menuitem" href="https://quota.bar/download/QuotaBar-0.5.0.dmg" download>下载 for Mac</a>
-        <a role="menuitem" href="https://github.com/gentpan/quotabar">查看源码<span class="mb-drop__ext" aria-hidden="true">↗</span></a>
+        <a role="menuitem" href="https://quota.bar/download/QuotaBar-0.5.0.dmg" download>Download for Mac</a>
+        <a role="menuitem" href="https://github.com/gentpan/quotabar">View Source<span class="mb-drop__ext" aria-hidden="true">↗</span></a>
       </div>
     </div>
     <div class="mb-menu">
-      <a class="mb-title" href="#features" aria-haspopup="menu" aria-expanded="false">功能</a>
+      <a class="mb-title" href="#features" aria-haspopup="menu" aria-expanded="false">Features</a>
       <div class="mb-drop" role="menu">
-        <a role="menuitem" href="#feature-menubar">菜单栏图标</a>
-        <a role="menuitem" href="#feature-alerts">到点提醒</a>
-        <a role="menuitem" href="#feature-spend">用量与花费</a>
+        <a role="menuitem" href="#feature-menubar">Menu Bar Icon</a>
+        <a role="menuitem" href="#feature-alerts">Alerts</a>
+        <a role="menuitem" href="#feature-spend">Usage and Spend</a>
         <hr>
-        <a role="menuitem" href="#settings">设置界面</a>
+        <a role="menuitem" href="#settings">Settings</a>
       </div>
     </div>
     <div class="mb-menu">
-      <a class="mb-title" href="#surfaces" aria-haspopup="menu" aria-expanded="false">展示方式</a>
+      <a class="mb-title" href="#surfaces" aria-haspopup="menu" aria-expanded="false">Views</a>
       <div class="mb-drop" role="menu">
-        <a role="menuitem" href="#surface-panels">菜单栏、刘海岛与停靠条</a>
-        <a role="menuitem" href="#privacy">用量不出这台 Mac</a>
+        <a role="menuitem" href="#surface-panels">Menu Bar, Notch Island and Dock</a>
+        <a role="menuitem" href="#privacy">Usage Stays on This Mac</a>
       </div>
     </div>
     <div class="mb-menu">
-      <a class="mb-title" href="#changelog" aria-haspopup="menu" aria-expanded="false">更新日志</a>
+      <a class="mb-title" href="#changelog" aria-haspopup="menu" aria-expanded="false">Changelog</a>
       <div class="mb-drop" role="menu">
-        <a role="menuitem" href="#changelog">最近更新</a>
-        <a role="menuitem" href="changelog.html">完整更新日志</a>
+        <a role="menuitem" href="#changelog">Recent Updates</a>
+        <a role="menuitem" href="changelog.html">Full Changelog</a>
         <hr>
         <a role="menuitem" href="https://github.com/gentpan/quotabar/releases">GitHub Releases<span class="mb-drop__ext" aria-hidden="true">↗</span></a>
       </div>
     </div>
     <div class="mb-menu">
-      <a class="mb-title" href="#faq" aria-haspopup="menu" aria-expanded="false">帮助</a>
+      <a class="mb-title" href="#faq" aria-haspopup="menu" aria-expanded="false">Help</a>
       <div class="mb-drop" role="menu">
-        <a role="menuitem" href="#faq">常见问题</a>
+        <a role="menuitem" href="#faq">Questions and Answers</a>
         <hr>
-        <a role="menuitem" href="https://github.com/gentpan/quotabar/issues">反馈问题<span class="mb-drop__ext" aria-hidden="true">↗</span></a>
-        <!--email_off--><a role="menuitem" href="mailto:hello@quota.bar">发邮件给我们</a><!--/email_off-->
+        <a role="menuitem" href="https://github.com/gentpan/quotabar/issues">Report an Issue<span class="mb-drop__ext" aria-hidden="true">↗</span></a>
+        <!--email_off--><a role="menuitem" href="mailto:hello@quota.bar">Email Us</a><!--/email_off-->
       </div>
     </div>
 
@@ -97,24 +105,36 @@
       <!-- 状态栏里的 QuotaBar：图标是应用真实渲染出来的（--snapshot 导出的 @3x），
            点开可以像在应用里一样换成 11 种样式中的任意一种。 -->
       <div class="mb-menu mb-menu--status">
-        <a class="mb-title menubar__quota" href="#features" aria-haspopup="menu" aria-expanded="false" aria-label="QuotaBar 菜单栏图标">
+        <a class="mb-title menubar__quota" href="#features" aria-haspopup="menu" aria-expanded="false" aria-label="QuotaBar menu bar icon">
           <i class="mb-glyph" id="menubarGlyph" style="--glyph:url(assets/glyphs/glyph-ring@3x.png)"></i>
         </a>
         <div class="mb-drop mb-drop--right mb-drop--glyphs" role="menu">
-          <p class="mb-drop__label">菜单栏图标样式</p>
-          <a role="menuitemradio" href="#" class="mb-glyph-option" data-glyph="ring" aria-checked="true"><i class="mb-glyph" style="--glyph:url(assets/glyphs/glyph-ring@3x.png)"></i><span>圆环</span></a>
-          <a role="menuitemradio" href="#" class="mb-glyph-option" data-glyph="dualBar" aria-checked="false"><i class="mb-glyph" style="--glyph:url(assets/glyphs/glyph-dualBar@3x.png)"></i><span>双层横条</span></a>
-          <a role="menuitemradio" href="#" class="mb-glyph-option" data-glyph="bar" aria-checked="false"><i class="mb-glyph" style="--glyph:url(assets/glyphs/glyph-bar@3x.png)"></i><span>横条</span></a>
-          <a role="menuitemradio" href="#" class="mb-glyph-option" data-glyph="columns" aria-checked="false"><i class="mb-glyph" style="--glyph:url(assets/glyphs/glyph-columns@3x.png)"></i><span>柱形</span></a>
-          <a role="menuitemradio" href="#" class="mb-glyph-option" data-glyph="percent" aria-checked="false"><i class="mb-glyph" style="--glyph:url(assets/glyphs/glyph-percent@3x.png)"></i><span>数字</span></a>
-          <a role="menuitemradio" href="#" class="mb-glyph-option" data-glyph="dual" aria-checked="false"><i class="mb-glyph" style="--glyph:url(assets/glyphs/glyph-dual@3x.png)"></i><span>双层分段</span></a>
-          <a role="menuitemradio" href="#" class="mb-glyph-option" data-glyph="segments" aria-checked="false"><i class="mb-glyph" style="--glyph:url(assets/glyphs/glyph-segments@3x.png)"></i><span>分段</span></a>
-          <a role="menuitemradio" href="#" class="mb-glyph-option" data-glyph="grid" aria-checked="false"><i class="mb-glyph" style="--glyph:url(assets/glyphs/glyph-grid@3x.png)"></i><span>九宫格</span></a>
-          <a role="menuitemradio" href="#" class="mb-glyph-option" data-glyph="battery" aria-checked="false"><i class="mb-glyph" style="--glyph:url(assets/glyphs/glyph-battery@3x.png)"></i><span>电量</span></a>
-          <a role="menuitemradio" href="#" class="mb-glyph-option" data-glyph="gauge" aria-checked="false"><i class="mb-glyph" style="--glyph:url(assets/glyphs/glyph-gauge@3x.png)"></i><span>仪表</span></a>
-          <a role="menuitemradio" href="#" class="mb-glyph-option" data-glyph="ticks" aria-checked="false"><i class="mb-glyph" style="--glyph:url(assets/glyphs/glyph-ticks@3x.png)"></i><span>刻度</span></a>
+          <p class="mb-drop__label">Menu Bar Icon Style</p>
+          <a role="menuitemradio" href="#" class="mb-glyph-option" data-glyph="ring" aria-checked="true"><i class="mb-glyph" style="--glyph:url(assets/glyphs/glyph-ring@3x.png)"></i><span>Ring</span></a>
+          <a role="menuitemradio" href="#" class="mb-glyph-option" data-glyph="dualBar" aria-checked="false"><i class="mb-glyph" style="--glyph:url(assets/glyphs/glyph-dualBar@3x.png)"></i><span>Dual bars</span></a>
+          <a role="menuitemradio" href="#" class="mb-glyph-option" data-glyph="bar" aria-checked="false"><i class="mb-glyph" style="--glyph:url(assets/glyphs/glyph-bar@3x.png)"></i><span>Bar</span></a>
+          <a role="menuitemradio" href="#" class="mb-glyph-option" data-glyph="columns" aria-checked="false"><i class="mb-glyph" style="--glyph:url(assets/glyphs/glyph-columns@3x.png)"></i><span>Columns</span></a>
+          <a role="menuitemradio" href="#" class="mb-glyph-option" data-glyph="percent" aria-checked="false"><i class="mb-glyph" style="--glyph:url(assets/glyphs/glyph-percent@3x.png)"></i><span>Percent</span></a>
+          <a role="menuitemradio" href="#" class="mb-glyph-option" data-glyph="dual" aria-checked="false"><i class="mb-glyph" style="--glyph:url(assets/glyphs/glyph-dual@3x.png)"></i><span>Dual cells</span></a>
+          <a role="menuitemradio" href="#" class="mb-glyph-option" data-glyph="segments" aria-checked="false"><i class="mb-glyph" style="--glyph:url(assets/glyphs/glyph-segments@3x.png)"></i><span>Segments</span></a>
+          <a role="menuitemradio" href="#" class="mb-glyph-option" data-glyph="grid" aria-checked="false"><i class="mb-glyph" style="--glyph:url(assets/glyphs/glyph-grid@3x.png)"></i><span>Grid</span></a>
+          <a role="menuitemradio" href="#" class="mb-glyph-option" data-glyph="battery" aria-checked="false"><i class="mb-glyph" style="--glyph:url(assets/glyphs/glyph-battery@3x.png)"></i><span>Battery</span></a>
+          <a role="menuitemradio" href="#" class="mb-glyph-option" data-glyph="gauge" aria-checked="false"><i class="mb-glyph" style="--glyph:url(assets/glyphs/glyph-gauge@3x.png)"></i><span>Gauge</span></a>
+          <a role="menuitemradio" href="#" class="mb-glyph-option" data-glyph="ticks" aria-checked="false"><i class="mb-glyph" style="--glyph:url(assets/glyphs/glyph-ticks@3x.png)"></i><span>Scale</span></a>
           <hr>
-          <p class="mb-drop__note">和应用里「外观」的 11 种样式一样，图标由应用直接渲染。</p>
+          <p class="mb-drop__note">The same 11 styles as Appearance in the app, each icon rendered by the app itself.</p>
+        </div>
+      </div>
+      <!-- 输入法菜单：和 macOS 一样，ABC 显示成一个 A，拼音显示成「拼」。
+           切换语言，停在同一个章节；选择记在本地，下次打开首页直接进这种语言。 -->
+      <div class="mb-menu mb-menu--status">
+        <a class="mb-title menubar__input" href="zh/" aria-haspopup="menu" aria-expanded="false" aria-label="Language: English">
+          <span class="mb-input" aria-hidden="true">A</span>
+        </a>
+        <div class="mb-drop mb-drop--right mb-drop--lang" role="menu">
+          <p class="mb-drop__label">Language</p>
+          <a role="menuitemradio" class="mb-lang" href="./" hreflang="en" lang="en" data-lang="en" aria-checked="true"><span class="mb-lang__check" aria-hidden="true">✓</span><span class="mb-input mb-input--sm" aria-hidden="true">A</span>English</a>
+          <a role="menuitemradio" class="mb-lang" href="zh/" hreflang="zh-CN" lang="zh-CN" data-lang="zh" aria-checked="false"><span class="mb-lang__check" aria-hidden="true">✓</span><span class="mb-input mb-input--sm" aria-hidden="true">拼</span>简体中文</a>
         </div>
       </div>
       <svg width="19" height="11" viewBox="0 0 19 11" fill="none" stroke="currentColor" stroke-width="1.1" aria-hidden="true">
@@ -131,23 +151,23 @@
       <!-- 控制中心：点开是「外观」，和系统设置里一样选浅色、深色或自动；
            换的是首屏的沙丘壁纸，选择记在本地。 -->
       <div class="mb-menu mb-menu--status menubar__extra">
-        <a class="mb-title menubar__cc" href="#top" aria-haspopup="menu" aria-expanded="false" aria-label="控制中心：外观">
+        <a class="mb-title menubar__cc" href="#top" aria-haspopup="menu" aria-expanded="false" aria-label="Control Center: Appearance">
           <svg width="17" height="14" viewBox="0 0 17 14" fill="none" stroke="currentColor" stroke-width="1.2" aria-hidden="true">
             <rect x="0.6" y="0.6" width="15.8" height="5.4" rx="2.7"/><circle cx="13.7" cy="3.3" r="1.6" fill="currentColor" stroke="none"/>
             <rect x="0.6" y="8" width="15.8" height="5.4" rx="2.7"/><circle cx="3.3" cy="10.7" r="1.6" fill="currentColor" stroke="none"/>
           </svg>
         </a>
         <div class="mb-drop mb-drop--right mb-drop--cc" role="menu">
-          <p class="mb-drop__label">外观</p>
+          <p class="mb-drop__label">Appearance</p>
           <div class="cc-appearance">
-            <a role="menuitemradio" href="#" class="cc-choice" data-theme-choice="light" aria-checked="false"><span class="cc-swatch cc-swatch--light"></span><span>浅色</span></a>
-            <a role="menuitemradio" href="#" class="cc-choice" data-theme-choice="dark" aria-checked="false"><span class="cc-swatch cc-swatch--dark"></span><span>深色</span></a>
-            <a role="menuitemradio" href="#" class="cc-choice" data-theme-choice="auto" aria-checked="true"><span class="cc-swatch cc-swatch--auto"></span><span>自动</span></a>
+            <a role="menuitemradio" href="#" class="cc-choice" data-theme-choice="light" aria-checked="false"><span class="cc-swatch cc-swatch--light"></span><span>Light</span></a>
+            <a role="menuitemradio" href="#" class="cc-choice" data-theme-choice="dark" aria-checked="false"><span class="cc-swatch cc-swatch--dark"></span><span>Dark</span></a>
+            <a role="menuitemradio" href="#" class="cc-choice" data-theme-choice="auto" aria-checked="true"><span class="cc-swatch cc-swatch--auto"></span><span>Auto</span></a>
           </div>
-          <p class="mb-drop__note">“自动”跟随系统外观：浅色显示白天的沙丘，深色显示夜里的沙丘。</p>
+          <p class="mb-drop__note">Auto follows your system appearance: the dunes by day when it's light, by night when it's dark.</p>
         </div>
       </div>
-      <!-- 访客的本地时间，由 app.js 按其系统语言格式化；没跑 JS 就不显示 -->
+      <!-- 访客的本地时间，由 app.js 按页面语言格式化；没跑 JS 就不显示 -->
       <time class="menubar__clock" id="menubarClock"></time>
     </div>
   </nav>
@@ -155,10 +175,10 @@
   <!-- 刘海岛面板：HTML/CSS 重建，不是截图。尺寸与色阶取自应用（IslandPanelLayout：
        24 内边距、300 列宽、96 图块、44 底栏；SF Mono 数字；白色透明度阶梯）。
        data-used 是读数（数据，不是样式），JS 没跑时也是正确的最终状态。 -->
-  <div class="qb qb-island desktop__island" role="group" aria-label="QuotaBar 刘海岛面板">
+  <div class="qb qb-island desktop__island" role="group" aria-label="QuotaBar notch island panel">
     <div class="qb-island__head">
       <span class="qb-island__brand wordmark">QuotaBar</span>
-      <span class="qb-island__sync"><i></i>已同步 刚刚</span>
+      <span class="qb-island__sync"><i></i>Synced just now</span>
     </div>
     <div class="qb-island__cols">
       <div class="qb-island__col">
@@ -167,18 +187,18 @@
             <img class="" src="assets/logos/codex.png?v=18e715a1" alt="">
             <span class="qb-iprov__name">Codex</span>
             <em class="qb-chip">PRO</em>
-            <span class="qb-status qb-status--warn"><i></i>轻微故障</span>
+            <span class="qb-status qb-status--warn"><i></i>Minor outage</span>
           </div>
           <div class="qb-itiles">
             <div class="qb-itile" data-used="36">
-              <div class="qb-itile__head"><span class="qb-itile__label">周</span><span class="qb-ipct" style="color:#fff">36</span><span class="qb-itile__unit">%</span></div>
+              <div class="qb-itile__head"><span class="qb-itile__label">Week</span><span class="qb-ipct" style="color:#fff">36</span><span class="qb-itile__unit">%</span></div>
               <span class="qb-steps" style="--c:#0A84FF"><span class="qb-steps__fill is-brand" style="width:36%;background:repeating-linear-gradient(90deg,#0A84FF 0 5px,transparent 5px 7px)"></span></span>
-              <span class="qb-itile__reset">5 天 16 小时后重置</span>
+              <span class="qb-itile__reset">resets in 5d 16h</span>
             </div>
             <div class="qb-itile" data-used="0">
               <div class="qb-itile__head"><span class="qb-itile__label">GPT-5.3-Codex-Spark</span><span class="qb-ipct" style="color:#fff">0</span><span class="qb-itile__unit">%</span></div>
               <span class="qb-steps" style="--c:#0A84FF"><span class="qb-steps__fill is-brand" style="width:0%;background:repeating-linear-gradient(90deg,#0A84FF 0 5px,transparent 5px 7px)"></span></span>
-              <span class="qb-itile__reset">4 小时 59 分后重置</span>
+              <span class="qb-itile__reset">resets in 4h 59m</span>
             </div>
           </div>
         </div>
@@ -189,18 +209,18 @@
             <img class="is-colour" src="assets/logos/claude.png?v=18e715a1" alt="">
             <span class="qb-iprov__name">Claude</span>
             <em class="qb-chip">MAX 20X</em>
-            <span class="qb-status qb-status--ok"><i></i>服务正常</span>
+            <span class="qb-status qb-status--ok"><i></i>Service OK</span>
           </div>
           <div class="qb-itiles">
             <div class="qb-itile" data-used="18">
-              <div class="qb-itile__head"><span class="qb-itile__label">5 小时</span><span class="qb-ipct" style="color:#fff">18</span><span class="qb-itile__unit">%</span></div>
+              <div class="qb-itile__head"><span class="qb-itile__label">5-hour</span><span class="qb-ipct" style="color:#fff">18</span><span class="qb-itile__unit">%</span></div>
               <span class="qb-steps" style="--c:#D97757"><span class="qb-steps__fill is-brand" style="width:18%;background:repeating-linear-gradient(90deg,#D97757 0 5px,transparent 5px 7px)"></span></span>
-              <span class="qb-itile__reset">2 小时 41 分后重置</span>
+              <span class="qb-itile__reset">resets in 2h 41m</span>
             </div>
             <div class="qb-itile" data-used="58">
-              <div class="qb-itile__head"><span class="qb-itile__label">周</span><span class="qb-ipct" style="color:#fff">58</span><span class="qb-itile__unit">%</span></div>
+              <div class="qb-itile__head"><span class="qb-itile__label">Week</span><span class="qb-ipct" style="color:#fff">58</span><span class="qb-itile__unit">%</span></div>
               <span class="qb-steps" style="--c:#D97757"><span class="qb-steps__fill is-brand" style="width:58%;background:repeating-linear-gradient(90deg,#D97757 0 5px,transparent 5px 7px)"></span></span>
-              <span class="qb-itile__reset">4 天 9 小时后重置</span>
+              <span class="qb-itile__reset">resets in 4d 9h</span>
             </div>
           </div>
         </div>
@@ -208,15 +228,15 @@
     </div>
     <div class="qb-island__foot">
       <svg class="qb-island__gear" aria-hidden="true" width="13" height="13" viewBox="0 0 15 15" fill="none" stroke="currentColor" stroke-width="1.4"><circle cx="7.5" cy="7.5" r="2.2"/><path d="M7.5 1v1.8M7.5 12.2V14M14 7.5h-1.8M2.8 7.5H1M12.1 2.9l-1.3 1.3M4.2 10.8l-1.3 1.3M12.1 12.1l-1.3-1.3M4.2 4.2 2.9 2.9"/></svg>
-      <em class="qb-chip">阶梯</em><em class="qb-chip">已用</em><em class="qb-chip">额度</em>
-      <span class="qb-island__sync"><i></i>已同步 刚刚</span>
+      <em class="qb-chip">Stepped</em><em class="qb-chip">Used</em><em class="qb-chip">Quota</em>
+      <span class="qb-island__sync"><i></i>Synced just now</span>
     </div>
   </div>
 
   <!-- 边缘停靠条：同样是重建，不是截图。环里只有图标，读数在悬停卡片里；
        选中的那个（菜单栏图标在报的）在环下方有一个绿点。 -->
   <div class="qb qb-dock desktop__strip" role="group"
-       aria-label="边缘停靠条：各服务商的环形读数">
+       aria-label="Edge dock: a ring reading for each provider">
     <div class="qb-ring" data-id="codex" data-used="36">
       <span class="qb-ring__disc">
         <svg viewBox="0 0 46 46" aria-hidden="true">
@@ -264,11 +284,11 @@
   </div>
 
   <!-- 桌面卡片：应用里的桌面小工具（标准密度）。黑色 82%、白色 10% 的描边、
-       18 圆角；和停靠条共用一套环。 -->
-  <div class="qb qb-widget desktop__widget" role="group" aria-label="QuotaBar 桌面卡片">
+       18 圆角；和停靠条共用一套环。replica.js 会换成可以换样式的卡片。 -->
+  <div class="qb qb-widget desktop__widget" role="group" aria-label="QuotaBar desktop card">
     <div class="qb-widget__head">
       <span class="qb-widget__brand wordmark">QuotaBar</span>
-      <span class="qb-widget__age">刚刚</span>
+      <span class="qb-widget__age">just now</span>
     </div>
     <div class="qb-widget__rings">
     <div class="qb-ring" data-id="w-codex" data-used="36">
@@ -315,45 +335,45 @@
   </div>
 
   <div class="desktop__copy">
-    <span class="eyebrow">macOS 14+ · <b class="provider-count">23</b> 个服务商 · 开源</span>
-    <h1>每个额度<br>抬眼就看见</h1>
+    <span class="eyebrow">macOS 14+ · <b class="provider-count">23</b> providers · Open source</span>
+    <h1>Every limit,<br>at a glance</h1>
     <p class="hero__sub">
-      Codex、Claude、Cursor、Gemini……<br>
-      用了多少、什么时候重置，<br>
-      菜单栏、刘海、屏幕边缘或桌面上一眼看完。
+      Codex, Claude, Cursor, Gemini…<br>
+      how much you've used and when it resets,<br>
+      in the menu bar, notch, screen edge or desktop.
     </p>
     <div class="hero__cta">
       <a class="btn btn--primary" href="https://quota.bar/download/QuotaBar-0.5.0.dmg" download>
         <svg width="15" height="18" viewBox="0 0 15 18" fill="currentColor" aria-hidden="true">
           <path d="M12.3 9.5c0-2 1.6-3 1.7-3-1-1.4-2.4-1.6-2.9-1.6-1.2-.1-2.4.7-3 .7-.6 0-1.6-.7-2.6-.7C4.2 5 3 5.7 2.3 7c-1.3 2.3-.3 5.7 1 7.5.6.9 1.4 1.9 2.4 1.9.9 0 1.3-.6 2.4-.6 1.1 0 1.4.6 2.4.6 1 0 1.7-.9 2.3-1.8.7-1 1-2 1-2.1 0 0-2-.8-2-3zM10.4 3.4c.5-.6.9-1.5.8-2.4-.8 0-1.7.5-2.3 1.2-.5.6-.9 1.5-.8 2.4.9.1 1.8-.5 2.3-1.2z"/>
         </svg>
-        下载 for Mac
+        Download for Mac
       </a>
-      <span class="btn__meta"><span class="latest-version">0.5.0</span> · Apple 公证 · 免费开源 · <a href="https://github.com/gentpan/QuotaBar/releases/download/v0.5.0/QuotaBar-0.5.0.dmg">从 GitHub 下载</a></span>
+      <span class="btn__meta"><span class="latest-version">0.5.0</span> · Notarized by Apple · Free and open source · <a href="https://github.com/gentpan/QuotaBar/releases/download/v0.5.0/QuotaBar-0.5.0.dmg">Download from GitHub</a></span>
     </div>
   </div>
 
   <div class="dock" id="dock">
-    <span class="dock__tile" style="background:linear-gradient(160deg,#4aa3ff,#1c6fd6)" title="访达"></span>
-    <span class="dock__tile" style="background:linear-gradient(160deg,#3d4148,#191b1f)" title="终端"></span>
-    <span class="dock__tile" style="background:linear-gradient(160deg,#ff9f43,#e4572e)" title="编辑器"></span>
-    <span class="dock__tile" style="background:linear-gradient(160deg,#8e7bff,#4f3ad6)" title="浏览器"></span>
+    <span class="dock__tile" style="background:linear-gradient(160deg,#4aa3ff,#1c6fd6)" title="Finder"></span>
+    <span class="dock__tile" style="background:linear-gradient(160deg,#3d4148,#191b1f)" title="Terminal"></span>
+    <span class="dock__tile" style="background:linear-gradient(160deg,#ff9f43,#e4572e)" title="Editor"></span>
+    <span class="dock__tile" style="background:linear-gradient(160deg,#8e7bff,#4f3ad6)" title="Browser"></span>
     <span class="dock__sep"></span>
-    <a class="dock__tile dock__tile--app" href="https://quota.bar/download/QuotaBar-0.5.0.dmg" download title="下载 QuotaBar">
+    <a class="dock__tile dock__tile--app" href="https://quota.bar/download/QuotaBar-0.5.0.dmg" download title="Download QuotaBar">
       <img src="assets/icon.png?v=18e715a1" alt="QuotaBar">
     </a>
   </div>
 
-  <a class="desktop__scroll" href="#features" aria-label="向下">
+  <a class="desktop__scroll" href="#features" aria-label="Scroll down">
     <svg aria-hidden="true" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6l4 4 4-4"/></svg>
   </a>
 </header>
 
 <main>
   <!-- providers:start -->
-  <!-- 由 Scripts/sync_changelog.py 从 ProviderID 与应用内的 logo 生成，请勿手改。 -->
-  <section id="providers" class="providers" aria-label="支持的服务商">
-    <p class="providers__head">支持 <b class="provider-count">23</b> 个 AI 编码服务</p>
+  <!-- Generated by Scripts/sync_changelog.py from ProviderID and the app's logos. Do not edit by hand. -->
+  <section id="providers" class="providers" aria-label="Supported providers">
+    <p class="providers__head"><b class="provider-count">23</b> AI coding services supported</p>
     <div class="providers__track">
       <ul class="providers__row">
           <li class="prov"><img class="prov__logo is-mono" src="assets/logos/codex.png?v=18e715a1" alt="" width="24" height="24" loading="lazy" decoding="async"><span>Codex</span></li>
@@ -369,13 +389,13 @@
           <li class="prov"><img class="prov__logo is-mono" src="assets/logos/grok.png?v=18e715a1" alt="" width="24" height="24" loading="lazy" decoding="async"><span>Grok</span></li>
           <li class="prov"><img class="prov__logo" src="assets/logos/antigravity.png?v=18e715a1" alt="" width="24" height="24" loading="lazy" decoding="async"><span>Antigravity</span></li>
           <li class="prov"><img class="prov__logo is-mono" src="assets/logos/qwen.png?v=18e715a1" alt="" width="24" height="24" loading="lazy" decoding="async"><span>Qwen Cloud</span></li>
-          <li class="prov"><img class="prov__logo" src="assets/logos/alibaba.png?v=18e715a1" alt="" width="24" height="24" loading="lazy" decoding="async"><span>阿里云百炼</span></li>
-          <li class="prov"><img class="prov__logo" src="assets/logos/volcengine.png?v=18e715a1" alt="" width="24" height="24" loading="lazy" decoding="async"><span>火山方舟</span></li>
-          <li class="prov"><img class="prov__logo" src="assets/logos/zhipu.png?v=18e715a1" alt="" width="24" height="24" loading="lazy" decoding="async"><span>智谱 GLM</span></li>
-          <li class="prov"><img class="prov__logo is-mono" src="assets/logos/moonshot.png?v=18e715a1" alt="" width="24" height="24" loading="lazy" decoding="async"><span>Kimi 开放平台</span></li>
+          <li class="prov"><img class="prov__logo" src="assets/logos/alibaba.png?v=18e715a1" alt="" width="24" height="24" loading="lazy" decoding="async"><span>Alibaba Coding Plan</span></li>
+          <li class="prov"><img class="prov__logo" src="assets/logos/volcengine.png?v=18e715a1" alt="" width="24" height="24" loading="lazy" decoding="async"><span>Volcengine Ark</span></li>
+          <li class="prov"><img class="prov__logo" src="assets/logos/zhipu.png?v=18e715a1" alt="" width="24" height="24" loading="lazy" decoding="async"><span>Zhipu GLM</span></li>
+          <li class="prov"><img class="prov__logo is-mono" src="assets/logos/moonshot.png?v=18e715a1" alt="" width="24" height="24" loading="lazy" decoding="async"><span>Moonshot API</span></li>
           <li class="prov"><img class="prov__logo is-mono" src="assets/logos/copilot.png?v=18e715a1" alt="" width="24" height="24" loading="lazy" decoding="async"><span>GitHub Copilot</span></li>
           <li class="prov"><img class="prov__logo is-mono" src="assets/logos/openrouter.png?v=18e715a1" alt="" width="24" height="24" loading="lazy" decoding="async"><span>OpenRouter</span></li>
-          <li class="prov"><img class="prov__logo" src="assets/logos/mimo.png?v=18e715a1" alt="" width="24" height="24" loading="lazy" decoding="async"><span>小米 MiMo</span></li>
+          <li class="prov"><img class="prov__logo" src="assets/logos/mimo.png?v=18e715a1" alt="" width="24" height="24" loading="lazy" decoding="async"><span>Xiaomi MiMo</span></li>
           <li class="prov"><img class="prov__logo is-dark" src="assets/logos/qoder.png?v=18e715a1" alt="" width="24" height="24" loading="lazy" decoding="async"><span>Qoder</span></li>
           <li class="prov"><img class="prov__logo is-mono" src="assets/logos/windsurf.png?v=18e715a1" alt="" width="24" height="24" loading="lazy" decoding="async"><span>Windsurf</span></li>
           <li class="prov"><img class="prov__logo" src="assets/logos/kiro.png?v=18e715a1" alt="" width="24" height="24" loading="lazy" decoding="async"><span>Kiro</span></li>
@@ -394,13 +414,13 @@
           <li class="prov"><img class="prov__logo is-mono" src="assets/logos/grok.png?v=18e715a1" alt="" width="24" height="24" loading="lazy" decoding="async"><span>Grok</span></li>
           <li class="prov"><img class="prov__logo" src="assets/logos/antigravity.png?v=18e715a1" alt="" width="24" height="24" loading="lazy" decoding="async"><span>Antigravity</span></li>
           <li class="prov"><img class="prov__logo is-mono" src="assets/logos/qwen.png?v=18e715a1" alt="" width="24" height="24" loading="lazy" decoding="async"><span>Qwen Cloud</span></li>
-          <li class="prov"><img class="prov__logo" src="assets/logos/alibaba.png?v=18e715a1" alt="" width="24" height="24" loading="lazy" decoding="async"><span>阿里云百炼</span></li>
-          <li class="prov"><img class="prov__logo" src="assets/logos/volcengine.png?v=18e715a1" alt="" width="24" height="24" loading="lazy" decoding="async"><span>火山方舟</span></li>
-          <li class="prov"><img class="prov__logo" src="assets/logos/zhipu.png?v=18e715a1" alt="" width="24" height="24" loading="lazy" decoding="async"><span>智谱 GLM</span></li>
-          <li class="prov"><img class="prov__logo is-mono" src="assets/logos/moonshot.png?v=18e715a1" alt="" width="24" height="24" loading="lazy" decoding="async"><span>Kimi 开放平台</span></li>
+          <li class="prov"><img class="prov__logo" src="assets/logos/alibaba.png?v=18e715a1" alt="" width="24" height="24" loading="lazy" decoding="async"><span>Alibaba Coding Plan</span></li>
+          <li class="prov"><img class="prov__logo" src="assets/logos/volcengine.png?v=18e715a1" alt="" width="24" height="24" loading="lazy" decoding="async"><span>Volcengine Ark</span></li>
+          <li class="prov"><img class="prov__logo" src="assets/logos/zhipu.png?v=18e715a1" alt="" width="24" height="24" loading="lazy" decoding="async"><span>Zhipu GLM</span></li>
+          <li class="prov"><img class="prov__logo is-mono" src="assets/logos/moonshot.png?v=18e715a1" alt="" width="24" height="24" loading="lazy" decoding="async"><span>Moonshot API</span></li>
           <li class="prov"><img class="prov__logo is-mono" src="assets/logos/copilot.png?v=18e715a1" alt="" width="24" height="24" loading="lazy" decoding="async"><span>GitHub Copilot</span></li>
           <li class="prov"><img class="prov__logo is-mono" src="assets/logos/openrouter.png?v=18e715a1" alt="" width="24" height="24" loading="lazy" decoding="async"><span>OpenRouter</span></li>
-          <li class="prov"><img class="prov__logo" src="assets/logos/mimo.png?v=18e715a1" alt="" width="24" height="24" loading="lazy" decoding="async"><span>小米 MiMo</span></li>
+          <li class="prov"><img class="prov__logo" src="assets/logos/mimo.png?v=18e715a1" alt="" width="24" height="24" loading="lazy" decoding="async"><span>Xiaomi MiMo</span></li>
           <li class="prov"><img class="prov__logo is-dark" src="assets/logos/qoder.png?v=18e715a1" alt="" width="24" height="24" loading="lazy" decoding="async"><span>Qoder</span></li>
           <li class="prov"><img class="prov__logo is-mono" src="assets/logos/windsurf.png?v=18e715a1" alt="" width="24" height="24" loading="lazy" decoding="async"><span>Windsurf</span></li>
           <li class="prov"><img class="prov__logo" src="assets/logos/kiro.png?v=18e715a1" alt="" width="24" height="24" loading="lazy" decoding="async"><span>Kiro</span></li>
@@ -413,8 +433,8 @@
   <section id="features" class="band">
     <div class="shell">
       <div class="section-head">
-        <h2>贴在屏幕边上，<br>不占一个窗口</h2>
-        <p>它一直在那儿。额度快见底的时候，你不需要先想起来去查。</p>
+        <h2>On the edge of the screen,<br>not in a window</h2>
+        <p>It's always there. When a limit is running low, you don't have to remember to check.</p>
       </div>
       <div class="features">
         <div class="feature">
@@ -424,8 +444,8 @@
               <rect x="1" y="10.6" width="17" height="4.4" rx="2.2"/><rect x="2.6" y="12" width="12" height="1.6" rx="0.8" fill="#6ee02b" stroke="none"/>
             </svg>
           </div>
-          <h3 id="feature-menubar">一个图标，读得出刻度</h3>
-          <p>十一种菜单栏样式，分段式的格子可以数——不是靠估。双层的两种把短周期和长周期分两行，哪个先见底一眼看到。</p>
+          <h3 id="feature-menubar">An icon you can actually read</h3>
+          <p>Eleven menu bar styles, and the segmented ones can be counted rather than guessed at. The two dual styles put the short and long windows on separate lines, so you see which runs out first.</p>
         </div>
         <div class="feature">
           <div class="feature__icon">
@@ -433,8 +453,8 @@
               <path d="M4 8a5.5 5.5 0 0 1 11 0c0 4 1.5 5 1.5 5h-14S4 12 4 8z"/><path d="M8 16.2a1.8 1.8 0 0 0 3 0"/>
             </svg>
           </div>
-          <h3 id="feature-alerts">到点提醒</h3>
-          <p>接近上限时发系统通知，警告和紧急两档阈值自己定。还会按当前速度提醒「余量很紧」和「重置前会用完」。额度一重置，停靠条滑出、圆环被扫满，刘海岛弹出横幅，菜单栏图标回满，用满过的还会通知你可以继续用了。</p>
+          <h3 id="feature-alerts">Alerts in time</h3>
+          <p>A system notification as you near a limit, with warning and critical thresholds you set. It also warns when your pace means it will be tight, or run out before the reset. When a limit resets, the dock slides out and sweeps the ring full, the notch island drops a banner and the menu bar icon refills; if you had run it dry, a notification says you're good to go again.</p>
         </div>
         <div class="feature">
           <div class="feature__icon">
@@ -442,8 +462,8 @@
               <path d="M9.5 2v15"/><path d="M13 5.2H7.8a2.3 2.3 0 0 0 0 4.6h3.4a2.3 2.3 0 0 1 0 4.6H6"/>
             </svg>
           </div>
-          <h3 id="feature-spend">用了多少，花了多少</h3>
-          <p>直接读 CLI 自己的会话日志：全年热力图、按模型的 token 数，费用对着公开价目在本地估算，可换算成人民币等 11 种货币。还能生成用量分享卡片。</p>
+          <h3 id="feature-spend">What you used, what it cost</h3>
+          <p>It reads the CLIs' own session logs: a year-long heat map and tokens by model, with spend estimated on your Mac from public prices and shown in any of 11 currencies. It can turn your week into a share card, too.</p>
         </div>
       </div>
     </div>
@@ -455,11 +475,11 @@
       <div class="cards">
         <div class="card">
           <div class="card__art">
-            <img src="assets/notch.png?v=18e715a1" alt="刘海条：服务商的图标与读数分列刘海两侧" style="max-width:88%" loading="lazy" decoding="async">
+            <img src="assets/notch.png?v=18e715a1" alt="The notch strip: provider marks and readings on either side of the notch" style="max-width:88%" loading="lazy" decoding="async">
           </div>
           <div class="card__body">
-            <h3 id="surface-panels">不止菜单栏</h3>
-            <p>点菜单栏图标打开下拉面板。藏进刘海：两侧各显示一到三个服务商，悬停展开成额度、用量、总览三页。贴在屏幕边缘：悬停看卡片，双击选圆环显示哪个额度。或者在桌面放几张卡片——大数字、仪表、趋势、排行，大中小三种尺寸。</p>
+            <h3 id="surface-panels">Not just the menu bar</h3>
+            <p>Click the menu bar icon for the panel. Tuck it into the notch: one to three providers on each side, opening on hover into limits, usage and overview pages. Stick it to the screen edge: hover for a card, double-click to choose which limit a ring shows. Or put cards on the desktop — big figure, gauge, trend, ranking — in three sizes.</p>
           </div>
         </div>
         <div class="card">
@@ -473,8 +493,8 @@
             </svg>
           </div>
           <div class="card__body">
-            <h3 id="privacy">用量不出这台 Mac</h3>
-            <p>用量在本机读取和计算，不做分析，不做追踪。自动型服务商复用你 CLI 已有的登录会话；手动填的凭据进 macOS 钥匙串，不写进任何文件。</p>
+            <h3 id="privacy">Usage stays on this Mac</h3>
+            <p>Usage is read and worked out on your Mac. No analytics, no tracking. Automatic providers reuse the sign-in your CLI already has; credentials you enter go into the macOS keychain and never into a file.</p>
           </div>
         </div>
       </div>
@@ -485,62 +505,62 @@
   <section id="settings" class="band" style="padding-top:0">
     <div class="shell">
       <div class="section-head">
-        <h2>该配的都能配</h2>
-        <p><span class="provider-count">23</span> 个服务商各自的登录方式、图标样式、提醒阈值、桌面卡片、用量统计、服务状态——都在一个窗口里，中英文界面随你选。有话说，反馈页直接发，不用登录。</p>
+        <h2>Everything you'd want to set</h2>
+        <p>Sign-in for each of the <span class="provider-count">23</span> providers, icon styles, alert thresholds, desktop cards, usage statistics, service status — all in one window, in English or Chinese. Something to say? Send it from the Feedback page, no sign-in needed.</p>
       </div>
       <div class="showcase">
-        <img src="assets/settings.png?v=18e715a1" alt="QuotaBar 设置窗口：左侧黑色导航，右侧服务商列表，每家带服务状态" loading="lazy" decoding="async">
+        <img src="assets/settings.png?v=18e715a1" alt="QuotaBar Settings: a dark sidebar on the left, the provider list on the right, each provider with its service status" loading="lazy" decoding="async">
       </div>
     </div>
   </section>
 
   <!-- changelog:start -->
-  <!-- 由 Scripts/sync_changelog.py 从 CHANGELOG.md 生成，请勿手改。 -->
+  <!-- Generated from CHANGELOG.en.md by Scripts/sync_changelog.py. Do not edit by hand. -->
   <section id="changelog" class="band" style="padding-top:0">
     <div class="shell">
       <div class="section-head">
-        <h2>更新日志</h2>
-        <p>当前版本 0.5.0 · 最近更新于 2026-09-13。每天改了什么，都记在这里。</p>
+        <h2>Changelog</h2>
+        <p>Current version 0.5.0 · last updated 2026-09-13. What changed, day by day.</p>
       </div>
       <div class="log">
         <article class="log__day">
-          <header class="log__head"><time datetime="2026-09-13">2026-09-13</time><span class="log__tag">未发布</span></header>
-          <p class="log__counts">新增 3 · 样式 7 · 修复 2</p>
+          <header class="log__head"><time datetime="2026-09-13">2026-09-13</time><span class="log__tag">Unreleased</span></header>
+          <p class="log__counts">3 added · 7 style · 3 fixed</p>
           <ul class="log__list">
-            <li><span class="badge badge--add">新增</span>服务商可以按位置隐藏，而不必停用：下拉面板、停靠条、刘海岛、桌面卡片各自决定显示哪些服务商。隐藏的服务商仍会读取数据、发提醒、计入花费，停用才会停止读取。设置 → 展示方式新增「各处显示的服务商」，每个服务商一行，点位置标签即可显示或隐藏；也可以右键下拉面板里的卡片选「在下拉面板中隐藏」，右键停靠条图标选「在停靠条中隐藏」。</li>
-            <li><span class="badge badge--add">新增</span>下拉面板底部在有隐藏的服务商时显示「N 个已在面板隐藏」和它们的图标，点「显示」可逐个恢复或打开设置管理；停靠条右键菜单也列出已隐藏的服务商。</li>
-            <li><span class="badge badge--add">新增</span>应用内更新在连不上 GitHub 时改从 quota.bar 服务器检查和下载，打不开 GitHub 的网络也能收到更新；下载到的安装包照旧要验证开发者签名和 Apple 公证才会安装。</li>
-            <li><span class="badge badge--style">样式</span>下拉面板页脚的刷新提示：点「全部刷新」或自动刷新完成后的一分钟内显示「刚刚更新」，之后显示「X 分钟后自动刷新」；鼠标悬停显示上次更新和下次自动刷新的具体时间及刷新间隔。以前刷新完立刻显示「5 分钟后刷新」，看起来像按钮没起作用。</li>
-            <li><span class="badge badge--style">样式</span>节奏提示的文案改为「预计重置时剩 8%」，不再写成含糊的「约 8% 余量」；鼠标悬停时写出算法和用到的数字，例如「这个窗口已过 87%，已用 80%。按这段时间的平均速度，到重置时约用到 92%，剩 8%」。</li>
+            <li><span class="badge badge--add">Added</span>Providers can be hidden per place instead of turned off: the panel, the edge dock, the notch island and desktop cards each choose which providers they show. A hidden provider is still read, still alerts and still counts towards spend; only turning it off stops reading it. Settings → Presentation has a new "What each place shows" card, one row per provider, where clicking a place's tag shows or hides it there. You can also right-click a card in the panel and choose "Hide from Panel", or right-click a dock icon and choose "Hide from the dock".</li>
+            <li><span class="badge badge--add">Added</span>When providers are hidden, the bottom of the panel says "N hidden here" with their icons; "Reveal" brings them back one at a time or opens Settings to manage them. The dock's right-click menu lists its hidden providers too.</li>
+            <li><span class="badge badge--add">Added</span>In-app updates check and download from the quota.bar server when GitHub can't be reached, so networks that block GitHub still get updates. The download must still carry the developer's signature and Apple's notarization before it installs. The About page's "Your data" list of connections now includes it.</li>
+            <li><span class="badge badge--style">Style</span>The refresh note in the panel footer reads "Updated just now" for a minute after "Refresh Everything" or an automatic refresh, then "Auto-refresh in Xm"; hovering shows when it last updated, when it refreshes next and the interval. It used to say "refresh in 5m" the moment a refresh finished, which looked as if the button had done nothing.</li>
+            <li><span class="badge badge--style">Style</span>The pacing note now reads "~8% left at reset" instead of the vaguer "about 8% to spare". Hovering spells out the working, for example "87% of this window has passed and 80% is used. At this rate it reaches about 92% by the reset, leaving 8%."</li>
           </ul>
-          <a class="log__more" href="changelog.html#d-2026-09-13">还有 7 项 →</a>
+          <a class="log__more" href="changelog.html#d-2026-09-13">8 more →</a>
         </article>
         <article class="log__day">
           <header class="log__head"><time datetime="2026-09-13">2026-09-13</time><span class="log__tag">0.5.0</span></header>
-          <p class="log__counts">新增 40 · 样式 10 · 修复 13</p>
+          <p class="log__counts">40 added · 10 style · 13 fixed</p>
           <ul class="log__list">
-            <li><span class="badge badge--add">新增</span>下拉面板回归：左键点菜单栏图标打开，右键仍是刷新、设置、退出。面板顶部是花费卡片，下面每个服务商一张卡片，底部显示版本、下次刷新倒计时、设置和选项菜单。按 Esc 关闭，⌘R 刷新，⌘, 打开设置。</li>
-            <li><span class="badge badge--add">新增</span>花费卡片：可切换花费、Token、每百万 token 花费三种口径，以及今日、昨日、近 30 天。环形图按来源分色，中间数字滚动变化，悬停来源查看按模型的明细。</li>
-            <li><span class="badge badge--add">新增</span>服务商卡片默认只显示最重要的两个额度窗口，其余窗口、限额重置次数、30 天用量趋势、今日昨日 30 天花费、状态页和控制台链接收在展开箭头里，展开状态会被记住。</li>
-            <li><span class="badge badge--add">新增</span>进度条加入节奏判断：细竖线标出匀速使用时此刻应在的位置。预计余量很紧时显示约多少余量，预计重置前用完时显示火苗和用完时间，已经用完显示已到上限。悬停进度条查看按当前速度重置时的用量。</li>
-            <li><span class="badge badge--add">新增</span>点击百分比在已用和剩余之间切换，点击重置时间在倒计时和具体时刻之间切换，所有界面同步生效。</li>
+            <li><span class="badge badge--add">Added</span>The panel is back: left-click the menu bar icon to open it, right-click for Refresh, Settings and Quit. A spend card sits at the top, a card per provider below, and the footer shows the version, the countdown to the next refresh, Settings and an options menu. Esc closes it, ⌘R refreshes, ⌘, opens Settings.</li>
+            <li><span class="badge badge--add">Added</span>Spend card: switch between spend, tokens and spend per million tokens, and between today, yesterday and the last 30 days. The ring is coloured by source, the figure in the middle rolls to its new value, and hovering a source shows the breakdown by model.</li>
+            <li><span class="badge badge--add">Added</span>Provider cards show the two most important windows by default. The other windows, limit reset counts, the 30-day usage trend, today's, yesterday's and 30-day spend, and links to the status page and console fold away under a disclosure arrow, which remembers whether it was open.</li>
+            <li><span class="badge badge--add">Added</span>Bars show pacing: a thin tick marks where steady use would put you right now. When it will be tight the bar says roughly how much will be left; when the window will run out before it resets it shows a flame and when; a window already used up says "Limit reached". Hover a bar to see what the usage will be at reset at the current rate.</li>
+            <li><span class="badge badge--add">Added</span>Click a percentage to switch between used and left, click a reset time to switch between a countdown and the exact time; every view follows.</li>
           </ul>
-          <a class="log__more" href="changelog.html#d-2026-09-13">还有 58 项 →</a>
+          <a class="log__more" href="changelog.html#d-2026-09-13">58 more →</a>
         </article>
         <article class="log__day">
           <header class="log__head"><time datetime="2026-09-12">2026-09-12</time><span class="log__tag">0.5.0</span></header>
-          <p class="log__counts">新增 6 · 样式 1 · 修复 2</p>
+          <p class="log__counts">6 added · 1 style · 2 fixed</p>
           <ul class="log__list">
-            <li><span class="badge badge--add">新增</span>悬浮卡片里双击某个额度窗口（5 小时、周窗口，或 Fable 这类按模型的额度），圆环、刘海岛、桌面卡片和菜单栏读数都改按这个窗口显示。再双击一次恢复为用得最满的那个。正在跟随的窗口名旁有圆点，手动选中时为品牌色实心点。</li>
-            <li><span class="badge badge--add">新增</span>展示方式新增「屏幕」选项：接了多块显示器时，可以选择停靠条、刘海岛和桌面卡片显示在哪块屏幕，默认自动。所选屏幕拔掉后自动回到默认，插拔显示器时各窗口会重新定位。</li>
-            <li><span class="badge badge--add">新增</span>服务状态页的每一行在折叠时就显示主服务最近 30 天的在线率和状态条。Claude 取 Claude Code，Codex 取 CLI，Cursor 取 IDE，Kimi 取 Open API，DeepSeek 取 API 服务。</li>
-            <li><span class="badge badge--add">新增</span>服务状态标记改为只看写代码相关的服务：Claude 看 Claude Code 和 Claude API，Codex 看 CLI、VS Code 插件、Codex API、Codex Web 和桌面端，Cursor 看 IDE、CLI 和云端 Agent。状态页其他组件的事件（如 Claude Cowork）不再让标记变黄，展开服务状态行时单独列在「其他组件」下。</li>
-            <li><span class="badge badge--add">新增</span>新增诊断命令 <code>QuotaBar --status</code>，列出各服务商状态标记依据的组件和其他组件的事件。</li>
+            <li><span class="badge badge--add">Added</span>Double-click a window in the hover card (5-hour, weekly, or a per-model limit such as Fable) and the rings, notch island, desktop card and menu bar reading all follow that window. Double-click again to go back to whichever is most used. The window being followed has a dot beside its name, solid in the provider's colour when chosen by hand.</li>
+            <li><span class="badge badge--add">Added</span>Presentation has a new "Screen" option: with several displays, choose which one shows the dock, notch island and desktop cards; the default is automatic. If the chosen display is unplugged it falls back to the default, and windows reposition when displays come and go.</li>
+            <li><span class="badge badge--add">Added</span>Each row of the service status page shows the main service's 30-day uptime and status bar even when folded: Claude Code for Claude, the CLI for Codex, the IDE for Cursor, the Open API for Kimi, the API service for DeepSeek.</li>
+            <li><span class="badge badge--add">Added</span>Service status marks look only at the services used for coding: Claude Code and Claude API for Claude; the CLI, the VS Code extension, the Codex API, Codex Web and the desktop app for Codex; the IDE, the CLI and cloud agents for Cursor. Incidents in other components of a status page (such as Claude Cowork) no longer turn the mark yellow, and are listed separately under "Elsewhere on the page" when a status row is opened.</li>
+            <li><span class="badge badge--add">Added</span>New diagnostic command <code>QuotaBar --status</code> lists the components each provider's status mark is based on and incidents in other components.</li>
           </ul>
-          <a class="log__more" href="changelog.html#d-2026-09-12">还有 4 项 →</a>
+          <a class="log__more" href="changelog.html#d-2026-09-12">4 more →</a>
         </article>
       </div>
-      <p class="log__all"><a href="changelog.html">查看完整更新日志 →</a></p>
+      <p class="log__all"><a href="changelog.html">Full changelog →</a></p>
     </div>
   </section>
   <!-- changelog:end -->
@@ -548,47 +568,47 @@
   <!-- ── FAQ ──────────────────────────────────────────────────────── -->
   <section id="faq" class="band">
     <div class="shell faq">
-      <h2>常见问题</h2>
+      <h2>Questions</h2>
       <div id="qa-list">
         <details class="qa">
-          <summary class="qa__q">QuotaBar 是什么？</summary>
-          <div class="qa__a"><div>一个常驻 macOS 的小应用。它把你在用的 AI 编码服务的额度用量、重置时间和花费读出来，放在菜单栏、刘海、屏幕边缘或桌面卡片上，抬眼就看见。不是任何一家服务商的官方应用。</div></div>
+          <summary class="qa__q">What is QuotaBar?</summary>
+          <div class="qa__a"><div>A small app that lives in your Mac's menu bar. It reads the limits, reset times and spend of the AI coding services you use and puts them in the menu bar, the notch, at the screen's edge or on desktop cards, where a glance is enough. It isn't an official app of any provider.</div></div>
         </details>
         <details class="qa">
-          <summary class="qa__q">支持哪些服务商？</summary>
-          <div class="qa__a"><div>Codex、Claude、Cursor、Gemini、Antigravity、Grok、OpenCode Go、Kimi Code、z.ai、MiniMax、Manus、DeepSeek、Qwen Cloud、GitHub Copilot，以及阿里云百炼、火山方舟、智谱 GLM、Kimi 开放平台、OpenRouter、小米 MiMo、Qoder、Windsurf、Kiro，共 <span class="provider-count">23</span> 个。后面 9 个标为实验性，还在用真实账号验证。你只启用自己在用的那几个。</div></div>
+          <summary class="qa__q">Which providers does it support?</summary>
+          <div class="qa__a"><div>Codex, Claude, Cursor, Gemini, Antigravity, Grok, OpenCode Go, Kimi Code, z.ai, MiniMax, Manus, DeepSeek, Qwen Cloud and GitHub Copilot, plus Alibaba Coding Plan, Volcengine Ark, Zhipu GLM, Moonshot API, OpenRouter, Xiaomi MiMo, Qoder, Windsurf and Kiro — <span class="provider-count">23</span> in all. The last 9 are marked experimental while they're verified with real accounts. You turn on only the ones you use.</div></div>
         </details>
         <details class="qa">
-          <summary class="qa__q">需要填 API Key 吗？</summary>
-          <div class="qa__a"><div>大多不用。Codex、Claude、Gemini、Antigravity、Grok、OpenCode Go、Cursor、GitHub Copilot、Windsurf、Kiro、火山方舟都是直接复用你本机 CLI 或客户端已经建立的登录会话——你已经登录过了，它就能读。剩下几个需要手动粘一次凭据，阿里云百炼和小米 MiMo 也可以在应用内登录。</div></div>
+          <summary class="qa__q">Do I need API keys?</summary>
+          <div class="qa__a"><div>Mostly not. Codex, Claude, Gemini, Antigravity, Grok, OpenCode Go, Cursor, GitHub Copilot, Windsurf, Kiro and Volcengine Ark reuse the sign-in your CLI or desktop app already has on this Mac — if you're signed in, it can read. The rest need a credential pasted once; Alibaba Coding Plan and Xiaomi MiMo can also sign in inside the app.</div></div>
         </details>
         <details class="qa">
-          <summary class="qa__q">我的凭据安全吗？</summary>
-          <div class="qa__a"><div>手动填写的凭据只存 macOS 登录钥匙串，不会写进配置文件。自动型服务商根本不存——每次直接读你 CLI 已有的会话。应用不向我们上报任何用量数据。除各服务商自己的接口外，它只会连接各家的公开状态页、每天取一次汇率的 open.er-api.com、GitHub（新版本和模型价目表），以及你主动提交反馈时的 quota.bar。设置了代理时，这些请求都经过代理。</div></div>
+          <summary class="qa__q">Are my credentials safe?</summary>
+          <div class="qa__a"><div>Credentials you enter are stored only in the macOS login keychain, never in the config file. Automatic providers store nothing — each read goes to your CLI's existing session. The app reports no usage to us. Besides each provider's own API, it connects only to the providers' public status pages, open.er-api.com once a day for exchange rates, GitHub for new versions and the model price list, and quota.bar when you send feedback or when GitHub can't be reached for an update. With a proxy set, all of these go through it.</div></div>
         </details>
         <details class="qa">
-          <summary class="qa__q">费用数字准不准？</summary>
-          <div class="qa__a"><div>是<strong>估算</strong>，不是账单。它扫描 CLI 自己的会话日志，按各家公布的标价算。两个容易算错的地方都处理了：Claude Code 会把同一轮对话写进多个会话文件（去重），Codex 的 <code>input_tokens</code> 已经含了缓存部分（不重复计费）。价格从在线目录取，只精确匹配模型 id。QuotaBar 还会自己按天保存存档，CLI 清理旧日志后统计也不会变少。</div></div>
+          <summary class="qa__q">How accurate is the spend?</summary>
+          <div class="qa__a"><div>It's an <strong>estimate</strong>, not a bill. It scans the CLIs' own session logs and prices them at each provider's published rates. Two easy mistakes are handled: Claude Code writes the same turn into several session files (deduplicated), and Codex's <code>input_tokens</code> already includes the cached part (not billed twice). Prices come from an online catalogue and match model ids exactly. QuotaBar also keeps its own daily archive, so totals don't shrink when a CLI clears old logs.</div></div>
         </details>
         <details class="qa">
-          <summary class="qa__q">怎么安装？</summary>
-          <div class="qa__a"><div>下载 <code>.dmg</code> 拖进「应用程序」，或者 <code>brew tap gentpan/tap</code>、<code>brew trust gentpan/tap</code>，然后 <code>brew install --cask quotabar</code>。已用 Developer ID 签名并通过 Apple 公证，不会弹「无法验证开发者」。安装包放在 quota.bar 自己的服务器上，打不开 GitHub 也能下载；同一个文件也可以从 <a href="https://github.com/gentpan/QuotaBar/releases/latest">GitHub Releases</a> 下载。</div></div>
+          <summary class="qa__q">How do I install it?</summary>
+          <div class="qa__a"><div>Download the <code>.dmg</code> and drag QuotaBar into Applications, or run <code>brew tap gentpan/tap</code> and <code>brew trust gentpan/tap</code>, then <code>brew install --cask quotabar</code>. It's signed with a Developer ID and notarized by Apple, so macOS won't warn about an unidentified developer. The download is served from quota.bar's own server, so it works where GitHub is blocked; the same file is also on <a href="https://github.com/gentpan/QuotaBar/releases/latest">GitHub Releases</a>.</div></div>
         </details>
         <details class="qa">
-          <summary class="qa__q">服务商改了接口怎么办？</summary>
-          <div class="qa__a"><div>那个服务商会显示为失败，并保留上一次的读数配一条过期提示——不会悄悄给你一个旧数字当新的。应用内可以自动更新，也可以走 <code>brew upgrade</code>。</div></div>
+          <summary class="qa__q">What if a provider changes its API?</summary>
+          <div class="qa__a"><div>That provider shows as failed and keeps its last reading with a note that it's out of date — you never get an old figure passed off as a new one. The app can update itself, or use <code>brew upgrade</code>.</div></div>
         </details>
         <details class="qa">
-          <summary class="qa__q">服务状态是从哪来的？</summary>
-          <div class="qa__a"><div>各家的公开状态页，每五分钟读一次，不用登录。状态按写代码相关的组件判断，比如 Claude 看 Claude Code，Codex 看 CLI；设置里能看到每个组件的当前状态和最近 30 天。目前 11 家有状态页，没有的就不显示。</div></div>
+          <summary class="qa__q">Where does service status come from?</summary>
+          <div class="qa__a"><div>Each provider's public status page, read every five minutes, no sign-in. Status is judged by the components used for coding — Claude Code for Claude, the CLI for Codex — and Settings shows each component's current status and the last 30 days. 11 providers have status pages so far; the rest show none.</div></div>
         </details>
         <details class="qa">
-          <summary class="qa__q">能给别的工具用吗？</summary>
-          <div class="qa__a"><div>可以。在设置的「通用」里打开本地接口，其他工具就能从 <code>http://127.0.0.1:6736/v1/limits</code> 读额度、从 <code>/v1/spend</code> 读花费，只对本机开放，不含凭据和账号名。终端里运行 <code>QuotaBar --json</code> 也能拿到同样的数据。</div></div>
+          <summary class="qa__q">Can other tools use it?</summary>
+          <div class="qa__a"><div>Yes. Turn on the local API under General in Settings and other tools can read limits from <code>http://127.0.0.1:6736/v1/limits</code> and spend from <code>/v1/spend</code> — on this Mac only, without credentials or account names. <code>QuotaBar --json</code> in a terminal gives the same data.</div></div>
         </details>
         <details class="qa">
-          <summary class="qa__q">需要什么系统版本？</summary>
-          <div class="qa__a"><div>macOS 14 或更新。Apple Silicon 和 Intel 都可以。液态玻璃效果需要 macOS 26，低版本自动回退到同尺寸的毛玻璃，布局不变。</div></div>
+          <summary class="qa__q">Which macOS does it need?</summary>
+          <div class="qa__a"><div>macOS 14 or later, on Apple silicon or Intel. The Liquid Glass look needs macOS 26; earlier versions fall back to frosted glass of the same size, with the same layout.</div></div>
         </details>
       </div>
     </div>
@@ -599,16 +619,17 @@
   <div class="shell">
     <img class="footer__icon" src="assets/icon.png?v=18e715a1" alt="" loading="lazy" decoding="async">
     <div class="footer__links">
-      <a href="https://quota.bar/download/QuotaBar-0.5.0.dmg" download>下载</a>
-      <a href="https://github.com/gentpan/quotabar">源码</a>
-      <a href="https://github.com/gentpan/quotabar/issues">反馈</a>
+      <a href="https://quota.bar/download/QuotaBar-0.5.0.dmg" download>Download</a>
+      <a href="https://github.com/gentpan/quotabar">Source</a>
+      <a href="https://github.com/gentpan/quotabar/issues">Feedback</a>
+      <a href="zh/" hreflang="zh-CN" lang="zh-CN" data-lang="zh">简体中文</a>
       <!--email_off--><a href="mailto:hello@quota.bar">hello@quota.bar</a><!--/email_off-->
     </div>
     <p class="footer__fine">
-      © 2026 QuotaBar · <a href="https://github.com/gentpan/quotabar/blob/main/LICENSE">MIT 许可证</a><br>
-      QuotaBar 是独立的第三方应用，与 OpenAI、Anthropic、Cursor、Google、xAI、GitHub、阿里云、字节跳动、<br>
-      Moonshot、智谱、MiniMax、Manus、DeepSeek、SST 及其他任何被展示的服务商均无从属、认可或赞助关系。<br>
-      商标归各自所有者。服务商标志的矢量原图来自 <a href="https://github.com/GLINCKER/thesvg">theSVG</a>（MIT），字体 <a href="assets/fonts/OFL.txt">Instrument Sans</a> 依 SIL OFL 1.1 授权。
+      © 2026 QuotaBar · <a href="https://github.com/gentpan/quotabar/blob/main/LICENSE">MIT License</a><br>
+      QuotaBar is an independent third-party app, not affiliated with, endorsed or sponsored by OpenAI, Anthropic, Cursor, Google, xAI, GitHub, Alibaba Cloud, ByteDance,<br>
+      Moonshot, Zhipu, MiniMax, Manus, DeepSeek, SST or any other provider shown.<br>
+      Trademarks belong to their owners. Provider logo artwork comes from <a href="https://github.com/GLINCKER/thesvg">theSVG</a> (MIT); the <a href="assets/fonts/OFL.txt">Instrument Sans</a> font is licensed under the SIL OFL 1.1.
     </p>
   </div>
 </footer>

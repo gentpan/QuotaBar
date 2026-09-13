@@ -693,6 +693,8 @@ struct StatusPill: View {
             Text(text)
                 .font(.system(size: 11))
                 .foregroundStyle(tone == .idle ? Color.secondary : Color.primary.opacity(0.8))
+                .lineLimit(1)
+                .fixedSize()
         }
         .padding(.horizontal, Design.space2)
         .padding(.vertical, 3)

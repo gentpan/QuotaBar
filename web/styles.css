@@ -860,3 +860,26 @@ section { position: relative; }
   .providers__row[aria-hidden="true"] { display: none; }
   html { scroll-behavior: auto; }
 }
+
+/* 输入法菜单：macOS 的输入源图标——ABC 是实心圆角方块里镂出一个 A，拼音是「拼」。
+   选中的语言前面打勾，和系统菜单一样。 */
+.menubar__input { padding-inline: 6px; }
+.mb-input {
+  display: inline-grid;
+  place-items: center;
+  min-width: 17px;
+  height: 15px;
+  padding-inline: 2px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.94);
+  color: #23252b;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
+  text-shadow: none;
+}
+.mb-input--sm { min-width: 15px; height: 14px; font-size: 10px; border-radius: 3.5px; }
+.mb-drop--lang { min-width: 184px; }
+.mb-drop a.mb-lang { justify-content: flex-start; gap: 8px; }
+.mb-lang__check { width: 10px; font-size: 12px; visibility: hidden; }
+.mb-lang[aria-checked="true"] .mb-lang__check { visibility: visible; }

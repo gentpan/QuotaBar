@@ -13,6 +13,12 @@
   var motion = window.matchMedia("(prefers-reduced-motion: reduce)");
   function reduced() { return motion.matches; }
 
+  // 页面语言：英文在根目录，中文在 /zh/
+  var ZH = /^zh/i.test(document.documentElement.lang);
+  function T(en, zh) { return ZH ? zh : en; }
+  // 站点根目录从脚本自己的地址算：中文页在下一层，写死相对路径会少一级
+  var ROOT = ((document.currentScript && document.currentScript.src) || "").replace(/replica\.js(\?.*)?$/, "");
+
   /* ── 用量色标（与 Sources/QuotaCore/UsageRamp.swift 同一份数据）──── */
   var STOPS = ["34C759", "4FC447", "82B91F", "A8A81E", "BF961C",
                "D0801B", "DE6418", "E83A1A", "DC2626"];
@@ -41,28 +47,28 @@
   /* ── 图片路径 ───────────────────────────────────────────────────── */
   // 指纹由 deploy_site.sh 统一改写（和 index.html、styles.css 里的字体一样）。
   // 写死 ?v=1 的话，指纹一升级，JS 渲染出的这些图不会跟着刷新。
-  var LOGO = "assets/logos/";
+  var LOGO = ROOT + "assets/logos/";
   var LOGOV = "?v=18e715a1";
   /* ── 停靠条悬停卡片的内容 ────────────────────────────────────────
    * 行标题取 scope ?? title，和 ProviderCallout.row 一致：有作用域就显示
    * 作用域名（Fable），否则显示窗口名（周窗口）。
    */
   var CALLOUT = {
-    codex: { name: "Codex", logo: "codex.png", plan: "PRO", acct: "you@example.com", status: "轻微故障", warn: true, rows: [
-      { title: "周窗口", used: 36, reset: "5 天 16 小时后重置" },
-      { title: "GPT-5.3-Codex-Spark", used: 0, reset: "4 小时 59 分后重置" },
+    codex: { name: "Codex", logo: "codex.png", plan: "PRO", acct: "you@example.com", status: T("Minor outage", "轻微故障"), warn: true, rows: [
+      { title: T("Weekly window", "周窗口"), used: 36, reset: T("resets in 5d 16h", "5 天 16 小时后重置") },
+      { title: "GPT-5.3-Codex-Spark", used: 0, reset: T("resets in 4h 59m", "4 小时 59 分后重置") },
     ]},
-    claude: { name: "Claude", logo: "claude.png", colour: true, plan: "MAX 20X", acct: "you@example.com", status: "服务正常", rows: [
-      { title: "5 小时窗口", used: 18, reset: "2 小时 41 分后重置" },
-      { title: "周窗口", used: 58, reset: "4 天 9 小时后重置" },
-      { title: "Fable", used: 10, reset: "4 天 9 小时后重置" },
+    claude: { name: "Claude", logo: "claude.png", colour: true, plan: "MAX 20X", acct: "you@example.com", status: T("Service OK", "服务正常"), rows: [
+      { title: T("5-hour window", "5 小时窗口"), used: 18, reset: T("resets in 2h 41m", "2 小时 41 分后重置") },
+      { title: T("Weekly window", "周窗口"), used: 58, reset: T("resets in 4d 9h", "4 天 9 小时后重置") },
+      { title: "Fable", used: 10, reset: T("resets in 4d 9h", "4 天 9 小时后重置") },
     ]},
-    cursor: { name: "Cursor", logo: "cursor.png", plan: "PRO PLUS", acct: "you@example.com", status: "服务正常", rows: [
-      { title: "月度套餐", used: 86, reset: "9 天 2 小时后重置", detail: "$17.20 / $20.00" },
-      { title: "Grok Bot", used: 2, reset: "6 天 21 小时后重置" },
+    cursor: { name: "Cursor", logo: "cursor.png", plan: "PRO PLUS", acct: "you@example.com", status: T("Service OK", "服务正常"), rows: [
+      { title: T("Monthly plan", "月度套餐"), used: 86, reset: T("resets in 9d 2h", "9 天 2 小时后重置"), detail: "$17.20 / $20.00" },
+      { title: "Grok Bot", used: 2, reset: T("resets in 6d 21h", "6 天 21 小时后重置") },
     ]},
     "opencode-go": { name: "OpenCode Go", logo: "opencode-go.png", plan: "GO", acct: "you@example.com", rows: [
-      { title: "周窗口", used: 84, reset: "3 天 4 小时后重置" },
+      { title: T("Weekly window", "周窗口"), used: 84, reset: T("resets in 3d 4h", "3 天 4 小时后重置") },
     ]},
   };
 
@@ -186,7 +192,7 @@
             '<span class="qb-steps qb-steps--sm"><span class="qb-steps__fill" style="width:' +
               Math.max(3, r.used) + "%;background:repeating-linear-gradient(90deg," + c + " 0 5px,transparent 5px 7px)" + '"></span></span>' +
             '<span class="qb-crow__used">' +
-              (r.detail ? esc(r.detail) + " · " : "") + "已用 " + r.used + "%</span>" +
+              (r.detail ? esc(r.detail) + " · " : "") + T(r.used + "% used", "已用 " + r.used + "%") + "</span>" +
           "</div>";
         }).join("");
     }
@@ -233,32 +239,37 @@
   var host = document.querySelector(".desktop__widget");
   if (!host) return;
 
-  var LOGO = "assets/logos/";
-  var V = (document.querySelector('link[href^="styles.css"]') || { getAttribute: function () { return ""; } })
+  var ZH = /^zh/i.test(document.documentElement.lang);
+  function T(en, zh) { return ZH ? zh : en; }
+  var LOGO = ((document.currentScript && document.currentScript.src) || "").replace(/replica\.js(\?.*)?$/, "") + "assets/logos/";
+  var V = (document.querySelector('link[href*="styles.css"]') || { getAttribute: function () { return ""; } })
     .getAttribute("href").replace(/^[^?]*/, "");
   var GREEN = "#3DD68C", AMBER = "#F5A524";
 
   var P = {
     claude: { name: "Claude", logo: "claude.png", colour: true, plan: "MAX 20X", acct: "you@example.com",
-      status: ["服务正常", GREEN], spend: "$38.20", tokens: "41.2M",
-      windows: [{ t: "5 小时窗口", used: 18, reset: "2 小时 41 分", s: "2时41分" }, { t: "周窗口", used: 58, reset: "4 天 9 小时", s: "4天9时" },
-                { t: "Fable", used: 10, reset: "4 天 9 小时", s: "4天9时" }] },
+      status: [T("Service OK", "服务正常"), GREEN], spend: "$38.20", tokens: "41.2M",
+      windows: [{ t: T("5-hour window", "5 小时窗口"), used: 18, reset: T("2h 41m", "2 小时 41 分"), s: T("2h 41m", "2时41分") },
+                { t: T("Weekly window", "周窗口"), used: 58, reset: T("4d 9h", "4 天 9 小时"), s: T("4d 9h", "4天9时") },
+                { t: "Fable", used: 10, reset: T("4d 9h", "4 天 9 小时"), s: T("4d 9h", "4天9时") }] },
     codex: { name: "Codex", logo: "codex.png", plan: "PRO 20X", acct: "you@example.com",
-      status: ["轻微故障", AMBER], spend: "$12.75", tokens: "18.6M",
-      windows: [{ t: "周窗口", used: 36, reset: "5 天 16 小时", s: "5天16时" }, { t: "GPT-5.3-Codex-Spark", used: 0, reset: "4 小时 59 分", s: "4时59分" }] },
+      status: [T("Minor outage", "轻微故障"), AMBER], spend: "$12.75", tokens: "18.6M",
+      windows: [{ t: T("Weekly window", "周窗口"), used: 36, reset: T("5d 16h", "5 天 16 小时"), s: T("5d 16h", "5天16时") },
+                { t: "GPT-5.3-Codex-Spark", used: 0, reset: T("4h 59m", "4 小时 59 分"), s: T("4h 59m", "4时59分") }] },
     cursor: { name: "Cursor", logo: "cursor.png", plan: "PRO PLUS", acct: "you@example.com",
-      status: ["服务正常", GREEN],
-      windows: [{ t: "月度套餐", used: 86, reset: "9 天 2 小时", s: "9天2时" }, { t: "Grok Bot", used: 2, reset: "6 天 21 小时", s: "6天21时" }] },
+      status: [T("Service OK", "服务正常"), GREEN],
+      windows: [{ t: T("Monthly plan", "月度套餐"), used: 86, reset: T("9d 2h", "9 天 2 小时"), s: T("9d 2h", "9天2时") },
+                { t: "Grok Bot", used: 2, reset: T("6d 21h", "6 天 21 小时"), s: T("6d 21h", "6天21时") }] },
     grok: { name: "Grok", logo: "grok.png", acct: "you@example.com",
-      windows: [{ t: "周窗口", used: 11, reset: "3 天 21 小时", s: "3天21时" }] },
+      windows: [{ t: T("Weekly window", "周窗口"), used: 11, reset: T("3d 21h", "3 天 21 小时"), s: T("3d 21h", "3天21时") }] },
   };
   var ORDER = ["codex", "claude", "cursor", "grok"];
   var SPEND14 = [22, 31, 18, 44, 39, 27, 52, 36, 61, 48, 33, 57, 42, 38.2];
   var TOKENS7 = [18.4, 9.1, 51.6, 22.3, 47.9, 58.8, 41.2];
-  var DAYS = ["一", "二", "三", "四", "五", "六", "日"];
-  var STYLES = [["focus", "大数字"], ["gauge", "环形仪表"], ["trend", "花费趋势"], ["daily", "每日对比"],
-                ["grid", "服务商网格"], ["ranking", "紧迫排行"], ["classic", "经典"]];
-  var SIZES = [["small", "小"], ["medium", "中"], ["large", "大"]];
+  var DAYS = ZH ? ["一", "二", "三", "四", "五", "六", "日"] : ["M", "T", "W", "T", "F", "S", "S"];
+  var STYLES = [["focus", T("Big figure", "大数字")], ["gauge", T("Gauge", "环形仪表")], ["trend", T("Spend trend", "花费趋势")], ["daily", T("Day by day", "每日对比")],
+                ["grid", T("Provider grid", "服务商网格")], ["ranking", T("Closest first", "紧迫排行")], ["classic", T("Classic", "经典")]];
+  var SIZES = [["small", T("Small", "小")], ["medium", T("Medium", "中")], ["large", T("Large", "大")]];
   var SINGLE = { focus: true, gauge: true };
   var DEFAULT = { style: "focus", size: "medium", provider: "claude" };
 
@@ -364,11 +375,11 @@
       var big = '<div class="dc-figure' + (compact ? " is-sm" : "") + '"><b style="color:' + figure(lead.used) + '">' + left(lead.used) + "</b><span>%</span></div>";
       if (compact) return h + '<span class="dc-flex"></span>' + big + '<p class="dc-cap">' + esc(lead.t) + " · " + esc(lead.reset) + "</p>";
       return h + '<span class="dc-flex"></span>' + big +
-        '<p class="dc-cap">' + esc(lead.t) + "剩余 · " + esc(lead.reset) + "后重置</p>" + '<span class="dc-flex"></span>' +
+        '<p class="dc-cap">' + T(esc(lead.t) + " left · resets in " + esc(lead.reset), esc(lead.t) + "剩余 · " + esc(lead.reset) + "后重置") + "</p>" + '<span class="dc-flex"></span>' +
         stats([
           stat(other ? left(other.used) + "%" : "—", other ? other.t : "—", GREEN),
-          d.spend ? stat(d.spend, "今日花费") : stat(lead.used >= 70 ? "偏快" : "—", "节奏"),
-          d.tokens ? stat(d.tokens, "今日 token") : stat(lead.reset, "后重置"),
+          d.spend ? stat(d.spend, T("Today", "今日花费")) : stat(lead.used >= 70 ? T("Fast", "偏快") : "—", T("Pace", "节奏")),
+          d.tokens ? stat(d.tokens, T("Tokens today", "今日 token")) : stat(lead.reset, T("To reset", "后重置")),
         ]) + (s.size === "large" ? windowLines(d) : "") + '<span class="dc-flex"></span>' + footer("person", d.acct);
     },
     gauge: function (s) {
@@ -383,29 +394,29 @@
       }
       return header(d.name, { id: s.provider, plan: d.plan, pill: d.status }) + '<span class="dc-flex"></span>' +
         '<div class="dc-row"><div><p class="dc-cap is-top">' + esc(lead.t) + '</p><div class="dc-figure is-md"><b style="color:' + figure(lead.used) + '">' +
-        left(lead.used) + "</b><span>% 剩余</span></div></div><span class=\"dc-sp\"></span>" + gaugeSVG(lead.used, 78, logo(s.provider, 24)) + "</div>" +
+        left(lead.used) + "</b><span>" + T("% left", "% 剩余") + "</span></div></div><span class=\"dc-sp\"></span>" + gaugeSVG(lead.used, 78, logo(s.provider, 24)) + "</div>" +
         '<span class="dc-flex"></span><div class="dc-tiles">' +
-        tile("clock", lead.s, "后重置") + tile("flame", lead.used >= 80 ? "2天3时" : "够用", "预计用完", lead.used >= 80 ? "#E5484D" : GREEN) +
+        tile("clock", lead.s, T("to reset", "后重置")) + tile("flame", lead.used >= 80 ? T("2d 3h", "2天3时") : T("OK", "够用"), T("runs out", "预计用完"), lead.used >= 80 ? "#E5484D" : GREEN) +
         tile("calendar", other ? left(other.used) + "%" : "—", other ? other.t : "—") + "</div>" +
         (s.size === "large" ? windowLines(d) : "") + '<span class="dc-flex"></span>' + footer("person", d.acct);
     },
     trend: function (s) {
-      var h = header("AI 花费", { symbol: "dollar", pill: ["实时", GREEN], compact: s.size === "small" });
+      var h = header(T("AI spend", "AI 花费"), { symbol: "dollar", pill: [T("Live", "实时"), GREEN], compact: s.size === "small" });
       if (s.size === "small") {
-        return h + '<span class="dc-flex"></span><p class="dc-cap is-top">今日</p><b class="dc-money is-sm">$38.20</b>' +
-          '<span class="dc-flex"></span>' + line(SPEND14, 136, 30) + '<p class="dc-cap dc-mono">近 7 天 $331</p>';
+        return h + '<span class="dc-flex"></span><p class="dc-cap is-top">' + T("Today", "今日") + '</p><b class="dc-money is-sm">$38.20</b>' +
+          '<span class="dc-flex"></span>' + line(SPEND14, 136, 30) + '<p class="dc-cap dc-mono">' + T("7 days $331", "近 7 天 $331") + "</p>";
       }
-      var money = '<div><p class="dc-cap is-top">今日</p><b class="dc-money">$38.20</b></div>';
+      var money = '<div><p class="dc-cap is-top">' + T("Today", "今日") + '</p><b class="dc-money">$38.20</b></div>';
       var body = s.size === "medium"
-        ? '<div class="dc-row is-bottom">' + money + '<span class="dc-sp"></span><div class="dc-trend"><span class="dc-mono dc-green">近 14 天</span>' + line(SPEND14, 140, 52) + "</div></div>"
-        : '<div class="dc-row">' + money + '</div><span class="dc-flex"></span><span class="dc-mono dc-green dc-small">近 30 天</span>' + line(SPEND14.concat(SPEND14.slice(0, 16)), 304, 70);
+        ? '<div class="dc-row is-bottom">' + money + '<span class="dc-sp"></span><div class="dc-trend"><span class="dc-mono dc-green">' + T("14 days", "近 14 天") + "</span>" + line(SPEND14, 140, 52) + "</div></div>"
+        : '<div class="dc-row">' + money + '</div><span class="dc-flex"></span><span class="dc-mono dc-green dc-small">' + T("30 days", "近 30 天") + "</span>" + line(SPEND14.concat(SPEND14.slice(0, 16)), 304, 70);
       return h + '<span class="dc-flex"></span>' + body + '<span class="dc-flex"></span>' +
-        stats([stat("$42.10", "昨日", GREEN), stat("$331", "近 7 天"), stat("41.2M", "今日 token")], true) +
+        stats([stat("$42.10", T("Yesterday", "昨日"), GREEN), stat("$331", T("7 days", "近 7 天")), stat("41.2M", T("Tokens today", "今日 token"))], true) +
         '<span class="dc-flex"></span>' + footer("cpu", "claude-opus-5");
     },
     daily: function (s) {
       var many = s.size === "large", values = many ? TOKENS7.concat(TOKENS7) : TOKENS7, peak = Math.max.apply(null, values);
-      var h = header("每日用量", { symbol: "bars", pill: [many ? "近 14 天" : "近 7 天", GREEN], compact: s.size === "small" });
+      var h = header(T("Daily tokens", "每日用量"), { symbol: "bars", pill: [many ? T("14 days", "近 14 天") : T("7 days", "近 7 天"), GREEN], compact: s.size === "small" });
       function bars(height, labels) {
         return '<div class="dc-bars" style="height:' + (height + (labels ? 16 : 0)) + 'px">' + values.map(function (v, i) {
           var today = i === values.length - 1;
@@ -416,16 +427,16 @@
         }).join("") + "</div>";
       }
       if (s.size === "small") {
-        return h + '<span class="dc-flex"></span><b class="dc-money is-sm dc-green">41.2M</b><p class="dc-cap is-tight">今日 token</p>' +
+        return h + '<span class="dc-flex"></span><b class="dc-money is-sm dc-green">41.2M</b><p class="dc-cap is-tight">' + T("Tokens today", "今日 token") + "</p>" +
           '<span class="dc-flex"></span>' + bars(46, false);
       }
       return h + '<span class="dc-flex"></span>' + bars(many ? 150 : 74, true) + '<span class="dc-flex"></span>' +
-        stats([stat("41.2M", "今日", GREEN), stat("36.4M", "日均"), stat("113%", "达到日均")]) +
+        stats([stat("41.2M", T("Today", "今日"), GREEN), stat("36.4M", T("Per day", "日均")), stat("113%", T("Of average", "达到日均"))]) +
         (many ? '<span class="dc-flex"></span>' + footer("cpu", "claude-opus-5") : "");
     },
     grid: function (s) {
       var ids = s.size === "small" ? ORDER.slice(0, 2) : ORDER;
-      var h = header("QuotaBar", { symbol: "grid", pill: ["1 个故障", AMBER], compact: s.size === "small" });
+      var h = header("QuotaBar", { symbol: "grid", pill: [T("1 degraded", "1 个故障"), AMBER], compact: s.size === "small" });
       if (s.size === "small") {
         return h + '<span class="dc-flex"></span><div class="dc-rows">' + ids.map(function (id) {
           var u = P[id].windows[0].used;
@@ -438,18 +449,18 @@
         return '<div class="dc-gtile"><div class="dc-gtile__head">' + logo(id, big ? 14 : 12) + (big ? "<span>" + P[id].name + "</span>" : "") + "</div>" +
           '<div class="dc-figure is-grid' + (big ? " is-big" : "") + '"><b style="color:' + figure(w.used) + '">' + left(w.used) + "</b><span>%</span></div>" +
           steps(w.used, big ? 5 : 4) + '<span class="dc-mono dc-dim dc-small">' + esc(w.s) + "</span></div>";
-      }).join("") + '</div><span class="dc-flex"></span>' + footer("grid", ORDER.length + " 个服务商 · 剩余");
+      }).join("") + '</div><span class="dc-flex"></span>' + footer("grid", T(ORDER.length + " providers · % left", ORDER.length + " 个服务商 · 剩余"));
     },
     ranking: function (s) {
       var compact = s.size === "small";
       var ranked = ORDER.slice().sort(function (a, b) { return P[b].windows[0].used - P[a].windows[0].used; }).slice(0, s.size === "large" ? 5 : 3);
-      var h = header(compact ? "快用完" : "快用完的排前面", { symbol: "flame", pill: ["实时", GREEN], compact: compact });
+      var h = header(compact ? T("Running out", "快用完") : T("Closest to the limit", "快用完的排前面"), { symbol: "flame", pill: [T("Live", "实时"), GREEN], compact: compact });
       return h + '<span class="dc-flex"></span><div class="dc-rank' + (compact ? " is-sm" : "") + '">' + ranked.map(function (id, i) {
         var w = P[id].windows[0];
         return '<div class="dc-rank__row">' + (compact ? "" : '<span class="dc-rank__n dc-mono">' + (i + 1) + "</span>") + logo(id, compact ? 14 : 18) +
           '<div class="dc-rank__body"><div><b>' + P[id].name + '</b><span class="dc-sp"></span>' + (compact ? "" : '<span class="dc-mono dc-dim dc-small">' + esc(w.s) + "</span>") +
           '<b class="dc-mono dc-rank__pct" style="color:' + figure(w.used) + '">' + left(w.used) + "%</b></div>" + bar(w.used, compact ? 4 : 5) + "</div></div>";
-      }).join("") + '</div><span class="dc-flex"></span>' + (s.size === "large" ? footer("flame", "按剩余从少到多排序") : "");
+      }).join("") + '</div><span class="dc-flex"></span>' + (s.size === "large" ? footer("flame", T("Sorted by what runs out first", "按剩余从少到多排序")) : "");
     },
     classic: function (s) {
       var ids = s.size === "small" ? ORDER.slice(0, 2) : ORDER;
@@ -459,7 +470,7 @@
           '<circle cx="23" cy="23" r="' + r + '" fill="none" stroke="' + ramp(u) + '" stroke-width="3" stroke-linecap="round" stroke-dasharray="' + Math.max(0.5, c * u / 100) + " " + c + '" transform="rotate(-90 23 23)"/></svg>' +
           logo(id, 22) + '</div><b class="dc-mono">' + Math.round(u) + "%</b></div>";
       }
-      return '<div class="dc-head"><b class="dc-title wordmark">QuotaBar</b><span class="dc-sp"></span><span class="dc-dim dc-small">刚刚</span></div>' +
+      return '<div class="dc-head"><b class="dc-title wordmark">QuotaBar</b><span class="dc-sp"></span><span class="dc-dim dc-small">' + T("just now", "刚刚") + "</span></div>" +
         '<span class="dc-flex"></span><div class="dc-rings">' + ids.map(ring).join("") + "</div><span class=\"dc-flex\"></span>" +
         (s.size === "large" ? '<div class="dc-lines">' + ORDER.map(function (id) {
           var w = P[id].windows[0];
@@ -471,10 +482,10 @@
   /* ── 挂到页面上 ─────────────────────────────────────────────────── */
   host.className = "desktop__widget dc-host";
   host.removeAttribute("aria-label");
-  host.innerHTML = '<div class="dc" tabindex="0" role="group" aria-label="QuotaBar 桌面卡片，右键或点右上角按钮更换样式">' +
-    '<div class="dc-body"></div><button class="dc-more" type="button" aria-label="卡片设置" aria-haspopup="menu">' +
+  host.innerHTML = '<div class="dc" tabindex="0" role="group" aria-label="' + T("QuotaBar desktop card. Right-click it, or use the button at the top right, to change its style", "QuotaBar 桌面卡片，右键或点右上角按钮更换样式") + '">' +
+    '<div class="dc-body"></div><button class="dc-more" type="button" aria-label="' + T("Card settings", "卡片设置") + '" aria-haspopup="menu">' +
     '<svg viewBox="0 0 16 16" width="14" height="14" fill="currentColor"><circle cx="3.5" cy="8" r="1.4"/><circle cx="8" cy="8" r="1.4"/><circle cx="12.5" cy="8" r="1.4"/></svg></button></div>' +
-    '<p class="dc-hint">右键卡片，或点右上角 ⋯ 换样式和尺寸</p>';
+    '<p class="dc-hint">' + T("Right-click the card, or click ⋯, to change its style and size", "右键卡片，或点右上角 ⋯ 换样式和尺寸") + "</p>";
   var card = host.querySelector(".dc"), body = host.querySelector(".dc-body"), more = host.querySelector(".dc-more"), hint = host.querySelector(".dc-hint");
   try { if (localStorage.getItem("qb-deskcard-hinted")) hint.hidden = true; } catch (e) { /* 忽略 */ }
 
@@ -508,11 +519,11 @@
   }
   function buildMenu() {
     menu.innerHTML =
-      '<p class="dc-menu__label">桌面卡片</p>' +
-      sub("样式", STYLES.map(function (s) { return item(s[1], state.style === s[0], "style:" + s[0]); }).join("")) +
-      sub("尺寸", SIZES.map(function (s) { return item(s[1], state.size === s[0], "size:" + s[0]); }).join("")) +
-      sub("服务商", ORDER.map(function (id) { return item(P[id].name, SINGLE[state.style] && state.provider === id, "provider:" + id, !SINGLE[state.style]); }).join("")) +
-      "<hr>" + '<button type="button" data-action="reset"><span class="dc-menu__check"></span>恢复默认</button>';
+      '<p class="dc-menu__label">' + T("Desktop card", "桌面卡片") + "</p>" +
+      sub(T("Style", "样式"), STYLES.map(function (s) { return item(s[1], state.style === s[0], "style:" + s[0]); }).join("")) +
+      sub(T("Size", "尺寸"), SIZES.map(function (s) { return item(s[1], state.size === s[0], "size:" + s[0]); }).join("")) +
+      sub(T("Provider", "服务商"), ORDER.map(function (id) { return item(P[id].name, SINGLE[state.style] && state.provider === id, "provider:" + id, !SINGLE[state.style]); }).join("")) +
+      "<hr>" + '<button type="button" data-action="reset"><span class="dc-menu__check"></span>' + T("Restore Default", "恢复默认") + "</button>";
   }
   function openMenu(x, y) {
     buildMenu();

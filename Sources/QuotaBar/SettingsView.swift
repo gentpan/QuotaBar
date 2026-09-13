@@ -706,7 +706,7 @@ struct ProviderSettingsRow: View {
             // pill that varies by a character would shift the badge column
             // with it.
             statusPill
-                .frame(width: 68, alignment: .leading)
+                .frame(width: 80, alignment: .leading)
 
             GlassSwitch(isOn: Binding(
                 get: { store.isEnabled(id) },

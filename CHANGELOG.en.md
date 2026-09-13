@@ -1,67 +1,19 @@
-<div align="center">
+# Changelog
 
-<img src="Assets/icon.png" alt="QuotaBar" width="112" height="112">
+New features, style changes and fixes in the QuotaBar app, newest first by version and day.
+Server moves, the website, and build or release scripts don't change the app itself and aren't recorded here.
 
-# QuotaBar
+## Unreleased
 
-**Every AI coding limit, at a glance — in the menu bar, the notch, at the screen's edge or on the desktop.**
+### 2026-09-13
 
-[![Release](https://img.shields.io/github/v/release/gentpan/quotabar?color=6ee02b&label=release)](https://github.com/gentpan/quotabar/releases/latest)
-[![Downloads](https://img.shields.io/github/downloads/gentpan/quotabar/total?color=6ee02b&label=downloads)](https://github.com/gentpan/quotabar/releases)
-[![Stars](https://img.shields.io/github/stars/gentpan/quotabar?style=flat&color=f5c518&label=stars)](https://github.com/gentpan/quotabar/stargazers)
-[![Last commit](https://img.shields.io/github/last-commit/gentpan/quotabar?color=black&label=last%20commit)](https://github.com/gentpan/quotabar/commits/main)
-[![Commit activity](https://img.shields.io/github/commit-activity/m/gentpan/quotabar?color=black&label=commits)](https://github.com/gentpan/quotabar/graphs/commit-activity)
-[![CI](https://github.com/gentpan/quotabar/actions/workflows/ci.yml/badge.svg)](https://github.com/gentpan/quotabar/actions/workflows/ci.yml)
-[![macOS](https://img.shields.io/badge/macOS-14%2B-black)](https://github.com/gentpan/quotabar/releases/latest)
-[![License](https://img.shields.io/badge/license-MIT-black)](LICENSE)
-
-QuotaBar is a macOS menu-bar app that shows how much of each AI coding service's quota
-you have used, when each window resets, and roughly what it has cost — for twenty-three
-providers, read and worked out on your own Mac. No account, no telemetry.
-
-[Download](https://github.com/gentpan/quotabar/releases/latest) ·
-[Website](https://quota.bar) ·
-[Changelog](CHANGELOG.en.md) ·
-[Architecture](ARCHITECTURE.md)
-
-**English** · [简体中文](README.zh-CN.md)
-
-</div>
-
----
-
-## Install
-
-```bash
-brew tap gentpan/tap
-brew trust gentpan/tap      # Homebrew 6 gates third-party taps
-brew install --cask quotabar
-```
-
-Or download the `.dmg` from [Releases](https://github.com/gentpan/quotabar/releases/latest)
-and drag `QuotaBar.app` into `/Applications`. Builds are signed with a Developer ID
-certificate and notarized by Apple, so Gatekeeper opens them without a detour.
-
-Requires macOS 14 (Sonoma) or later. Apple Silicon and Intel. The interface is in
-English and Simplified Chinese and follows the system language unless you pick one.
-
-## Recent updates
-
-<!-- changelog:start -->
-<!-- Generated from CHANGELOG.en.md by Scripts/sync_changelog.py. Do not edit by hand. -->
-
-Latest release **0.5.0** (2026-09-13) · **13** changes in development · [full changelog](CHANGELOG.en.md)
-
-<details open>
-<summary><b>2026-09-13</b> · Unreleased · 3 added · 7 style · 3 fixed</summary>
-
-**Added**
+#### Added
 
 - Providers can be hidden per place instead of turned off: the panel, the edge dock, the notch island and desktop cards each choose which providers they show. A hidden provider is still read, still alerts and still counts towards spend; only turning it off stops reading it. Settings → Presentation has a new "What each place shows" card, one row per provider, where clicking a place's tag shows or hides it there. You can also right-click a card in the panel and choose "Hide from Panel", or right-click a dock icon and choose "Hide from the dock".
 - When providers are hidden, the bottom of the panel says "N hidden here" with their icons; "Reveal" brings them back one at a time or opens Settings to manage them. The dock's right-click menu lists its hidden providers too.
 - In-app updates check and download from the quota.bar server when GitHub can't be reached, so networks that block GitHub still get updates. The download must still carry the developer's signature and Apple's notarization before it installs. The About page's "Your data" list of connections now includes it.
 
-**Style**
+#### Style
 
 - The refresh note in the panel footer reads "Updated just now" for a minute after "Refresh Everything" or an automatic refresh, then "Auto-refresh in Xm"; hovering shows when it last updated, when it refreshes next and the interval. It used to say "refresh in 5m" the moment a refresh finished, which looked as if the button had done nothing.
 - The pacing note now reads "~8% left at reset" instead of the vaguer "about 8% to spare". Hovering spells out the working, for example "87% of this window has passed and 80% is used. At this rate it reaches about 92% by the reset, leaving 8%."
@@ -71,18 +23,17 @@ Latest release **0.5.0** (2026-09-13) · **13** changes in development · [full 
 - The QuotaBar wordmark changes from Sora to Instrument Sans SemiBold across the settings sidebar, the About page, the panel, the notch island, share cards and copied images; the About page's acknowledgements now credit Instrument Sans.
 - The usage share card window no longer has a separate grey title bar: the title bar is transparent and the card preview and the settings beside it run to the top of the window, one piece like the Settings window. The card and the heading on the right keep clear of the traffic-light buttons and line up with each other.
 
-**Fixed**
+#### Fixed
 
 - In English, the "Keychain" tag in Settings → Providers broke over two lines ("Keychai" / "n"): the tag's slot is wider and the text stays on one line.
 - Pacing gave wild estimates right after a window began — 3% used three minutes into a 5-hour window was projected to run out. It now waits until at least 5% of the window, and no less than 15 minutes, has passed before saying how much will be left, that it will run out, or when; a window already used up still shows at once.
 - The edge dock jumped off the screen edge for an instant when it opened on hover, leaving a gap. The window no longer changes size as the dock opens and closes; only the black shape grows inside it, flush to the edge throughout, and the undrawn transparent area lets the pointer through.
 
-</details>
+## 0.5.0 · 2026-09-13
 
-<details>
-<summary><b>2026-09-13</b> · 0.5.0 · 40 added · 10 style · 13 fixed</summary>
+### 2026-09-13
 
-**Added**
+#### Added
 
 - The panel is back: left-click the menu bar icon to open it, right-click for Refresh, Settings and Quit. A spend card sits at the top, a card per provider below, and the footer shows the version, the countdown to the next refresh, Settings and an options menu. Esc closes it, ⌘R refreshes, ⌘, opens Settings.
 - Spend card: switch between spend, tokens and spend per million tokens, and between today, yesterday and the last 30 days. The ring is coloured by source, the figure in the middle rolls to its new value, and hovering a source shows the breakdown by model.
@@ -125,7 +76,7 @@ Latest release **0.5.0** (2026-09-13) · **13** changes in development · [full 
 - Reset moments · panel and cards: the window's row flashes in the provider's colour and fades back, a "Just reset" tag pops in with its arrow turning once, and stays for ten minutes; the desktop card's status corner also reads "Just reset" for a while.
 - Reset notifications: off, after heavy use (the default, only when the window had passed 90%) or always. Resets that happened while the app was closed don't send a late notification. Settings → Alerts has a new "Resets" card; `QuotaBar --simulate-reset claude` previews the effect from a terminal.
 
-**Style**
+#### Style
 
 - The rows in the dock's hover card use the new shared limit row, with pacing and click-to-switch.
 - "Menu bar" in Presentation is renamed "Menu bar only"; dates on share cards and exact reset times follow the interface language.
@@ -138,7 +89,7 @@ Latest release **0.5.0** (2026-09-13) · **13** changes in development · [full 
 - Switches in Settings are green when on instead of dark grey. Switch rows with a single-line title are as tall as field rows, row spacing inside a card is consistent, and labels on the left sit centred against the controls on the right.
 - The usage share card window's pop-ups, byline field, switches and Share, Save and Copy buttons use the same control style.
 
-**Fixed**
+#### Fixed
 
 - Flipping a card to its usage side, the notch island's usage page and the Usage page each took ten-odd seconds the first time after every launch; they're now worked out from the local archive and show at once.
 - The spend card took about 8 seconds to show a figure after launch; it now reads the local archive at launch in about 2 ms, and in the background rereads only logs changed in the last two days, about 30 ms each time after.
@@ -154,12 +105,9 @@ Latest release **0.5.0** (2026-09-13) · **13** changes in development · [full 
 - Before any reading, desktop cards drew the gauge ring, provider grid and ranking bars full and green, with pacing "OK"; they now draw empty, with dashes for the figures and pacing.
 - The About page's network note missed one address: the model price list also comes from GitHub (LiteLLM's price list). It's now listed.
 
-</details>
+### 2026-09-12
 
-<details>
-<summary><b>2026-09-12</b> · 0.5.0 · 6 added · 1 style · 2 fixed</summary>
-
-**Added**
+#### Added
 
 - Double-click a window in the hover card (5-hour, weekly, or a per-model limit such as Fable) and the rings, notch island, desktop card and menu bar reading all follow that window. Double-click again to go back to whichever is most used. The window being followed has a dot beside its name, solid in the provider's colour when chosen by hand.
 - Presentation has a new "Screen" option: with several displays, choose which one shows the dock, notch island and desktop cards; the default is automatic. If the chosen display is unplugged it falls back to the default, and windows reposition when displays come and go.
@@ -168,290 +116,185 @@ Latest release **0.5.0** (2026-09-13) · **13** changes in development · [full 
 - New diagnostic command `QuotaBar --status` lists the components each provider's status mark is based on and incidents in other components.
 - New diagnostic command `QuotaBar --credentials` shows whether each local credential can be read and how, without printing any secrets.
 
-**Style**
+#### Style
 
 - The Settings window no longer flashes a scroll bar on the right, including when a service status row opens.
 
-**Fixed**
+#### Fixed
 
 - Codex's status couldn't find the CLI component: the OpenAI status page's summary leaves it out, so the full component list is now read when it's missing.
 - After reinstalling or updating, opening the app asked again for keychain access to "Claude Code-credentials". It now reads through the system's own security tool, the same way Claude Code does, so a change in the app's signature no longer prompts again.
 
-</details>
+## 0.4.0 · 2026-09-12
 
-<!-- changelog:end -->
+#### Added
 
-## Activity
+- Service status: reads the public status pages of Claude, OpenAI (Codex), Cursor, Manus, MiniMax, Kimi, DeepSeek and Gemini every five minutes, no sign-in needed. Outages show in the hover card and in Settings.
+- New "Service status" page in Settings: a row per provider that opens to show each component's status and the last 30 days of uptime.
+- New "Usage" page in Settings: a year-long heat map and token usage from local Claude Code, Codex CLI and OpenCode session logs.
+- New providers Antigravity and Qwen Cloud.
+- Cursor adds the Grok Bot limit; the Grok and Claude cards show the signed-in account.
+- The notch island is redone: one to three providers on each side of the notch, opening from the top into the full panel on hover. The panel's footer switches between stepped and continuous bars, used or left, and limits or usage.
+- Click a ring in the dock to open the full card, where a provider can be pinned to the menu bar, notch island, dock or desktop card.
+- The dock's right-click menu adds Refresh Now, Keep open and Show every provider.
+- The hover card flips over to show usage: today, 7, 14 and 30 days with daily averages, and hovering a column shows that day's value.
+- The refresh button on the hover card refreshes just that provider, spinning while it does.
+- The menu bar icon can show the reading, the white QuotaBar logo, or nothing.
+- Clicking the menu bar icon opens the Settings window directly instead of a menu.
+- Turning on a provider you haven't signed in to opens it with sign-in instructions. Cursor and Kimi can sign in through the in-app browser.
+- Updates can download, install and relaunch automatically, or be installed by hand; the Updates page shows the current version.
+- Feedback page: send feedback straight to quota.bar, no sign-in needed.
+- The About page links the website, GitHub and X.
+- Bars in Settings default to the stepped style, with the continuous style still available.
+- The desktop card can show every provider or just a pinned one.
 
-<p align="center">
-  <img src="Assets/readme/activity.svg" alt="Commits per day over the last 26 weeks" width="760">
-</p>
+#### Style
 
-<p align="center">
-  <a href="https://star-history.com/#gentpan/quotabar&Date">
-    <picture>
-      <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=gentpan/quotabar&type=Date&theme=dark">
-      <img alt="Star history" src="https://api.star-history.com/svg?repos=gentpan/quotabar&type=Date" width="760">
-    </picture>
-  </a>
-</p>
+- The dock's corner radius is 14 pt, and the square-corner option is gone.
+- Logos in the dock's rings are larger; the percentage under each ring is gone, and the selected provider has a green dot under its ring.
+- The dock is offset towards the screen edge to make up for the display's own black border, so it looks centred.
+- Dock rings grow slightly on hover, and the card glides between rings.
+- Logos and figures on either side of the notch island share the provider's colour.
+- Kimi's logo loses its black backing; Qwen and Antigravity get their official brand logos.
+- Buttons in Settings are uniformly taller and wider; status marks in the provider list line up in a column.
+- The usage statistics card is light.
+- Uptime bars use the same green as limit bars, with the uptime figure in front of the bar.
+- The desktop card shows each provider by window, with at most two bars.
 
-## Providers
+#### Fixed
 
-| Provider | Source | Credential |
-|---|---|---|
-| Codex | `~/.codex/auth.json` OAuth → `chatgpt.com/backend-api/wham/usage` | automatic |
-| Claude | Claude Code keychain item → `api.anthropic.com/api/oauth/usage` | automatic |
-| Gemini | `~/.gemini/oauth_creds.json` → `cloudcode-pa.googleapis.com` | automatic |
-| Grok | `~/.grok/auth.json` → `cli-chat-proxy.grok.com/v1/billing` | automatic / manual |
-| Antigravity | `~/.gemini/jetski-standalone-oauth-token` → `cloudcode-pa.googleapis.com` | automatic |
-| Cursor | Cursor's own `state.vscdb` session → `cursor.com/api/usage-summary` | automatic / manual |
-| OpenCode Go | `~/.local/share/opencode/auth.json` → `opencode.ai/zen/go/v1/usage` | automatic / manual |
-| Kimi Code | `kimi.com` billing gateway | manual `kimi-auth` JWT |
-| z.ai | `api.z.ai/api/monitor/usage/quota/limit` | manual API key |
-| MiniMax | `api.minimax.io` coding-plan remains | manual token / cookie |
-| Manus | `api.manus.im` credits | manual session token |
-| DeepSeek | `api.deepseek.com/user/balance` | manual API key |
-| Qwen Cloud | `home.qwencloud.com` console → token plan usage | manual Cookie header |
-| GitHub Copilot | GitHub CLI sign-in (`gh auth token`) → `api.github.com/copilot_internal/user` | automatic / manual |
-| 阿里云百炼 Coding Plan *(experimental)* | Bailian console gateway → coding plan quota | Cookie header / in-app sign-in |
-| 火山方舟 *(experimental)* | `arkcli usage plan --format json` | automatic (arkcli login) |
-| 智谱 GLM *(experimental)* | `open.bigmodel.cn/api/monitor/usage/quota/limit` | manual API key |
-| Kimi 开放平台 *(experimental)* | `api.moonshot.cn/v1/users/me/balance` | manual API key |
-| OpenRouter *(experimental)* | `openrouter.ai/api/v1/credits` + `/key` | manual API key |
-| 小米 MiMo *(experimental)* | `platform.xiaomimimo.com/api/v1` balance + token plan | Cookie header / in-app sign-in |
-| Qoder *(experimental)* | `qoder.com/api/v2/me/usages/big_model_credits` | manual Cookie header |
-| Windsurf *(experimental)* | Windsurf's own `state.vscdb` cached plan | automatic |
-| Kiro *(experimental)* | `kiro-cli` session → AWS `GetUsageLimits` | automatic |
+- Buttons in the hover card highlighted but did nothing when clicked.
+- The dock showed a blank strip when opening and jumped up as a whole when closing.
+- Uptime bar colours and uptime percentages were wrong, showing good days in red.
+- After changing the docking edge, the dock stayed on the old side.
+- The newer Grok CLI's sign-in file couldn't be read, so Grok always showed as not set up.
+- A leftover record of an old Homebrew install made the app think it was Homebrew-managed and refuse in-app updates.
 
-*Experimental* providers are built from the services' own consoles and CLIs but have not
-yet been checked against a live account; they are labelled as such in Settings.
+## 0.3.3 · 2026-09-12
 
-**No dialog, normally.** Claude is the only provider whose session lives in *another
-app's* keychain item. QuotaBar reads it the way Claude Code itself does — through
-`/usr/bin/security`, which every item that tool writes trusts — so macOS has nothing to
-ask, whatever the build is signed with. Only if that read is refused does the
-**Allow keychain access** button appear, and the dialog is never raised from a background
-refresh — only from that button.
+#### Added
 
-## Where the numbers show
+- Universal binary, running natively on both Apple silicon and Intel Macs.
 
-**Menu bar and panel**
-- Eleven glyph styles, four of them *stepped* so the reading can be counted rather than
-  estimated; or a text reading, the logo alone, or nothing.
-- The glyph splits a **short** horizon (5-hour, rolling) from a **long** one (weekly,
-  billing cycles), because collapsing them hides which limit is actually near.
-- Click it for the panel: a spend card on top — spend, tokens or cost per million
-  tokens, for today, yesterday or 30 days, split by CLI — then one card per provider
-  with its two most important windows; the rest, the trend, 30-day spend and the status
-  page fold out beneath.
-- Click any percentage to flip between used and left, any reset time between a countdown
-  and the clock. Right-click a card to copy it as an image.
-- `Esc` closes, `⌘R` refreshes everything, `⌘,` opens Settings. A global hotkey can open
-  it from anywhere.
+#### Fixed
 
-**Notch island** — on notched Macs the figures sit either side of the notch. Hover to open
-three pages (limits, usage, overview) with five chart styles. A soft glow turns amber and
-red as a limit nears, and the island peeks out on its own the first time one crosses the
-warning line. A low-power mode glows only when something happens.
+- Background refreshes brought up the Claude keychain dialog every minute. It now asks only when you click "Allow keychain access".
 
-**Edge dock** — hides until the pointer reaches the screen edge. Double-click a window
-(5-hour, weekly, a model's own) to choose what its ring shows.
+## 0.3.2 · 2026-08-31
 
-**Desktop cards** — as many as you like, sitting on the desktop below your windows or
-kept above them: big figure, gauge, spend trend, day by day, provider grid, closest to the
-limit, and the classic list, each in small, medium or large. Drag to move, double-click
-for the panel, right-click to change style, size or provider.
+#### Style
 
-With two screens, choose which one the island, dock and cards appear on.
+- Usage colour is a continuous ramp: green up to 50%, through gold and orange, to red at 90%.
+- The app name QuotaBar is set in Sora.
+- The Settings window is one surface, without what looked like an extra title bar at the top.
 
-## Pace, alerts and spend
+#### Fixed
 
-- **Pace.** A thin tick on every bar marks where even use would be by now. A window on
-  course to finish tight says so; one on course to run out shows a flame and when.
-- **Alerts.** Warning and critical thresholds, plus *almost out*, *cutting it close* and
-  *will run out* — each fires once per crossing and once per reset period.
-- **Resets.** QuotaBar reads a provider again the moment a window resets, and marks it
-  in that provider's colour: the dock slides out and sweeps the ring full with a card
-  beside it, the island opens a "limit reset" banner, the menu-bar glyph refills with a
-  sheen, and the row says it just reset; a notification follows if the window had been
-  used past 90%.
-- **Spend.** Estimated locally from Claude Code, Codex CLI and OpenCode session logs, in
-  dollars or one of ten other currencies at daily reference rates, counting all tokens or
-  input and output only. QuotaBar keeps its own day-by-model archive, so the figures do
-  not shrink when a CLI prunes old logs.
-- **Usage page.** A year heatmap and volume chart in Settings.
-- **Share card.** Your last 7 days, 30 days, 3 months, year or all time, by API value or
-  tokens; the card turns black past $1,000 and blue past $10,000. 4:5, 1:1 or 9:16, saved
-  as a 1080-pixel PNG or copied.
-- **Service status.** The providers' own status pages, judged by the coding components —
-  Claude Code, the Codex CLI — with 30 days of history in Settings.
+- The Settings window's close, minimise and zoom buttons had disappeared.
+- The menu panel's height stuck at its empty first-open state, cutting off the content.
 
-## Your data
+## 0.3.1 · 2026-08-29
 
-Automatic providers reuse the session your CLI already created — the app never asks for a
-password. Manually entered tokens go to the **macOS login keychain**, never to a file.
-Preferences live in `~/.config/quotabar/config.json` (mode `0600`) and contain no
-secrets. There is no analytics and no telemetry.
+#### Added
 
-QuotaBar connects only to:
+- The Settings window has a sidebar with sections.
+- When closed, the notch island sits on either side of the notch with readings and reset countdowns.
+- Click a ring in the dock to select a provider, double-click to open the panel.
+- Cursor's usage for a specific model shows on its own row.
 
-- the usage endpoints of the providers you turn on, with your own session or key;
-- their public status pages, such as `status.claude.com`;
-- `open.er-api.com`, once a day, for exchange rates;
-- GitHub, to check for and download updates and to fetch model prices (LiteLLM's catalog);
-- `quota.bar`, only when you send feedback.
+#### Style
 
-With a proxy set (HTTP, HTTPS or SOCKS5), all of it goes through the proxy. Your usage is
-never sent to a server of ours. While a screen share or recording is on, QuotaBar can
-hide the figures and leave only its mark in the menu bar.
+- The selection in the Settings sidebar is a band of light that moves.
+- The closed dock shows a handle that fills from the bottom in steps to the current usage.
 
-## For other tools
+#### Fixed
 
-Turn on **Local API** in Settings → General and QuotaBar serves JSON on this Mac only:
+- Cursor showed 100% when 54% had been used.
+- The closed dock was nearly invisible and hard to click.
+- Single-colour logos on the dock, notch island and desktop card turned black in light mode and vanished.
+- The dock's opening animation stuttered, moving in several jumps.
 
-```bash
-curl http://127.0.0.1:6736/v1/limits   # every window, percent and reset
-curl http://127.0.0.1:6736/v1/spend    # dollars and tokens: today, yesterday, 30 days
-```
+## 0.3.0 · 2026-08-29
 
-No credentials, no account names. From a terminal, the same limits without the app open:
+#### Added
 
-```bash
-/Applications/QuotaBar.app/Contents/MacOS/QuotaBar --json          # cached up to five minutes
-/Applications/QuotaBar.app/Contents/MacOS/QuotaBar --json --force  # ask every provider now
-```
+- The dock: a column of provider rings at the screen edge, showing that provider's limit card on hover.
+- Desktop widget in three sizes, on the desktop layer by default or optionally on top.
+- Spend breakdown: switch between today, yesterday and the last 30 days, with a ring by source. OpenCode joins as a third source.
+- Prices update daily from a public price list, with a built-in price table as the offline fallback.
+- Limit pacing: works out whether the current rate will run the window out before it resets.
+- In-app updates: downloads are checked for signature and notarization before they install.
 
-## First run
+#### Fixed
 
-1. On a fresh install QuotaBar turns on only the providers whose tools it finds signed in
-   on this Mac, and a welcome card in the panel says how many.
-2. Automatic providers need the matching CLI signed in (`codex`, `claude`, `gemini`,
-   `grok`, `gh`) or the app installed (Cursor, Windsurf).
-3. Manual providers: open Settings → **Providers**, paste the token described under the
-   row, then **Test connection** — it bypasses every cache and asks the source directly.
+- A maxed-out limit filled the whole trend chart, hiding any change.
+- The panel's height jumped when switching providers.
+- Unknown models were matched to cheap prices, putting spend well below the real figure.
 
-The panel refreshes every 5, 15 or 30 minutes, on wake, and when the network comes back;
-the footer's button refreshes everything at once. Upgrading from a build that stored
-credentials in `config.json`? They are moved into the keychain on first launch and erased
-from the file.
+## 0.2.4 · 2026-08-27
 
-## Build & run
+#### Added
 
-Requires macOS 14+ and a **full Xcode toolchain** — CommandLineTools alone lacks the
-SwiftUI macro plugin, so the build fails on `@State`.
+- The menu bar icon shows the short and long windows on two lines.
+- The menu bar icon follows the provider selected in the panel, and remembers the choice.
 
-```bash
-export DEVELOPER_DIR=/Applications/Xcode-beta.app/Contents/Developer
-swift build && swift test
-UNIVERSAL=0 ./Scripts/package_app.sh   # QuotaBar.app in place; drop UNIVERSAL=0 for Intel too
-open QuotaBar.app
-```
+#### Fixed
 
-The app is a menu-bar agent, so there is little to screenshot. Render the surfaces
-off-screen instead — CI runs the first two as smoke tests. Add `--lang en` or `--lang zh`
-to render one language:
+- With alert colours, an exhausted limit and a full one looked the same.
+- Alert colours were too pale and washed out in the menu bar.
 
-```bash
-.build/debug/QuotaBar --snapshot ./snapshots             # panel, dock, notch strip
-.build/debug/QuotaBar --settings-preview ./settings      # every settings section, both languages
-.build/debug/QuotaBar --icon-preview ./icons             # all eleven menu-bar styles
-.build/debug/QuotaBar --island-preview ./island          # island pages and chart styles
-.build/debug/QuotaBar --widget-concepts ./cards          # every desktop card, every size
-```
+## 0.2.3 · 2026-08-27
 
-Glass, vibrancy and springs only exist on screen — `ImageRenderer` draws none of them.
-For those, open the real thing:
+#### Added
 
-```bash
-.build/debug/QuotaBar --settings-window about
-.build/debug/QuotaBar --panel-window
-QUOTABAR_DOCK_TRACE=1 QUOTABAR_DOCK_SLIDE=2 ./QuotaBar.app/Contents/MacOS/QuotaBar
-```
+- Limit windows are labelled by length, such as 5h or 7d.
+- Codex's limit reset count is shown.
 
-For a single provider: `QuotaBar --provider claude`; for the status pages:
-`QuotaBar --status`.
+## 0.2.2 · 2026-08-27
 
-## Distribution
+#### Added
 
-Developer ID only, not the App Store — the sandbox forbids reading `~/.codex`,
-`~/.claude` and another app's keychain item, which is the entire feature set.
+- Cursor and OpenCode Go sign-ins are read from this Mac automatically, no pasting needed.
 
-`package_app.sh` picks its signing tier automatically:
+#### Fixed
 
-| What you have | What others get |
-|---|---|
-| Nothing | Ad-hoc signature — runs on your Mac only. Others see *"QuotaBar is damaged"*. |
-| Developer ID certificate | Hardened runtime. Others see *"Apple cannot check it for malicious software"*. |
-| Certificate + notarization | Gatekeeper accepts it — the normal *"downloaded from the internet"* prompt. |
+- OpenCode Go was parsed wrongly and never had data.
 
-Store a notarization credential once (needs an
-[app-specific password](https://appleid.apple.com)):
+## 0.2.1 · 2026-08-27
 
-```bash
-xcrun notarytool store-credentials QuotaBar \
-  --apple-id you@example.com --team-id <YOUR_TEAM_ID>
-```
+#### Fixed
 
-### Cutting a release
+- After clicking Settings the window opened behind other windows, as if nothing had happened.
 
-```bash
-./Scripts/release.sh
-```
+## 0.2.0 · 2026-08-27
 
-Notarizes, staples, zips with `ditto` (which preserves the ticket), builds a signed and
-notarized `.dmg`, computes both SHA-256s, and writes a ready-to-commit Homebrew cask to
-`dist/quotabar.rb`. It **refuses to produce a release if Gatekeeper still rejects the
-bundle**, so a half-signed build cannot reach users by accident. The app updates itself
-only from a download signed by this app's developer and notarized by Apple.
+#### Added
 
-## Spend estimates
+- Five new menu bar icon styles: grid, segmented bar, battery, gauge and scale. Settings shows the icons themselves to choose from.
+- A notarized DMG installer.
 
-Computed locally from `~/.claude/projects/**/*.jsonl`,
-`~/.codex/sessions/**/rollout-*.jsonl` and OpenCode's own database, priced from a live
-catalog that matches exact model ids. They are an estimate for orientation, **not a
-bill** — they cannot see plan-included usage, discounts, or anything that happened
-outside these CLIs.
+#### Style
 
-Two things are easy to get wrong here and are pinned by tests: Claude Code writes the
-same assistant turn into every session file that replays it (deduplicated on
-`message.id` + `requestId`), and Codex reports `input_tokens` inclusive of
-`cached_input_tokens` (not double-charged).
+- The accent colour changes from fluorescent green to a neutral graphite.
+- The panel grows with its content instead of cutting it off.
 
-## Architecture
+#### Fixed
 
-- `Sources/QuotaCore` — provider protocol, HTTP helpers, config and keychain store,
-  credential readers, cost estimator and usage archive, pricing catalog, status pages,
-  updater, one file per provider group.
-- `Sources/QuotaBar` — the app: an AppKit status item and panels hosting SwiftUI — usage
-  store, menu-bar glyph, panel, settings, notch island, edge dock, desktop cards, share
-  card, local API.
-- `Tests/QuotaCoreTests` — parser fixtures, cost regressions, config migration, updater
-  verification. Everything testable lives in QuotaCore.
-- `site/index.html` — the website's template, every piece of copy written as
-  `[[English||中文]]`; `Scripts/sync_changelog.py` builds it into `web/` (English at the
-  root, Chinese under `web/zh/`). `web/` is what gets deployed.
+- Reset times could read "resets in reset".
+- One unrecognised value in config.json reset every setting.
 
-Adding a provider, and every design decision worth knowing before changing one:
-[ARCHITECTURE.md](ARCHITECTURE.md). Every change to the app is logged, dated, in
-[CHANGELOG.en.md](CHANGELOG.en.md) (English) and [CHANGELOG.md](CHANGELOG.md) (Chinese).
+## 0.1.0 · 2026-08-27
 
-## Acknowledgements
+#### Added
 
-QuotaBar builds on these open-source projects and this typeface. Thank you.
+- First release: limits and reset times for 11 AI coding services in the menu bar.
+- English and Chinese interface, following the system language.
+- Manually entered credentials are stored only in the system keychain.
+- Daily spend chart comparing today with the last 30 days.
+- Log scanning about 7.7× faster.
 
-| Project | Author | License | What QuotaBar took |
-|---|---|---|---|
-| [codex-island](https://github.com/ericjypark/codex-island) | Eric Park | MIT | The notch island's look and motion |
-| [OpenUsage](https://github.com/robinebers/openusage) | Robin Ebers | MIT | The menu panel, pace hints and the share card |
-| [CodexBar](https://github.com/steipete/CodexBar) | Peter Steinberger | MIT | How providers report their usage; QuotaBar is a clean-room Swift implementation inspired by it |
-| [theSVG](https://github.com/GLINCKER/thesvg) | thesvg.org | MIT | The vector masters of the provider logos, kept in `Assets/logos-src-*.svg` |
-| [Instrument Sans](https://github.com/Instrument/instrument-sans) | The Instrument Sans Project Authors | SIL OFL 1.1 | The typeface of the QuotaBar wordmark and the website |
+#### Fixed
 
-QuotaBar is an independent third-party app. It is not affiliated with, endorsed by, or
-sponsored by Anthropic, OpenAI, Cursor, Google, xAI, GitHub, X or any other company it
-mentions. Their names and logos belong to their respective owners.
-
-## License
-
-MIT — see [LICENSE](LICENSE).
+- Claude Code usage was counted twice, putting spend at about double the real figure.
+- Codex cached input was billed twice.
+- Limits are named by window length, so Pro plans are no longer mislabelled as a 5-hour window.

@@ -138,8 +138,8 @@ struct AboutPane: View {
                    "open.er-api.com，每天一次，获取汇率；"),
             L10n.t("GitHub, to check for and download updates and to fetch model prices;",
                    "GitHub，检查和下载更新，以及获取模型价目表；"),
-            L10n.t("quota.bar, only when you send feedback.",
-                   "quota.bar，仅在你提交反馈时。"),
+            L10n.t("quota.bar, when you send feedback, and for updates when GitHub can't be reached.",
+                   "quota.bar，在你提交反馈时，以及连不上 GitHub 时检查和下载更新。"),
         ]
     }
 
