@@ -20,7 +20,7 @@ Python 服务，数据放 SQLite（WAL）。验签、存读数、算 run 和 tie
 | `run_server.py` | 服务本体，`127.0.0.1:8788`，由 Caddy 在 quota.run 反代 `/api/*` |
 | `test_run_server.py` | `unittest`，进程内起服务、用 P-256 密钥像应用一样签名 |
 | `quotabar-run.service` | systemd 单元（专用用户 `quotabar-run`，状态目录 `/var/lib/quotabar-run`） |
-| `caddy-snippet.caddy` | `quota.run` 的完整站点块（页面、`/@username` 改写、`/api/*` 反代），以及 `quota.bar` 里旧地址的跳转 |
+| `caddy-snippet.caddy` | `quota.run` 的完整站点块（页面、`/@username` 改写、`/api/*` 反代） |
 
 ## 接口一览
 
@@ -32,7 +32,10 @@ Python 服务，数据放 SQLite（WAL）。验签、存读数、算 run 和 tie
   条目带 `runId`、`secondsTo50/90/100`、`seasonRuns`，响应带 `summary`
 - `GET /runs/<runId>`：一条公开 run 和最多 240 个点的用量曲线 `readings: [{t, p}]`
 - `GET /insights?season=&region=`：各榜的人数、完成比例、最快、p10 / 中位数 / p90、按地区的中位数
-- `GET /users/<username>`：资料、链接、项目、各榜最好成绩（名次、人数、前百分之几）、最近 20 条 run、统计
+- `GET /users/<username>`：资料、链接、项目、各榜最好成绩（名次、人数、前百分之几）、最近 20 条 run、统计，
+  以及近 53 周每天 token 数的热力图（`activity`）和关联的 GitHub 登录名（`github`）
+- `GET /users/<username>/github`：GitHub 贡献日历（有令牌时带提交、PR、评审、Issue 数）和项目里各仓库的星标、语言、
+  近 52 周每周提交数。不走 30 秒内存缓存，数据在 `github_cache` 表里；手里还没有时回 `pending: true`（`no-store`）
 
 以下全部 `Cache-Control: no-store`。
 
@@ -123,9 +126,18 @@ Python 服务，数据放 SQLite（WAL）。验签、存读数、算 run 和 tie
   另附 `unit` 和 `achievedAt`。`recent` 里每条 run 是
   `{runId, provider, plan, planLabel, windowKey, windowSeconds, windowTitle, season, windowStart, resetsAt, peakPercent, secondsTo50, secondsTo90, secondsTo100, completedAt, lastObservedAt, tier, accountVerified}`。
   `activeDays` 是有计分读数或有 token 的 UTC 日数。
-- **链接**：`links.website` 必须是 https；`links.github`、`links.x` 可以填账号名（可带 @）或
-  对应站点的 https 地址，统一存成 https 地址返回。项目的 `github` 可以填 `owner/repo`，同样存成地址。
-  带 `user:pass@` 的地址一律不收。
+- **链接**：17 种，顺序和规则都在 `LINK_KINDS`。`website`、`blog`、`mastodon` 收任意 https 地址（`mastodon` 也收
+  `@name@实例`）；其余要么是对应站点的 https 地址，要么是账号名（可带 @），统一存成 https 地址返回。
+  `website`、`github`、`x` 有自己的列（应用只认这三个），其余放 `users.links_json`。返回时 17 个键都在，没填的是 `null`。
+  项目的 `github` 可以填 `owner/repo`，同样存成地址。带 `user:pass@` 的地址一律不收。
+- **热力图（`activity`）**：只算计分设备的活动分钟，按 15 分钟一桶汇总后按这个人的时区换算日期（半点、三刻的时区也分得准）。
+  时区没选时中国区按 `Asia/Shanghai`，其余 `UTC`。`showActivity: false` 时为 `null`。
+- **GitHub（`github`、`/users/<username>/github`）**：只认登录方式里的 GitHub 身份（按数字 id 取当前登录名，改名跟着改），
+  手填的 GitHub 链接不算。有 `QUOTA_RUN_GITHUB_TOKEN` 时贡献日历和分项走 GraphQL；没有时读
+  `github.com/users/<login>/contributions` 的公开页面（HTML，一年少于 300 格就当页面改版、算失败），REST 调用用 OAuth 应用的
+  client id / secret 认证。缓存键 `user:<数字 id>`、`repo:<owner/name 小写>`：六小时过期，过期了先给旧的、后台线程重取
+  （同一个键同时只取一次，不占服务锁）；失败 15 分钟后再试并保留上一份；`commit_activity` 回 202 时两分钟后再取；
+  两周没人看的删掉，删号时删掉这个人的 `user:` 那条。`showGithub: false` 时不给日历，仓库数据照给。
 - **PUT /profile** 是部分更新：没传的字段保持原值，传 `null` 或空串才清空。
 - **计分设备**：第一台自动成为计分设备，不算一次更换；之后每次更换开始 7 天冷却。
   `rankedChangeAvailableAt` 冷却中给时间，能换时为 `null`；`POST /devices/ranked` 的响应也带它。
@@ -194,6 +206,7 @@ QUOTA_RUN_SECRET_FILE=/etc/quotabar-run.secret
 | `QUOTA_RUN_GITHUB_CLIENT_ID`、`QUOTA_RUN_GITHUB_CLIENT_SECRET` | GitHub 登录，两个都有才启用 |
 | `QUOTA_RUN_GOOGLE_CLIENT_ID`、`QUOTA_RUN_GOOGLE_CLIENT_SECRET` | Google 登录，两个都有才启用 |
 | `QUOTA_RUN_SMTP_HOST`、`QUOTA_RUN_SMTP_PORT`、`QUOTA_RUN_SMTP_USER`、`QUOTA_RUN_SMTP_PASSWORD`、`QUOTA_RUN_MAIL_FROM` | 邮箱验证码；`HOST` 和 `MAIL_FROM` 都有才启用。端口 465 直接 TLS，其他端口（默认 587）STARTTLS；没有 `USER` 就不登录 |
+| `QUOTA_RUN_GITHUB_TOKEN` | 选填。个人主页的 GitHub 贡献日历带上提交、PR、评审、Issue 数；不需要任何权限（fine-grained 令牌只选公开仓库只读即可）。没有时日历读公开页面，只有贡献总数 |
 
 没配置的登录方式在 `GET /auth/providers` 里是 `false`：GitHub / Google 的起跳直接跳回
 `/login?error=provider_unavailable`，邮箱发码回 `503 email_unavailable`。启动日志只打印哪几种登录可用，
@@ -255,9 +268,9 @@ python3 server/run/run_server.py
 
 `Scripts/deploy_run.sh`：本地先跑测试，rsync 到 `/opt/quotabar-run`（不含测试文件），在服务器上
 建 `quotabar-run` 系统用户和 `/var/lib/quotabar-run`，没有密钥时生成 `/etc/quotabar-run.secret`
-（不回显），没有 `/etc/quotabar-run.env` 时放一个空模板（已存在绝不覆盖、不回显），装 systemd 单元并重启；`caddy-snippet.caddy` 的第二段整份写成
-`/etc/caddy/sites/quota.run.caddy`，第一段放进 `/etc/caddy/sites/quota.bar.caddy` 站点块里的
-`# >>> quota-run`、`# <<< quota-run` 之间（重跑时整段替换，早先无标记的 `/api/run/` 反代一并删掉）；
+（不回显），没有 `/etc/quotabar-run.env` 时放一个空模板（已存在绝不覆盖、不回显），装 systemd 单元并重启；`caddy-snippet.caddy`
+整份写成 `/etc/caddy/sites/quota.run.caddy`，`/etc/caddy/sites/quota.bar.caddy` 里早先放过的 Quota Run 配置
+（无标记的 `/api/run/` 反代、`# >>> quota-run` 与 `# <<< quota-run` 之间的旧地址跳转）一并删掉；
 `caddy validate` 通过才 reload，失败则恢复原配置；最后 `curl` 验证 `stats`、`auth/providers`
 （只有 true/false）和 `POST /register` 是 404。
 页面本身（`web-run/`）由 `Scripts/deploy_site.sh` 同步到 `/var/www/quota.run`。

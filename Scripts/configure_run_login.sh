@@ -5,6 +5,7 @@
 #   ./Scripts/configure_run_login.sh github                                    # 终端里输入 Client ID 和 Secret（不回显）
 #   ./Scripts/configure_run_login.sh cloudflare                                # Cloudflare Email Sending：只输入 API 令牌（不回显）
 #   ./Scripts/configure_run_login.sh smtp                                      # 终端里输入 SMTP 设置（密码不回显）
+#   ./Scripts/configure_run_login.sh github-token                              # 个人主页 GitHub 数据用的令牌（不回显，不需要任何权限）
 #
 # 凭据只经 ssh 的标准输入传过去，不出现在命令行参数、终端输出或仓库里；
 # 服务器上只改动对应的几行，其余设置原样保留。
@@ -56,8 +57,14 @@ PY
     [ -n "$host" ] && [ -n "$user" ] && [ -n "$password" ] && [ -n "$from" ] || die "主机、用户名、密码、发件人都要填"
     payload="$(H="$host" P="${port:-465}" U="$user" W="$password" F="$from" python3 -c 'import json, os; print(json.dumps({"QUOTA_RUN_SMTP_HOST": os.environ["H"], "QUOTA_RUN_SMTP_PORT": os.environ["P"], "QUOTA_RUN_SMTP_USER": os.environ["U"], "QUOTA_RUN_SMTP_PASSWORD": os.environ["W"], "QUOTA_RUN_MAIL_FROM": os.environ["F"]}))')"
     ;;
+  github-token)
+    # github.com/settings/personal-access-tokens → Fine-grained token，Repository access 选 Public repositories，不加任何权限。
+    # 只用来读个人主页上的贡献日历和提交、PR 数；留空就删掉这一项（回到读公开页面）。
+    read -r -s -p "GitHub 令牌（不回显，留空则删除）: " token; echo
+    payload="$(T="$token" python3 -c 'import json, os; print(json.dumps({"QUOTA_RUN_GITHUB_TOKEN": os.environ["T"]}))')"
+    ;;
   *)
-    die "用法：$0 google <client_secret.json> | github | cloudflare | smtp"
+    die "用法：$0 google <client_secret.json> | github | cloudflare | smtp | github-token"
     ;;
 esac
 

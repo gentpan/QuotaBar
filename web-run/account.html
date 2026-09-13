@@ -115,6 +115,31 @@
                 <input class="acc-input" id="pfX" name="x" type="text" autocapitalize="off" spellcheck="false" placeholder="@handle or URL">
               </div>
             </div>
+            <div class="acc-field">
+              <div class="acc-label-row"><span class="acc-label" id="moreLinksLabel">More links</span><span class="acc-count" id="linksCount" aria-hidden="true"></span></div>
+              <p class="acc-hint">Blog, GitLab, Bluesky, Mastodon, LinkedIn, YouTube, Telegram, Hugging Face, Bilibili, Zhihu, Juejin, V2EX, Weibo, Xiaohongshu. Most take a username; the others an https:// link.</p>
+              <div class="acc-links" id="linksList" role="group" aria-labelledby="moreLinksLabel"></div>
+              <button class="acc-btn acc-btn--dashed" type="button" id="linkAdd">
+                <svg aria-hidden="true" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M8 3v10M3 8h10"/></svg>
+                <span>Add a link</span>
+              </button>
+            </div>
+            <fieldset class="acc-field">
+              <legend class="acc-label">Show on your profile</legend>
+              <label class="acc-toggle">
+                <input class="check" type="checkbox" name="showActivity">
+                <span><b>AI coding usage heatmap</b><small>Tokens per day from the ranked Mac over the last 53 weeks, split by tool. Only daily totals are public.</small></span>
+              </label>
+              <label class="acc-toggle">
+                <input class="check" type="checkbox" name="showGithub">
+                <span><b>GitHub contributions heatmap</b><small id="githubToggleNote"></small></span>
+              </label>
+            </fieldset>
+            <div class="acc-field acc-field--half">
+              <label class="acc-label" for="pfTimezone">Heatmap time zone</label>
+              <select class="acc-input acc-select" id="pfTimezone" name="timezone"></select>
+              <p class="acc-hint">Each square is one day, from midnight to midnight in this time zone.</p>
+            </div>
             <div class="acc-actions">
               <button class="acc-btn acc-btn--primary" type="submit">Save profile</button>
               <p class="acc-status" role="status" aria-live="polite"></p>

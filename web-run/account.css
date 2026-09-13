@@ -182,6 +182,21 @@
 .acc-sec > .acc-alert { margin-top: var(--space-4); }
 .acc-actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-3); padding-top: var(--space-2); }
 
+/* 更多链接：一行一个平台 */
+.acc-links { display: grid; gap: var(--space-2); }
+.acc-links:empty { display: none; }
+.acc-linkrow { display: grid; grid-template-columns: 160px minmax(0, 1fr) auto; align-items: center; gap: var(--space-2); }
+.acc-field--half { max-width: 360px; }
+
+/* 主页上显示的开关 */
+.acc-toggle { display: flex; align-items: flex-start; gap: var(--space-3); padding: var(--space-3) 0; cursor: pointer; }
+.acc-toggle + .acc-toggle { border-top: var(--border-soft); }
+.acc-toggle .check { margin-top: var(--space-half); }
+.acc-toggle span { display: grid; gap: var(--space-half); min-width: 0; }
+.acc-toggle b { font-weight: 500; }
+.acc-toggle small { color: var(--text-2); font-size: var(--text-xs); }
+.acc-toggle small a { color: var(--text-1); text-decoration: underline; text-decoration-color: var(--color-neutral-300); text-underline-offset: var(--space-1); }
+
 /* 项目编辑卡 */
 .acc-projects { display: grid; gap: var(--space-3); }
 .acc-project { display: grid; gap: var(--space-3); min-width: 0; margin: 0; padding: var(--space-4); border: var(--border); border-radius: var(--radius); background: var(--color-neutral-50); }
@@ -281,6 +296,8 @@
   .shell.acc-main { padding-left: var(--space-4); padding-right: var(--space-4); }
   .acc-card { padding: var(--space-6) var(--space-4) var(--space-4); }
   .acc-grid { grid-template-columns: minmax(0, 1fr); }
+  .acc-linkrow { grid-template-columns: minmax(0, 1fr) auto; }
+  .acc-linkrow .acc-input:not(select) { grid-column: 1; grid-row: 2; }
   .acc-head__id { gap: var(--space-4); }
   .acc-head__name { font-size: var(--text-xl); }
   .acc-sec { padding: var(--space-4); }

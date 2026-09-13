@@ -20,6 +20,8 @@ Mac 通过 connect（类似 OAuth 设备流，绑定设备公钥）加入账号�
   QUOTA_RUN_GOOGLE_CLIENT_ID / QUOTA_RUN_GOOGLE_CLIENT_SECRET   Google 登录（两个都有才启用）
   QUOTA_RUN_SMTP_HOST / _PORT / _USER / _PASSWORD, QUOTA_RUN_MAIL_FROM
                          邮箱验证码（HOST 和 MAIL_FROM 都有才启用；465 直接 TLS，其他端口 STARTTLS）
+  QUOTA_RUN_GITHUB_TOKEN 选填：取个人主页的 GitHub 贡献日历和提交数用的令牌（不需要任何权限）。
+                         没有时日历从 github.com 的公开页面读，只有贡献总数，没有提交、PR 的分项
   QUOTA_RUN_INSECURE_COOKIES=1  cookie 去掉 Secure（本机 http 测试）
   QUOTA_RUN_DEV_LOGIN=1         POST /auth/dev 直接以某个邮箱登录（仅限本机测试）
   QUOTA_RUN_DEVICE_SIGNUP=1     重新打开 POST /register（仅限本机测试）
@@ -47,7 +49,8 @@ from datetime import datetime, timedelta, timezone
 from email.message import EmailMessage
 from email.utils import formatdate, make_msgid
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from urllib.parse import parse_qsl, unquote, urlencode, urlsplit
+from urllib.parse import parse_qsl, quote, unquote, urlencode, urlsplit
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from cryptography.exceptions import InvalidSignature
 from cryptography.hazmat.primitives import hashes
@@ -100,6 +103,24 @@ GOOGLE_AUTHORIZE_URL = "https://accounts.google.com/o/oauth2/v2/auth"
 GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token"
 GOOGLE_USERINFO_URL = "https://openidconnect.googleapis.com/v1/userinfo"
 
+# —— 个人主页：用量热力图与 GitHub ——
+HEATMAP_WEEKS = 53            # 热力图从 52 周前那个星期一画到今天
+GITHUB_API = "https://api.github.com"
+GITHUB_GRAPHQL_URL = "https://api.github.com/graphql"
+GITHUB_CONTRIBUTIONS_URL = "https://github.com/users/{login}/contributions"
+GITHUB_TTL = 6 * 3600         # 贡献日历和仓库数据六小时取一次
+GITHUB_RETRY = 15 * 60        # 取失败了十五分钟后再试，这期间照旧给上一份
+GITHUB_PENDING_RETRY = 120    # commit_activity 回 202（GitHub 还在算）时两分钟后再取
+GITHUB_WAIT = 8               # 第一次有人看、手里还没有数据时，请求最多等这么久
+GITHUB_UNUSED = 14 * 86400    # 两周没人看的缓存清掉
+GITHUB_WORKERS = 6
+MAX_GITHUB_REPOS = 12
+GITHUB_QUERY = (
+    "query($login: String!) { user(login: $login) { contributionsCollection {"
+    " contributionCalendar { totalContributions weeks { contributionDays { date contributionCount } } }"
+    " totalCommitContributions totalPullRequestContributions totalIssueContributions"
+    " totalPullRequestReviewContributions restrictedContributionsCount } } }")
+
 # 令牌桶：(容量, 每补一个令牌的秒数)。write 是契约里的「每台设备 10 秒一次、突发 5」，网页会话按账号同样算；
 # register 没有设备号，只能按来源 IP（connect/start 共用）；poll 是 connect 轮询（应用每 3 秒一次）；
 # auth 管 OAuth 起跳、验证码校验、注册用户名这类登录动作；lookup 管用户名查重和 connect 码查询；
@@ -143,6 +164,40 @@ GITHUB_HANDLE_RE = re.compile(r"[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})")
 GITHUB_REPO_RE = re.compile(r"[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})/[A-Za-z0-9._-]{1,100}")
 X_HANDLE_RE = re.compile(r"[A-Za-z0-9_]{1,15}")
 BIDI_CONTROLS = set("\u200e\u200f\u202a\u202b\u202c\u202d\u202e\u2066\u2067\u2068\u2069")
+TIMEZONE_RE = re.compile(r"[A-Za-z0-9_+-]{1,32}(?:/[A-Za-z0-9_+-]{1,32}){0,2}")
+MASTODON_HANDLE_RE = re.compile(
+    r"@?([A-Za-z0-9_]{1,30})@((?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63})", re.I)
+
+# \u4e2a\u4eba\u4e3b\u9875\u7684\u94fe\u63a5\uff0c\u6309\u4e3b\u9875\u4e0a\u7684\u987a\u5e8f\uff1a\u952e \u2192 (\u5141\u8bb8\u7684\u4e3b\u673a\uff0c\u7b80\u5199\u7684\u6b63\u5219\uff0c\u7b80\u5199\u6362\u6210\u5730\u5740\u7684\u6a21\u677f)\u3002
+# \u4e3b\u673a\u4e3a None \u7684\u6536\u4efb\u610f https \u5730\u5740\uff1bwebsite\u3001github\u3001x \u6709\u81ea\u5df1\u7684\u5217\uff0c\u5176\u4f59\u653e\u5728 users.links_json\u3002
+LINK_KINDS = {
+    "website": (None, None, None),
+    "blog": (None, None, None),
+    "github": (frozenset({"github.com", "www.github.com"}), GITHUB_HANDLE_RE, "https://github.com/{}"),
+    "gitlab": (frozenset({"gitlab.com", "www.gitlab.com"}), re.compile(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,254}"),
+               "https://gitlab.com/{}"),
+    "x": (frozenset({"x.com", "www.x.com", "twitter.com", "www.twitter.com"}), X_HANDLE_RE, "https://x.com/{}"),
+    "bluesky": (frozenset({"bsky.app"}), re.compile(r"(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}", re.I),
+                "https://bsky.app/profile/{}"),
+    "mastodon": (None, None, None),   # \u5b9e\u4f8b\u5404\u4e0d\u76f8\u540c\uff0c\u4efb\u610f https \u5730\u5740\uff1b@name@host \u53e6\u5916\u6362\u7b97
+    "linkedin": (frozenset({"linkedin.com", "www.linkedin.com", "cn.linkedin.com"}), re.compile(r"[A-Za-z0-9-]{3,100}"),
+                 "https://www.linkedin.com/in/{}"),
+    "youtube": (frozenset({"youtube.com", "www.youtube.com", "m.youtube.com"}), re.compile(r"[A-Za-z0-9._-]{3,30}"),
+                "https://www.youtube.com/@{}"),
+    "telegram": (frozenset({"t.me", "telegram.me"}), re.compile(r"[A-Za-z0-9_]{5,32}"), "https://t.me/{}"),
+    "huggingface": (frozenset({"huggingface.co"}), re.compile(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,95}"),
+                    "https://huggingface.co/{}"),
+    "bilibili": (frozenset({"space.bilibili.com", "bilibili.com", "www.bilibili.com", "b23.tv"}), re.compile(r"\d{1,20}"),
+                 "https://space.bilibili.com/{}"),
+    "zhihu": (frozenset({"zhihu.com", "www.zhihu.com"}), re.compile(r"[A-Za-z0-9_-]{1,64}"),
+              "https://www.zhihu.com/people/{}"),
+    "juejin": (frozenset({"juejin.cn"}), re.compile(r"\d{1,24}"), "https://juejin.cn/user/{}"),
+    "v2ex": (frozenset({"v2ex.com", "www.v2ex.com"}), re.compile(r"[A-Za-z0-9_]{1,32}"), "https://www.v2ex.com/member/{}"),
+    "weibo": (frozenset({"weibo.com", "www.weibo.com", "weibo.cn", "m.weibo.cn"}), re.compile(r"\d{5,20}"),
+              "https://weibo.com/u/{}"),
+    "xiaohongshu": (frozenset({"xiaohongshu.com", "www.xiaohongshu.com", "xhslink.com"}), None, None),
+}
+LINK_COLUMNS = ("website", "github", "x")
 
 
 class ApiError(Exception):
@@ -214,7 +269,7 @@ class Settings:
 
     def __init__(self, origin=DEFAULT_ORIGIN, insecure_cookies=False, github_client_id="", github_client_secret="",
                  google_client_id="", google_client_secret="", smtp_host="", smtp_port=0, smtp_user="",
-                 smtp_password="", mail_from=""):
+                 smtp_password="", mail_from="", github_token=""):
         self.origin = (origin or DEFAULT_ORIGIN).strip().rstrip("/")
         self.insecure_cookies = bool(insecure_cookies)
         self.github_client_id = github_client_id or ""
@@ -226,6 +281,7 @@ class Settings:
         self.smtp_user = smtp_user or ""
         self.smtp_password = smtp_password or ""
         self.mail_from = mail_from or ""
+        self.github_token = github_token or ""
 
     @classmethod
     def from_env(cls, env=None):
@@ -247,6 +303,7 @@ class Settings:
             smtp_user=get("QUOTA_RUN_SMTP_USER"),
             smtp_password=env.get("QUOTA_RUN_SMTP_PASSWORD") or "",
             mail_from=get("QUOTA_RUN_MAIL_FROM"),
+            github_token=get("QUOTA_RUN_GITHUB_TOKEN"),
         )
 
     @property
@@ -263,11 +320,11 @@ class Settings:
 
     def __repr__(self):
         return (f"Settings(origin={self.origin!r}, github={self.github}, google={self.google}, "
-                f"email={self.email}, insecure_cookies={self.insecure_cookies})")
+                f"email={self.email}, github_token={bool(self.github_token)}, insecure_cookies={self.insecure_cookies})")
 
 
 def urllib_http(method, url, headers=None, body=None):
-    """默认的出站 HTTP，只用来向 GitHub、Google 换令牌和取用户信息。返回 (状态码, 响应体)。
+    """默认的出站 HTTP：向 GitHub、Google 换令牌和取用户信息，以及取个人主页的 GitHub 公开数据。返回 (状态码, 响应体)。
 
     测试注入假的同签名函数，不连外网。
     """
@@ -970,7 +1027,28 @@ def migrate_v4(service):
         service.db.execute("INSERT INTO schema_version(version) VALUES (4)")
 
 
-MIGRATIONS = [(1, SCHEMA_V1), (2, SCHEMA_V2), (3, migrate_v3), (4, migrate_v4)]
+def migrate_v5(service):
+    """个人主页：更多链接、热力图用的时区、两个显示开关，以及 GitHub 公开数据的缓存。"""
+    db = service.db
+    with service.transaction():
+        # 可重复执行：已经有的列不再加
+        columns = {row[1] for row in db.execute("PRAGMA table_info(users)")}
+        for column, definition in (("links_json", "TEXT NOT NULL DEFAULT '{}'"), ("timezone", "TEXT"),
+                                   ("show_activity", "INTEGER NOT NULL DEFAULT 1"),
+                                   ("show_github", "INTEGER NOT NULL DEFAULT 1")):
+            if column not in columns:
+                db.execute(f"ALTER TABLE users ADD COLUMN {column} {definition}")
+        # key 是 user:<GitHub 数字 id> 或 repo:<owner/name 小写>；payload 是整理好的 JSON。
+        # retry_at 之前不再去取（失败退避、GitHub 还在算）；used_at 是最近一次有人看的时间
+        db.execute(
+            "CREATE TABLE IF NOT EXISTS github_cache ("
+            " key TEXT PRIMARY KEY, payload TEXT, fetched_at INTEGER NOT NULL DEFAULT 0,"
+            " retry_at INTEGER NOT NULL DEFAULT 0, used_at INTEGER NOT NULL DEFAULT 0"
+            ") WITHOUT ROWID")
+        db.execute("INSERT INTO schema_version(version) VALUES (5)")
+
+
+MIGRATIONS = [(1, SCHEMA_V1), (2, SCHEMA_V2), (3, migrate_v3), (4, migrate_v4), (5, migrate_v5)]
 
 PUBLIC_TIERS = "('verified', 'standard')"   # flagged 和 unranked 不上榜、不进个人页和统计
 PROVIDER_ACCOUNT_ID_RE = re.compile(r"[0-9a-f]{16}")
@@ -1036,6 +1114,7 @@ class RunService:
         self._buckets = {}
         self._cache = {}
         self._last_purge = 0
+        self._github_jobs = {}    # 正在后台取的 GitHub 缓存键 → 线程，同一个键同时只取一次
         self.migrate()
 
     def close(self):
@@ -1077,6 +1156,10 @@ class RunService:
             if request.method == "GET" and route in ("/auth/github/callback", "/auth/google/callback"):
                 # 回调要向 GitHub / Google 发请求，不能整段占着锁；它自己分段加锁
                 response = self.oauth_callback(request, route.split("/")[2])
+            elif request.method == "GET" and route.startswith("/users/") and route.endswith("/github") \
+                    and route.count("/") == 3:
+                # 可能要等 GitHub 的数据，同样自己分段加锁
+                response = self.user_github(request, unquote(route[len("/users/"):-len("/github")]))
             else:
                 with self.lock:
                     response = self._route(request, route)
@@ -1366,6 +1449,7 @@ class RunService:
         self.db.execute("DELETE FROM email_codes WHERE expires_at < ?", (now - EMAIL_CODE_GRACE,))
         self.db.execute("DELETE FROM oauth_states WHERE created_at < ?", (now - OAUTH_TTL,))
         self.db.execute("DELETE FROM connect_requests WHERE expires_at < ?", (now - CONNECT_GRACE,))
+        self.db.execute("DELETE FROM github_cache WHERE used_at < ?", (now - GITHUB_UNUSED,))
 
     def account_hmac(self, digest):
         # 只存 HMAC：数据库泄露也不能拿常见邮箱去撞出是谁
@@ -1597,6 +1681,10 @@ class RunService:
             owned = [tuple(r) for r in self.db.execute(
                 "SELECT account_hmac, provider FROM account_owners WHERE user_id = ?", (user_id,))]
             self.db.executemany("DELETE FROM nonces WHERE scope = ?", [(d,) for d in device_ids])
+            # 主页上取过的 GitHub 贡献日历一并删掉；仓库数据不属于某个人，留给两周无人看后的清理
+            self.db.execute(
+                "DELETE FROM github_cache WHERE key IN (SELECT 'user:' || subject FROM identities"
+                " WHERE user_id = ? AND provider = 'github')", (user_id,))
             # identities 删掉时 sessions 跟着级联删除；email_codes、oauth_states 里的 link_user_id 同样级联
             for table in ("snapshots", "activity", "runs", "projects", "account_owners", "account_bindings", "devices",
                           "connect_requests", "identities"):
@@ -1622,10 +1710,10 @@ class RunService:
 
     def identities_payload(self, user_id):
         rows = self.db.execute(
-            "SELECT id, provider, email, name, linked_at FROM identities WHERE user_id = ? ORDER BY linked_at, rowid",
+            "SELECT id, provider, email, name, login, linked_at FROM identities WHERE user_id = ? ORDER BY linked_at, rowid",
             (user_id,))
         return [{"id": row["id"], "provider": row["provider"], "email": row["email"], "name": row["name"],
-                 "linkedAt": row["linked_at"]} for row in rows]
+                 "login": row["login"], "linkedAt": row["linked_at"]} for row in rows]
 
     def save_identity(self, provider, subject, email, verified, name, login, now):
         """按 (provider, subject) 新建或更新身份（邮箱、名字以登录时提供方给的为准），返回 dict。"""
@@ -2348,9 +2436,26 @@ class RunService:
             links = body["links"] or {}
             if not isinstance(links, dict):
                 raise ApiError(400, "invalid_links", "links must be an object.")
-            for field in ("website", "github", "x"):
-                if field in links:
-                    updates[field] = profile_link(field, links[field])
+            # 没传的链接保持原值；认不出的键忽略（应用只认 website、github、x，只会传这三个）
+            extra = json.loads(user["links_json"] or "{}")
+            for field in LINK_KINDS:
+                if field not in links:
+                    continue
+                url = profile_link(field, links[field])
+                if field in LINK_COLUMNS:
+                    updates[field] = url
+                elif url is None:
+                    extra.pop(field, None)
+                else:
+                    extra[field] = url
+            updates["links_json"] = json.dumps({k: extra[k] for k in LINK_KINDS if extra.get(k)}, separators=(",", ":"))
+        if "timezone" in body:
+            updates["timezone"] = profile_timezone(body["timezone"])
+        for field, column in (("showActivity", "show_activity"), ("showGithub", "show_github")):
+            if field in body:
+                if not isinstance(body[field], bool):
+                    raise ApiError(400, "invalid_profile", f"{field} must be true or false.")
+                updates[column] = int(body[field])
         if updates:
             assignments = ", ".join(f"{column} = ?" for column in updates)
             self.db.execute(f"UPDATE users SET {assignments} WHERE id = ?", (*updates.values(), user["id"]))
@@ -2714,13 +2819,271 @@ class RunService:
             "bests": bests,
             "recent": [run_payload(row) for row in recent],
             "stats": {"runs": totals[0], "verifiedRuns": totals[1], "providers": totals[2], "activeDays": active_days},
+            "activity": self.activity_payload(user) if user["show_activity"] else None,
+            "github": self.github_brief(user),
         }
+
+    # —— 个人主页：用量热力图 ——
+
+    def activity_payload(self, user):
+        """近 53 周每天的 token 数（计分设备上传的活动分钟），按这个人的时区分日；只列有用量的日子。"""
+        name, zone = effective_timezone(user)
+        today = datetime.fromtimestamp(self.now(), zone).date()
+        first = today - timedelta(days=today.weekday() + (HEATMAP_WEEKS - 1) * 7)
+        # 往前多取一天：时区偏移最多 14 小时，按 UTC 算的起点不能把第一天的前半截漏掉
+        since = int(datetime(first.year, first.month, first.day, tzinfo=timezone.utc).timestamp()) - 86400
+        # 按 15 分钟一桶汇总再换算日期：半点、三刻的时区（印度、尼泊尔）也分得准，行数又比按分钟少得多
+        rows = self.db.execute(
+            "SELECT minute / 900 AS bucket, source, SUM(tokens) FROM activity"
+            " WHERE user_id = ? AND counted = 1 AND tokens > 0 AND minute >= ?"
+            " GROUP BY bucket, source", (user["id"], since)).fetchall()
+        offsets = {}
+        days = {}
+        for bucket, source, tokens in rows:
+            start = bucket * 900
+            hour = start // 3600
+            if hour not in offsets:
+                offsets[hour] = int(datetime.fromtimestamp(hour * 3600, timezone.utc).astimezone(zone)
+                                    .utcoffset().total_seconds())
+            date = datetime.fromtimestamp(start + offsets[hour], timezone.utc).date()
+            if first <= date <= today:
+                sources = days.setdefault(date, {})
+                sources[source] = sources.get(source, 0) + tokens
+        return {
+            "timezone": name,
+            "from": first.isoformat(),
+            "to": today.isoformat(),
+            "days": [{"date": date.isoformat(), "tokens": sum(sources.values()),
+                      "sources": dict(sorted(sources.items(), key=lambda item: -item[1]))}
+                     for date, sources in sorted(days.items())],
+            "totalTokens": sum(sum(sources.values()) for sources in days.values()),
+        }
+
+    # —— 个人主页：GitHub ——
+
+    def github_identity(self, user_id):
+        """这个账号最近关联的 GitHub 登录身份：(数字 id, 登录名)。只认登录过的身份，不认主页上手填的 GitHub 链接。"""
+        row = self.db.execute(
+            "SELECT subject, login FROM identities WHERE user_id = ? AND provider = 'github'"
+            " ORDER BY linked_at DESC, rowid DESC LIMIT 1", (user_id,)).fetchone()
+        return (row["subject"], row["login"]) if row else None
+
+    def github_brief(self, user):
+        identity = self.github_identity(user["id"]) if user["show_github"] else None
+        if identity is None:
+            return None
+        cached = self.github_cached("user:" + identity[0])
+        login = (cached or {}).get("login") or identity[1]
+        return {"login": login, "url": f"https://github.com/{login}"} if login else None
+
+    def github_cached(self, key):
+        row = self.db.execute("SELECT payload FROM github_cache WHERE key = ?", (key,)).fetchone()
+        return json.loads(row["payload"]) if row and row["payload"] else None
+
+    def user_github(self, request, raw_username):
+        """GET /users/<username>/github：GitHub 贡献日历（只对关联了 GitHub 登录的人）和主页项目里各仓库的数据。
+
+        数据在 github_cache 里，过期了在后台线程里重取，不占服务锁；手里一份都没有时这个请求最多等 GITHUB_WAIT 秒，
+        还没取到就回 pending，页面过一会儿再来。
+        """
+        with self.lock:
+            self.take_token("ip:" + request.ip, "public")
+            username = normalize_username(raw_username)
+            user = self.db.execute("SELECT * FROM users WHERE username = ?", (username,)).fetchone() \
+                if username else None
+            if user is None:
+                return Response(404, ApiError(404, "user_not_found", "No such user.").payload(), public=True)
+            identity = self.github_identity(user["id"]) if user["show_github"] else None
+            repos = []
+            for project in self.projects_payload(user["id"]):
+                repo = github_repo(project["github"])
+                if repo and repo.lower() not in {r.lower() for r in repos}:
+                    repos.append(repo)
+            repos = repos[:MAX_GITHUB_REPOS]
+            keys = (["user:" + identity[0]] if identity else []) + ["repo:" + repo.lower() for repo in repos]
+            now = self.now()
+            rows = {row["key"]: row for row in self.db.execute(
+                f"SELECT * FROM github_cache WHERE key IN ({','.join('?' * len(keys))})", keys)} if keys else {}
+            if keys:
+                # 记下有人看过（一小时最多写一次），两周没人看的由 _purge 清掉
+                self.db.executemany(
+                    "INSERT INTO github_cache(key, used_at) VALUES (?, ?) ON CONFLICT(key) DO UPDATE"
+                    " SET used_at = excluded.used_at WHERE github_cache.used_at < excluded.used_at - 3600",
+                    [(key, now) for key in keys])
+            jobs = {}
+            for key in keys:
+                row = rows.get(key)
+                due = row is None or (row["fetched_at"] + GITHUB_TTL <= now and row["retry_at"] <= now) \
+                    or (row["payload"] is None and row["retry_at"] <= now)
+                if due:
+                    target = (identity[0], identity[1]) if key.startswith("user:") else repos[
+                        [r.lower() for r in repos].index(key[len("repo:"):])]
+                    jobs[key] = self.start_github_job(key, target)
+            waiting = [jobs[key] for key in keys if key in jobs and (rows.get(key) is None or rows[key]["payload"] is None)]
+        deadline = time.monotonic() + GITHUB_WAIT
+        for job in waiting:
+            job.join(max(0.0, deadline - time.monotonic()))
+        with self.lock:
+            payloads = {key: self.github_cached(key) for key in keys}
+        pending = any(key in jobs and jobs[key].is_alive() and payloads[key] is None for key in keys)
+        body = {"login": None, "url": None, "calendar": None, "totals": None, "repos": [], "pending": pending}
+        fetched = []
+        if identity:
+            data = payloads["user:" + identity[0]]
+            if data:
+                body.update(login=data.get("login"), url=data.get("url"), calendar=data.get("calendar"),
+                            totals=data.get("totals"))
+                fetched.append(data.get("fetchedAt") or 0)
+            else:
+                body.update(login=identity[1], url=f"https://github.com/{identity[1]}" if identity[1] else None)
+        for repo in repos:
+            data = payloads["repo:" + repo.lower()]
+            if data:
+                body["repos"].append(dict(data, repo=data.get("repo") or repo))
+                fetched.append(data.get("fetchedAt") or 0)
+        body["fetchedAt"] = min(fetched) if fetched else None
+        return Response(200, body, public=not pending)
+
+    def start_github_job(self, key, target):
+        job = self._github_jobs.get(key)
+        if job is None or not job.is_alive():
+            job = threading.Thread(target=self.refresh_github, args=(key, target), daemon=True)
+            self._github_jobs[key] = job
+            job.start()
+        return job
+
+    def refresh_github(self, key, target):
+        """后台线程：取一份 GitHub 数据写进缓存。取失败保留上一份，GITHUB_RETRY 之后再试。"""
+        retry = GITHUB_RETRY
+        payload = None
+        try:
+            if key.startswith("user:"):
+                payload = self.fetch_github_profile(*target)
+            else:
+                payload, pending = self.fetch_github_repo(target)
+                if pending:
+                    retry = GITHUB_PENDING_RETRY
+        except Exception as error:  # noqa: BLE001 — 网络、JSON、页面改版都只记一行
+            print(f"github: refreshing {key.partition(':')[0]} failed: {type(error).__name__}", file=sys.stderr)
+        with self.lock:
+            now = self.now()
+            if payload is not None:
+                payload["fetchedAt"] = now
+                # 仓库数据还缺提交统计（GitHub 在算）时照样存下，但 fetched_at 不算数，两分钟后再取
+                fetched_at = now if retry != GITHUB_PENDING_RETRY else 0
+                self.db.execute(
+                    "INSERT INTO github_cache(key, payload, fetched_at, retry_at, used_at) VALUES (?, ?, ?, ?, ?)"
+                    " ON CONFLICT(key) DO UPDATE SET payload = excluded.payload, fetched_at = excluded.fetched_at,"
+                    " retry_at = excluded.retry_at",
+                    (key, json.dumps(payload, separators=(",", ":")), fetched_at, now + retry if not fetched_at else 0, now))
+                if key.startswith("user:"):
+                    # GitHub 上改过名：身份里的登录名跟着改
+                    self.db.execute("UPDATE identities SET login = ? WHERE provider = 'github' AND subject = ?",
+                                    (payload.get("login"), key[len("user:"):]))
+                self._cache.clear()
+            else:
+                self.db.execute(
+                    "INSERT INTO github_cache(key, retry_at, used_at) VALUES (?, ?, ?)"
+                    " ON CONFLICT(key) DO UPDATE SET retry_at = excluded.retry_at", (key, now + retry, now))
+
+    def github_headers(self, accept="application/vnd.github+json"):
+        headers = {"Accept": accept, "User-Agent": USER_AGENT, "X-GitHub-Api-Version": "2022-11-28"}
+        if self.settings.github_token:
+            headers["Authorization"] = f"Bearer {self.settings.github_token}"
+        elif self.settings.github:
+            # 没有令牌时用 OAuth 应用的 client id / secret：公开数据每小时 5000 次，不用的话按 IP 只有 60 次
+            pair = f"{self.settings.github_client_id}:{self.settings.github_client_secret}".encode("utf-8")
+            headers["Authorization"] = "Basic " + base64.b64encode(pair).decode("ascii")
+        return headers
+
+    def github_json(self, method, url, body=None, allow=(200,)):
+        headers = self.github_headers()
+        if body is not None:
+            headers["Content-Type"] = "application/json"
+        status, raw = self.http(method, url, headers, body)
+        if status not in allow:
+            raise OAuthFailure(f"HTTP {status}")
+        return status, (json.loads(raw.decode("utf-8")) if raw else None)
+
+    def fetch_github_profile(self, subject, known_login):
+        """按数字 id 取当前登录名（改过名也跟得上），再取近一年的贡献日历；有令牌时连提交、PR 等分项一起取。"""
+        status, user = self.github_json("GET", f"{GITHUB_API}/user/{quote(subject, safe='')}", allow=(200, 404))
+        if status == 404:
+            return {"login": None, "url": None, "calendar": None, "totals": None, "gone": True}
+        login = user.get("login") if isinstance(user, dict) else None
+        if not isinstance(login, str) or not GITHUB_HANDLE_RE.fullmatch(login):
+            raise OAuthFailure("no login")
+        calendar = totals = None
+        if self.settings.github_token:
+            try:
+                calendar, totals = self.fetch_github_graphql(login)
+            except (OAuthFailure, ValueError, KeyError, TypeError):
+                calendar = totals = None
+        if calendar is None:
+            calendar = self.fetch_github_calendar_page(login)
+        return {"login": login, "url": f"https://github.com/{login}", "calendar": calendar, "totals": totals}
+
+    def fetch_github_graphql(self, login):
+        body = json.dumps({"query": GITHUB_QUERY, "variables": {"login": login}}).encode("utf-8")
+        _, data = self.github_json("POST", GITHUB_GRAPHQL_URL, body)
+        collection = data["data"]["user"]["contributionsCollection"]
+        days = [(day["date"], int(day["contributionCount"]))
+                for week in collection["contributionCalendar"]["weeks"] for day in week["contributionDays"]]
+        calendar = calendar_payload(days)
+        totals = {"commits": int(collection["totalCommitContributions"]),
+                  "pullRequests": int(collection["totalPullRequestContributions"]),
+                  "issues": int(collection["totalIssueContributions"]),
+                  "reviews": int(collection["totalPullRequestReviewContributions"]),
+                  "private": int(collection["restrictedContributionsCount"])}
+        return calendar, totals
+
+    def fetch_github_calendar_page(self, login):
+        """没有令牌时读 github.com 公开的贡献日历页面（HTML），只拿到每天的贡献数。"""
+        headers = {"Accept": "text/html", "User-Agent": USER_AGENT}
+        status, raw = self.http("GET", GITHUB_CONTRIBUTIONS_URL.format(login=quote(login, safe="")), headers)
+        if status != 200:
+            raise OAuthFailure(f"HTTP {status}")
+        days = parse_contribution_page(raw.decode("utf-8", "replace"))
+        if len(days) < 300:   # 一年少说 365 格；太少说明页面改版了，不能当成真数据
+            raise OAuthFailure("calendar layout")
+        return calendar_payload(days)
+
+    def fetch_github_repo(self, repo):
+        """仓库的星标、分叉、语言、最近推送，以及近 52 周每周的提交数。返回 (payload, 提交统计是否还在算)。"""
+        status, meta = self.github_json("GET", f"{GITHUB_API}/repos/{repo}", allow=(200, 404, 451))
+        if status != 200:
+            return {"repo": repo, "missing": True}, False
+        payload = {
+            "repo": meta.get("full_name") if isinstance(meta.get("full_name"), str) else repo,
+            "url": meta.get("html_url") if https_url(meta.get("html_url"), hosts={"github.com"}) else f"https://github.com/{repo}",
+            "description": clip_text(meta.get("description"), 200),
+            "stars": as_int(meta.get("stargazers_count")),
+            "forks": as_int(meta.get("forks_count")),
+            "language": clip_text(meta.get("language"), 40),
+            "pushedAt": iso_seconds(meta.get("pushed_at")),
+            "archived": meta.get("archived") is True,
+            "weeks": None,
+            "commits": None,
+        }
+        status, weeks = self.github_json("GET", f"{GITHUB_API}/repos/{repo}/stats/commit_activity", allow=(200, 202, 204))
+        if status == 202:
+            return payload, True
+        counts = [as_int(week.get("total")) or 0 for week in weeks if isinstance(week, dict)] \
+            if isinstance(weeks, list) else []
+        counts = ([0] * 52 + counts)[-52:]
+        payload.update(weeks=counts, commits=sum(counts))
+        return payload, False
 
 
 # —— 响应形状 ——
 
 def links_payload(user):
-    return {"website": user["website"], "github": user["github"], "x": user["x"]}
+    """全部链接，按主页上的顺序；没填的是 null。"""
+    try:
+        extra = json.loads(user["links_json"] or "{}")
+    except ValueError:
+        extra = {}
+    return {kind: (user[kind] if kind in LINK_COLUMNS else extra.get(kind)) or None for kind in LINK_KINDS}
 
 
 def user_brief(user):
@@ -2729,7 +3092,20 @@ def user_brief(user):
 
 def private_user(user):
     return {"username": user["username"], "displayName": user["display_name"], "bio": user["bio"],
-            "region": user["region"], "links": links_payload(user), "joinedAt": user["joined_at"]}
+            "region": user["region"], "links": links_payload(user), "joinedAt": user["joined_at"],
+            "timezone": user["timezone"], "showActivity": bool(user["show_activity"]),
+            "showGithub": bool(user["show_github"])}
+
+
+def effective_timezone(user):
+    """热力图按这个时区分日：自己选的，没选时中国区按 Asia/Shanghai，其余按 UTC。返回 (名字, ZoneInfo)。"""
+    for name in (user["timezone"], "Asia/Shanghai" if user["region"] == "china" else "UTC"):
+        if name:
+            try:
+                return name, ZoneInfo(name)
+            except (ZoneInfoNotFoundError, ValueError):
+                continue
+    return "UTC", timezone.utc
 
 
 def run_payload(row):
@@ -2844,21 +3220,93 @@ def parse_json_object(body):
 
 
 def profile_link(field, value):
-    """个人链接统一存成 https 地址；GitHub 和 X 也接受账号名（可带 @）。"""
+    """个人链接统一存成 https 地址。有简写的平台也接受账号名（可带 @），Mastodon 接受 @name@实例。"""
     if value is None or (isinstance(value, str) and not value.strip()):
         return None
-    text = value.strip().lstrip("@") if isinstance(value, str) else None
-    if field == "website":
-        url = https_url(value, limit=200)
-    elif field == "github":
-        url = f"https://github.com/{text}" if text and GITHUB_HANDLE_RE.fullmatch(text) else \
-            https_url(value, limit=200, hosts={"github.com", "www.github.com"})
-    else:
-        url = f"https://x.com/{text}" if text and X_HANDLE_RE.fullmatch(text) else \
-            https_url(value, limit=200, hosts={"x.com", "www.x.com", "twitter.com", "www.twitter.com"})
+    hosts, handle_re, template = LINK_KINDS[field]
+    url = None
+    if isinstance(value, str):
+        text = value.strip()
+        mastodon = MASTODON_HANDLE_RE.fullmatch(text) if field == "mastodon" else None
+        handle = text.lstrip("@")
+        if mastodon:
+            url = f"https://{mastodon.group(2).lower()}/@{mastodon.group(1)}"
+        elif handle_re is not None and handle_re.fullmatch(handle):
+            url = template.format(handle)
+        else:
+            url = https_url(text, limit=200, hosts=hosts)
     if url is None:
-        raise ApiError(400, "invalid_links", f"links.{field} must be an https:// URL or a handle.")
+        kind = "an https:// URL or a handle" if handle_re is not None or field == "mastodon" else "an https:// URL"
+        raise ApiError(400, "invalid_links", f"links.{field} must be {kind}.")
     return url
+
+
+def profile_timezone(value):
+    """IANA 时区名（Asia/Shanghai）；null 或空串清空，回到按地区的默认值。"""
+    if value is None or value == "":
+        return None
+    if isinstance(value, str) and TIMEZONE_RE.fullmatch(value) and ".." not in value:
+        try:
+            ZoneInfo(value)
+            return value
+        except (ZoneInfoNotFoundError, ValueError):
+            pass
+    raise ApiError(400, "invalid_timezone", "timezone must be an IANA time zone name such as Asia/Shanghai.")
+
+
+CALENDAR_CELL_RE = re.compile(r"<td\b[^>]*\bContributionCalendar-day\b[^>]*>")
+CALENDAR_DATE_RE = re.compile(r'\bdata-date="(\d{4}-\d{2}-\d{2})"')
+CALENDAR_ID_RE = re.compile(r'\bid="([^"]+)"')
+CALENDAR_TIP_RE = re.compile(r'<tool-tip\b[^>]*\bfor="([^"]+)"[^>]*>([^<]*)</tool-tip>')
+CALENDAR_COUNT_RE = re.compile(r"\s*(\d[\d,]*)\s+contributions?\b")
+
+
+def parse_contribution_page(html):
+    """github.com/users/<login>/contributions：每个格子是带 data-date 的 td，数字在 for 指向它的 tool-tip 里
+    （「12 contributions on May 1st.」「No contributions on …」）。返回 [(日期, 贡献数)]。"""
+    tips = {}
+    for cell_id, text in CALENDAR_TIP_RE.findall(html):
+        match = CALENDAR_COUNT_RE.match(text)
+        tips[cell_id] = int(match.group(1).replace(",", "")) if match else 0
+    days = []
+    for tag in CALENDAR_CELL_RE.findall(html):
+        date, cell_id = CALENDAR_DATE_RE.search(tag), CALENDAR_ID_RE.search(tag)
+        if date:
+            days.append((date.group(1), tips.get(cell_id.group(1), 0) if cell_id else 0))
+    return days
+
+
+def calendar_payload(days):
+    """[(日期, 贡献数)] → {total, from, to, days}；days 只列有贡献的日子，按日期排。"""
+    ordered = sorted((date, count) for date, count in days if count >= 0)
+    if not ordered:
+        return {"total": 0, "from": None, "to": None, "days": []}
+    return {"total": sum(count for _, count in ordered), "from": ordered[0][0], "to": ordered[-1][0],
+            "days": [{"date": date, "count": count} for date, count in ordered if count > 0]}
+
+
+def github_repo(url):
+    """项目里存的 https://github.com/owner/repo（可能带 .git 或更深的路径）→ owner/repo；不是仓库地址返回 None。"""
+    if not isinstance(url, str):
+        return None
+    parts = urlsplit(url)
+    if parts.hostname not in ("github.com", "www.github.com"):
+        return None
+    segments = [s for s in parts.path.split("/") if s]
+    if len(segments) < 2:
+        return None
+    repo = f"{segments[0]}/{segments[1].removesuffix('.git')}"
+    return repo if GITHUB_REPO_RE.fullmatch(repo) else None
+
+
+def iso_seconds(value):
+    """GitHub 的 2026-09-10T12:00:00Z → Unix 秒。"""
+    if not isinstance(value, str):
+        return None
+    try:
+        return int(datetime.fromisoformat(value.replace("Z", "+00:00")).timestamp())
+    except ValueError:
+        return None
 
 
 def validate_project(index, item):

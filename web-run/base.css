@@ -82,6 +82,13 @@
   --border-strong: 1px solid var(--color-neutral-300);
   --focus: 2px solid var(--color-secondary);
   --ease: 150ms ease-out;
+
+  /* 热力图五档：空、四档绿（同一个绿色由浅到深） */
+  --heat-0: var(--color-neutral-100);
+  --heat-1: #bbf7d0;
+  --heat-2: #4ade80;
+  --heat-3: var(--color-primary);
+  --heat-4: var(--color-primary-ink);
 }
 
 *, *::before, *::after { box-sizing: border-box; }
@@ -389,6 +396,34 @@ table { border-collapse: collapse; }
 .swatch-dot { display: inline-block; width: var(--space-2); height: var(--space-2); border-radius: var(--radius-full); background: var(--color-primary); }
 .swatch-tick { display: inline-block; width: 3px; height: var(--space-3); border-radius: var(--radius-sm); background: var(--text-1); }
 .swatch-tick--window { width: 0; border-left: 1.5px dashed var(--text-3); background: none; }
+
+/* ── 热力图：近 53 周一格一天（common.js 的 heatmap 画），窄屏在自己的盒子里横向滚动 ── */
+
+.hm { display: grid; gap: var(--space-2); min-width: 0; }
+.hm__scroll { max-width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; scrollbar-width: thin; }
+.hm__svg { overflow: visible; }
+.hm__lbl { fill: var(--text-3); font-family: var(--font-sans); font-size: var(--text-xs); }
+.hm__c { fill: var(--heat-0); }
+rect.hm__c { cursor: default; transition: stroke var(--ease); }
+rect.hm__c:hover { stroke: var(--text-1); stroke-width: 1; }
+.hm__c--1 { fill: var(--heat-1); }
+.hm__c--2 { fill: var(--heat-2); }
+.hm__c--3 { fill: var(--heat-3); }
+.hm__c--4 { fill: var(--heat-4); }
+.hm__foot { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-2) var(--space-4); color: var(--text-2); font-size: var(--text-xs); }
+.hm__legend { display: inline-flex; align-items: center; gap: var(--space-1); }
+.hm__legend span:first-child { margin-right: var(--space-1); }
+.hm__legend span:last-child { margin-left: var(--space-1); }
+.hm__legend i { width: var(--space-3); height: var(--space-3); border-radius: var(--space-half); background: var(--heat-0); }
+.hm__legend i.hm__c--1 { background: var(--heat-1); }
+.hm__legend i.hm__c--2 { background: var(--heat-2); }
+.hm__legend i.hm__c--3 { background: var(--heat-3); }
+.hm__legend i.hm__c--4 { background: var(--heat-4); }
+
+/* 悬停提示：浮在页面上，用第二档阴影 */
+.hm-tip { position: fixed; left: 0; top: 0; z-index: 50; max-width: 280px; padding: var(--space-2) var(--space-3); border-radius: var(--radius); background: var(--color-neutral-900); color: var(--color-neutral-0); box-shadow: var(--shadow-2); font-size: var(--text-xs); line-height: 1.5; pointer-events: none; }
+.hm-tip b { font-weight: 600; }
+.hm-tip small { display: block; color: var(--color-neutral-300); font-size: var(--text-xs); }
 
 /* ── 加载骨架 ─────────────────────────────────────────────────────────── */
 

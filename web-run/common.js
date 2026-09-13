@@ -300,6 +300,53 @@
     each(document.querySelectorAll("a.run-lang"), function (a) { a.setAttribute("href", langHref(search)); });
   }
 
+  // 主页上的链接，顺序与接口 links 的键一致。handle：从地址里取出显示用的账号名（取不出就显示平台名）
+  var LINK_KINDS = [
+    { kind: "website", en: "Website", zh: "网站" },
+    { kind: "blog", en: "Blog", zh: "博客" },
+    { kind: "github", en: "GitHub", zh: "GitHub", handle: /^\/([^\/]+)\/?$/ },
+    { kind: "gitlab", en: "GitLab", zh: "GitLab", handle: /^\/([^\/]+)\/?$/ },
+    { kind: "x", en: "X", zh: "X", handle: /^\/([^\/]+)\/?$/, at: true },
+    { kind: "bluesky", en: "Bluesky", zh: "Bluesky", handle: /^\/profile\/([^\/]+)\/?$/, at: true },
+    { kind: "mastodon", en: "Mastodon", zh: "Mastodon" },
+    { kind: "linkedin", en: "LinkedIn", zh: "LinkedIn" },
+    { kind: "youtube", en: "YouTube", zh: "YouTube" },
+    { kind: "telegram", en: "Telegram", zh: "Telegram" },
+    { kind: "huggingface", en: "Hugging Face", zh: "Hugging Face" },
+    { kind: "bilibili", en: "Bilibili", zh: "哔哩哔哩" },
+    { kind: "zhihu", en: "Zhihu", zh: "知乎" },
+    { kind: "juejin", en: "Juejin", zh: "掘金" },
+    { kind: "v2ex", en: "V2EX", zh: "V2EX" },
+    { kind: "weibo", en: "Weibo", zh: "微博" },
+    { kind: "xiaohongshu", en: "Xiaohongshu", zh: "小红书" },
+  ];
+
+  function linkKind(kind) {
+    for (var i = 0; i < LINK_KINDS.length; i++) if (LINK_KINDS[i].kind === kind) return LINK_KINDS[i];
+    return null;
+  }
+
+  function linkName(kind) {
+    var k = linkKind(kind);
+    return k ? t(k.en, k.zh) : String(kind || "");
+  }
+
+  // 主页上链接旁边的字：网站、博客写域名；GitHub、X 这类写账号名；其余写平台名
+  function linkLabel(kind, url) {
+    var k = linkKind(kind);
+    if (kind === "website" || kind === "blog") return hostOf(url);
+    if (kind === "mastodon") {
+      var m = /^\/@([^\/]+)\/?$/.exec(url.pathname);
+      if (m) return "@" + decodeURIComponent(m[1]) + "@" + url.host;
+    }
+    var match = k && k.handle ? k.handle.exec(url.pathname) : null;
+    if (match) {
+      var name = decodeURIComponent(match[1]);
+      return k.at ? "@" + name : name;
+    }
+    return linkName(kind);
+  }
+
   // 只放行 https 链接；GitHub 和 X 也接受裸用户名
   function safeLink(kind, value) {
     var v = String(value || "").trim();
@@ -509,8 +556,149 @@
 
   function setBusy(el, busy) { if (el) el.setAttribute("aria-busy", busy ? "true" : "false"); }
 
+  /* ── 热力图：近 53 周，一格一天（个人主页的 token 用量和 GitHub 贡献共用） ── */
+
+  var DAY_MS = 86400000;
+  var HEAT = { cell: 12, step: 16, left: 32, top: 20 };
+  var COMPACT = new Intl.NumberFormat(LOCALE, { notation: "compact", maximumFractionDigits: 1 });
+  var CAL_FORMAT = new Intl.DateTimeFormat(LOCALE, { year: "numeric", month: ZH ? "long" : "short", day: "numeric", weekday: "short", timeZone: "UTC" });
+  var CAL_SHORT = new Intl.DateTimeFormat(LOCALE, { month: ZH ? "long" : "short", day: "numeric", timeZone: "UTC" });
+  var MONTH_SHORT = new Intl.DateTimeFormat(LOCALE, { month: "short", timeZone: "UTC" });
+  var heatTips = {};
+  var heatCount = 0;
+
+  function compact(n) { return has(n) ? COMPACT.format(Number(n)) : "—"; }
+
+  // 接口里的日期是不带时区的「2026-09-12」，按 UTC 零点换成毫秒来算，显示时也按 UTC 格式化
+  function dayMs(date) {
+    var m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(date || ""));
+    return m ? Date.UTC(+m[1], +m[2] - 1, +m[3]) : NaN;
+  }
+  function dayKey(ms) { return new Date(ms).toISOString().slice(0, 10); }
+  function calendarDate(date, short) { var ms = dayMs(date); return isNaN(ms) ? "" : (short ? CAL_SHORT : CAL_FORMAT).format(new Date(ms)); }
+
+  // 画出来的范围：从 52 周前的星期一到 to 那天
+  function heatRange(to) {
+    var end = dayMs(to);
+    if (isNaN(end)) end = Date.UTC(new Date().getFullYear(), new Date().getMonth(), new Date().getDate());
+    var weekday = (new Date(end).getUTCDay() + 6) % 7;
+    return { start: end - (weekday + 52 * 7) * DAY_MS, end: end };
+  }
+
+  // 范围里的合计、有数的天数、最长连续、当前连续（今天还是 0 就从昨天往回数）、单日最高
+  function heatStats(values, to) {
+    var range = heatRange(to);
+    var total = 0, active = 0, longest = 0, run = 0, best = null;
+    for (var ms = range.start; ms <= range.end; ms += DAY_MS) {
+      var v = Number(values[dayKey(ms)]) || 0;
+      total += v;
+      if (v > 0) {
+        active += 1;
+        run += 1;
+        longest = Math.max(longest, run);
+        if (!best || v > best.value) best = { date: dayKey(ms), value: v };
+      } else {
+        run = 0;
+      }
+    }
+    var current = 0;
+    var day = range.end;
+    if (!(Number(values[dayKey(day)]) > 0)) day -= DAY_MS;
+    while (day >= range.start && Number(values[dayKey(day)]) > 0) { current += 1; day -= DAY_MS; }
+    return { total: total, activeDays: active, longest: longest, current: current, best: best };
+  }
+
+  // values：{ "2026-09-12": 数 }；tip(date, value) 给悬停提示的文字；label 给读屏的一句话
+  function heatmap(options) {
+    var values = options.values || {};
+    var range = heatRange(options.to);
+    var id = "hm" + (++heatCount);
+    heatTips[id] = options.tip;
+    var positive = Object.keys(values).map(function (k) { return Number(values[k]); }).filter(function (v) { return v > 0; }).sort(function (a, b) { return a - b; });
+    function quantile(p) { return positive[Math.floor(p * (positive.length - 1))]; }
+    var cuts = positive.length ? [quantile(0.25), quantile(0.5), quantile(0.75)] : [];
+    function level(v) {
+      if (!(v > 0)) return 0;
+      return v <= cuts[0] ? 1 : v <= cuts[1] ? 2 : v <= cuts[2] ? 3 : 4;
+    }
+    var weeks = Math.floor(Math.round((range.end - range.start) / DAY_MS) / 7) + 1;
+    var width = HEAT.left + weeks * HEAT.step - (HEAT.step - HEAT.cell);
+    var height = HEAT.top + 7 * HEAT.step - (HEAT.step - HEAT.cell);
+    var parts = [];
+    var lastLabel = -3;
+    for (var w = 0; w < weeks; w++) {
+      var monday = range.start + w * 7 * DAY_MS;
+      for (var d = 0; d < 7; d++) {
+        var ms = monday + d * DAY_MS;
+        if (ms > range.end) break;
+        var key = dayKey(ms);
+        var date = new Date(ms);
+        // 这一列里有某月 1 号就在上面写月份；第一列只在离下一个月份足够远时写
+        if (date.getUTCDate() === 1 && w - lastLabel >= 3 && w < weeks - 1) {
+          parts.push('<text class="hm__lbl" x="' + (HEAT.left + w * HEAT.step) + '" y="' + (HEAT.top - 8) + '">' + esc(ZH ? date.getUTCMonth() + 1 + "月" : MONTH_SHORT.format(date)) + "</text>");
+          lastLabel = w;
+        }
+        var v = Number(values[key]) || 0;
+        parts.push('<rect class="hm__c hm__c--' + level(v) + '" x="' + (HEAT.left + w * HEAT.step) + '" y="' + (HEAT.top + d * HEAT.step) + '" width="' + HEAT.cell + '" height="' + HEAT.cell + '" rx="2" data-d="' + key + '" data-v="' + v + '"></rect>');
+      }
+      if (w === 0 && lastLabel !== 0 && new Date(monday).getUTCDate() <= 10) {
+        parts.unshift('<text class="hm__lbl" x="' + HEAT.left + '" y="' + (HEAT.top - 8) + '">' + esc(ZH ? new Date(monday).getUTCMonth() + 1 + "月" : MONTH_SHORT.format(new Date(monday))) + "</text>");
+        lastLabel = 0;
+      }
+    }
+    [[0, t("Mon", "一")], [2, t("Wed", "三")], [4, t("Fri", "五")]].forEach(function (row) {
+      parts.push('<text class="hm__lbl" x="0" y="' + (HEAT.top + row[0] * HEAT.step + HEAT.cell - 2) + '">' + row[1] + "</text>");
+    });
+    var legend = [0, 1, 2, 3, 4].map(function (n) { return '<i class="hm__c hm__c--' + n + '"></i>'; }).join("");
+    return '<div class="hm" data-hm="' + id + '">' +
+      '<div class="hm__scroll"><svg class="hm__svg" role="img" aria-label="' + esc(options.label || "") + '" width="' + width + '" height="' + height + '" viewBox="0 0 ' + width + " " + height + '">' + parts.join("") + "</svg></div>" +
+      '<div class="hm__foot">' + (options.note ? '<span class="hm__note">' + options.note + "</span>" : "<span></span>") +
+      '<span class="hm__legend" aria-hidden="true"><span>' + t("Less", "少") + "</span>" + legend + "<span>" + t("More", "多") + "</span></span></div></div>";
+  }
+
+  // 画完以后：窄屏先滚到最近几周
+  function heatmapReady(root) {
+    each((root || document).querySelectorAll(".hm__scroll"), function (box) { box.scrollLeft = box.scrollWidth; });
+  }
+
+  var heatTip = null;
+  function showHeatTip(cell) {
+    var box = cell.closest("[data-hm]");
+    var tip = box && heatTips[box.getAttribute("data-hm")];
+    if (!tip) return;
+    if (!heatTip) {
+      heatTip = document.createElement("div");
+      heatTip.className = "hm-tip";
+      heatTip.setAttribute("role", "tooltip");
+      document.body.appendChild(heatTip);
+    }
+    heatTip.innerHTML = tip(cell.getAttribute("data-d"), Number(cell.getAttribute("data-v")));
+    heatTip.hidden = false;
+    var r = cell.getBoundingClientRect();
+    var w = heatTip.offsetWidth, h = heatTip.offsetHeight;
+    var x = Math.max(8, Math.min(window.innerWidth - w - 8, r.left + r.width / 2 - w / 2));
+    var y = r.top - h - 8 < 8 ? r.bottom + 8 : r.top - h - 8;
+    heatTip.style.transform = "translate(" + Math.round(x) + "px," + Math.round(y) + "px)";
+  }
+  function hideHeatTip() { if (heatTip) heatTip.hidden = true; }
+
+  document.addEventListener("mouseover", function (event) {
+    var cell = event.target.closest && event.target.closest("[data-hm] rect[data-d]");
+    if (cell) showHeatTip(cell); else if (heatTip && !heatTip.hidden && !event.target.closest("[data-hm]")) hideHeatTip();
+  });
+  document.addEventListener("click", function (event) {
+    var cell = event.target.closest && event.target.closest("[data-hm] rect[data-d]");
+    if (cell) showHeatTip(cell); else hideHeatTip();
+  });
+  document.addEventListener("mouseleave", hideHeatTip);
+  window.addEventListener("scroll", hideHeatTip, { passive: true });
+  document.addEventListener("scroll", function (event) { if (event.target.classList && event.target.classList.contains("hm__scroll")) hideHeatTip(); }, true);
+
   var ICONS = {
     website: '<svg aria-hidden="true" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><circle cx="8" cy="8" r="6.3"/><path d="M1.8 8h12.4M8 1.7c1.8 1.8 2.6 3.9 2.6 6.3S9.8 12.5 8 14.3C6.2 12.5 5.4 10.4 5.4 8S6.2 3.5 8 1.7z"/></svg>',
+    blog: '<svg aria-hidden="true" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M10.5 2.5 13.5 5.5 6 13H3v-3z"/><path d="M9 4l3 3"/></svg>',
+    star: '<svg aria-hidden="true" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"><path d="M8 1.9l1.9 3.9 4.2.6-3 3 .7 4.2L8 11.6l-3.8 2 .7-4.2-3-3 4.2-.6z"/></svg>',
+    fork: '<svg aria-hidden="true" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><circle cx="4.5" cy="3.5" r="1.5"/><circle cx="11.5" cy="3.5" r="1.5"/><circle cx="8" cy="12.5" r="1.5"/><path d="M4.5 5v1.5A1.5 1.5 0 0 0 6 8h4a1.5 1.5 0 0 0 1.5-1.5V5M8 8v3"/></svg>',
     github: '<svg aria-hidden="true" width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>',
     x: '<svg aria-hidden="true" width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M12.2 1h2.3L9.5 6.8 15.4 15h-4.6L7.2 10.2 3 15H.7l5.4-6.2L.4 1h4.7l3.3 4.4L12.2 1zm-.8 12.6h1.3L4.5 2.3H3.1l8.3 11.3z"/></svg>',
     link: '<svg aria-hidden="true" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6.5 9.5a3 3 0 0 0 4.2 0l2.3-2.3a3 3 0 0 0-4.2-4.2l-.9.9"/><path d="M9.5 6.5a3 3 0 0 0-4.2 0L3 8.8A3 3 0 0 0 7.2 13l.9-.9"/></svg>',
@@ -526,11 +714,13 @@
     isoWeek: isoWeek, weekStart: weekStart, seasonParam: seasonParam,
     providerName: providerName, logo: logo, windowLabel: windowLabel, windowSpan: windowSpan, boardName: boardName, boardKey: boardKey,
     avatar: avatar, initial: initial, tierTag: tierTag, accountMark: accountMark, regionLabel: regionLabel, safeLink: safeLink, hostOf: hostOf,
+    LINK_KINDS: LINK_KINDS, linkName: linkName, linkLabel: linkLabel,
     query: query, demoPairs: demoPairs, profileHref: profileHref, homeHref: homeHref, boardHref: boardHref, pageHref: pageHref, demoHref: demoHref,
     currentPath: currentPath, langHref: langHref, setLangLinks: setLangLinks,
     api: api, getJSON: getJSON, request: request, session: session, signedInUser: signedInUser,
     renderAccountLink: renderAccountLink, demoSession: demoSession,
     stateBox: stateBox, errorBox: errorBox, copyText: copyText, setBusy: setBusy,
+    compact: compact, calendarDate: calendarDate, heatmap: heatmap, heatmapReady: heatmapReady, heatStats: heatStats,
     FULL_FORMAT: FULL_FORMAT, YEAR_FORMAT: YEAR_FORMAT, MONTH_FORMAT: MONTH_FORMAT,
     ICONS: ICONS, ACCOUNT_ICON: ACCOUNT_ICON, accountVerifiedText: accountVerifiedText,
   };

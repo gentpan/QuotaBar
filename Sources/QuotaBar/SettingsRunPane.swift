@@ -583,8 +583,8 @@ private struct RunConsent: View {
             }
             .fixedSize(horizontal: false, vertical: true)
             SettingFootnote(L10n.t(
-                "You sign in on quota.run with Google, GitHub or an email code; the app never sees a password. Ranked results and each run's usage curve are public on quota.run; the sign-in email is never shown — not on your profile, not on the boards.",
-                "登录在 quota.run 上完成，可用 Google、GitHub 或邮箱验证码，本应用不经手任何密码。上榜的成绩和每一轮的用量曲线会在 quota.run 上公开；登录邮箱永远不会公开，不会出现在你的主页或排行榜上。"))
+                "You sign in on quota.run with Google, GitHub or an email code; the app never sees a password. Ranked results, each run's usage curve and a heatmap of tokens per day on your profile are public on quota.run (the heatmap can be turned off on the account page); the sign-in email is never shown — not on your profile, not on the boards.",
+                "登录在 quota.run 上完成，可用 Google、GitHub 或邮箱验证码，本应用不经手任何密码。上榜的成绩、每一轮的用量曲线和主页上每天 token 用量的热力图会在 quota.run 上公开（热力图可以在账号页关掉）；登录邮箱永远不会公开，不会出现在你的主页或排行榜上。"))
         }
     }
 

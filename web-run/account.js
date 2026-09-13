@@ -49,6 +49,8 @@
     invalid_display_name: ["The display name can be at most 40 characters.", "显示名称最多 40 个字符。"],
     invalid_bio: ["The bio can be at most 160 characters.", "简介最多 160 个字符。"],
     invalid_links: ["Links must be https:// addresses; GitHub and X also take a username.", "链接必须是 https:// 地址；GitHub 和 X 也可以只填用户名。"],
+    invalid_timezone: ["That time zone isn't recognised. Pick another from the list.", "认不出这个时区，换一个试试。"],
+    invalid_profile: ["Something in the profile couldn't be saved. Reload and try again.", "主页设置有一项存不进去，刷新后再试。"],
     too_many_projects: ["At most 12 projects.", "最多 12 个项目。"],
     device_not_found: ["That Mac is no longer on your account.", "这台 Mac 已经不在你的账号里了。"],
     account_not_found: ["That provider account is no longer bound to your account.", "这个服务商账号已经不在你的账号里了。"],
@@ -537,6 +539,101 @@
     // ── 公开主页 ──
     var profileForm = $("profileForm");
 
+    // 更多链接：website、github、x 有固定的输入框，其余平台一行一个，平台从下拉里选
+    var COLUMN_LINKS = ["website", "github", "x"];
+    var EXTRA_KINDS = Q.LINK_KINDS.map(function (k) { return k.kind; }).filter(function (kind) { return COLUMN_LINKS.indexOf(kind) < 0; });
+    var LINK_PLACEHOLDERS = {
+      blog: "https://", gitlab: t("username", "用户名"), bluesky: "name.bsky.social", mastodon: "@name@mastodon.social",
+      linkedin: t("profile slug or URL", "个人主页后缀或链接"), youtube: "@handle", telegram: t("username", "用户名"),
+      huggingface: t("username", "用户名"), bilibili: "UID", zhihu: t("profile slug", "个性域名"), juejin: t("user id", "用户 ID"),
+      v2ex: t("username", "用户名"), weibo: t("UID or URL", "UID 或链接"), xiaohongshu: "https://www.xiaohongshu.com/user/profile/…",
+    };
+    var extraLinks = [];
+    var linksList = $("linksList");
+    var timezoneSelect = $("pfTimezone");
+
+    function browserZone() {
+      try { return Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC"; } catch (e) { return "UTC"; }
+    }
+
+    function fillTimezones(selected) {
+      var zones = [];
+      try { zones = Intl.supportedValuesOf("timeZone"); } catch (e) { /* 老浏览器只给当前的 */ }
+      if (zones.indexOf("UTC") < 0) zones.unshift("UTC");
+      if (selected && zones.indexOf(selected) < 0) zones.unshift(selected);
+      var here = browserZone();
+      timezoneSelect.innerHTML = zones.map(function (zone) {
+        return '<option value="' + esc(zone) + '"' + (zone === selected ? " selected" : "") + ">" + esc(zone.replace(/_/g, " ")) + (zone === here ? t(" (this browser)", "（这个浏览器）") : "") + "</option>";
+      }).join("");
+    }
+
+    function renderLinks(focus) {
+      linksList.innerHTML = extraLinks.map(function (link, i) {
+        var options = EXTRA_KINDS.filter(function (kind) {
+          return kind === link.kind || !extraLinks.some(function (other) { return other.kind === kind; });
+        }).map(function (kind) {
+          return '<option value="' + kind + '"' + (kind === link.kind ? " selected" : "") + ">" + esc(Q.linkName(kind)) + "</option>";
+        }).join("");
+        var name = Q.linkName(link.kind);
+        return '<div class="acc-linkrow" data-i="' + i + '">' +
+          '<select class="acc-input acc-select" data-link="kind" aria-label="' + esc(t("Platform", "平台")) + '">' + options + "</select>" +
+          '<input class="acc-input" data-link="value" data-kind="' + link.kind + '" type="text" autocapitalize="off" spellcheck="false" maxlength="200" aria-label="' + esc(name) + '" placeholder="' + esc(LINK_PLACEHOLDERS[link.kind] || "https://") + '" value="' + esc(link.value) + '">' +
+          '<button type="button" class="acc-icon-btn" data-link="remove" aria-label="' + esc(t("Remove ", "移除") + name) + '">' + ICON.x + "</button>" +
+          "</div>";
+      }).join("");
+      $("linksCount").textContent = extraLinks.length ? extraLinks.length + " / " + EXTRA_KINDS.length : "";
+      $("linkAdd").disabled = extraLinks.length >= EXTRA_KINDS.length;
+      if (focus) {
+        var el = linksList.querySelector(focus);
+        if (el) el.focus();
+      }
+    }
+
+    linksList.addEventListener("input", function (event) {
+      var row = event.target.closest(".acc-linkrow");
+      if (!row || event.target.getAttribute("data-link") !== "value") return;
+      extraLinks[Number(row.getAttribute("data-i"))].value = event.target.value;
+      event.target.removeAttribute("aria-invalid");
+    });
+    linksList.addEventListener("change", function (event) {
+      var row = event.target.closest(".acc-linkrow");
+      if (!row || event.target.getAttribute("data-link") !== "kind") return;
+      var i = Number(row.getAttribute("data-i"));
+      extraLinks[i].kind = event.target.value;
+      renderLinks('.acc-linkrow[data-i="' + i + '"] [data-link="value"]');
+      status(profileForm, "");
+    });
+    linksList.addEventListener("click", function (event) {
+      var button = event.target.closest('[data-link="remove"]');
+      if (!button) return;
+      var i = Number(button.closest(".acc-linkrow").getAttribute("data-i"));
+      extraLinks.splice(i, 1);
+      renderLinks(extraLinks.length ? '.acc-linkrow[data-i="' + Math.max(0, i - 1) + '"] [data-link="value"]' : null);
+      if (!extraLinks.length) $("linkAdd").focus();
+      status(profileForm, "");
+    });
+    $("linkAdd").addEventListener("click", function () {
+      var free = EXTRA_KINDS.filter(function (kind) { return !extraLinks.some(function (link) { return link.kind === kind; }); });
+      if (!free.length) return;
+      extraLinks.push({ kind: free[0], value: "" });
+      renderLinks('.acc-linkrow[data-i="' + (extraLinks.length - 1) + '"] [data-link="kind"]');
+    });
+
+    // GitHub 贡献热力图只认登录方式里关联的 GitHub，不认上面手填的 GitHub 链接
+    function githubNote() {
+      var identity = (me.identities || []).filter(function (item) { return item.provider === "github"; }).pop();
+      var note = $("githubToggleNote");
+      if (identity && identity.login) {
+        note.textContent = ZH ? "来自登录方式里关联的 GitHub 账号 @" + identity.login + "，只显示 GitHub 上公开的贡献。" : "From @" + identity.login + ", the GitHub account under Sign-in methods. Only what GitHub shows publicly.";
+      } else if (identity) {
+        note.textContent = t("From the GitHub account under Sign-in methods. Only what GitHub shows publicly.", "来自登录方式里关联的 GitHub 账号，只显示 GitHub 上公开的贡献。");
+      } else {
+        note.innerHTML = ZH
+          ? '先在<a href="#sign-in">登录方式</a>里绑定 GitHub 才会显示，手填的 GitHub 链接不算：这样别人冒充不了你的贡献。'
+          : 'Shows once GitHub is linked under <a href="#sign-in">Sign-in methods</a>; a typed GitHub link doesn\'t count, so no one can borrow your contributions.';
+      }
+    }
+
     function fillProfile() {
       var user = me.user, links = user.links || {};
       profileForm.elements.displayName.value = user.displayName || "";
@@ -545,6 +642,12 @@
       profileForm.elements.website.value = links.website || "";
       profileForm.elements.github.value = links.github || "";
       profileForm.elements.x.value = links.x || "";
+      extraLinks = EXTRA_KINDS.filter(function (kind) { return links[kind]; }).map(function (kind) { return { kind: kind, value: links[kind] }; });
+      renderLinks();
+      profileForm.elements.showActivity.checked = user.showActivity !== false;
+      profileForm.elements.showGithub.checked = user.showGithub !== false;
+      fillTimezones(user.timezone || browserZone());
+      githubNote();
       bioCount();
     }
 
@@ -566,11 +669,17 @@
         status(profileForm, t("The website has to start with https://.", "网站地址要以 https:// 开头。"), "error");
         return;
       }
+      var links = { website: website, github: f.github.value.trim(), x: f.x.value.trim() };
+      EXTRA_KINDS.forEach(function (kind) { links[kind] = null; });
+      extraLinks.forEach(function (link) { if (String(link.value).trim()) links[link.kind] = String(link.value).trim(); });
       var body = {
         displayName: f.displayName.value.trim(),
         bio: f.bio.value.trim(),
         region: (profileForm.querySelector('input[name="region"]:checked') || {}).value || me.user.region,
-        links: { website: website, github: f.github.value.trim(), x: f.x.value.trim() },
+        links: links,
+        showActivity: f.showActivity.checked,
+        showGithub: f.showGithub.checked,
+        timezone: timezoneSelect.value || null,
       };
       var button = profileForm.querySelector('button[type="submit"]');
       busy(button, true);
@@ -586,8 +695,14 @@
         busy(button, false);
         if (lostSession(error)) return;
         if (error.code === "invalid_links") {
-          var field = /links\.(website|github|x)/.exec(error.message || "");
-          if (field) { f[field[1]].setAttribute("aria-invalid", "true"); f[field[1]].focus(); }
+          var field = /links\.([a-z0-9]+)/.exec(error.message || "");
+          var input = field && (COLUMN_LINKS.indexOf(field[1]) >= 0 ? f[field[1]] : linksList.querySelector('[data-kind="' + field[1] + '"]'));
+          if (input) { input.setAttribute("aria-invalid", "true"); input.focus(); }
+          if (field && COLUMN_LINKS.indexOf(field[1]) < 0) {
+            status(profileForm, ZH ? Q.linkName(field[1]) + " 的链接不对：要填 https:// 链接" + (LINK_PLACEHOLDERS[field[1]] && !/^https/.test(LINK_PLACEHOLDERS[field[1]]) ? "，或者" + LINK_PLACEHOLDERS[field[1]] : "") + "。"
+              : "The " + Q.linkName(field[1]) + " link isn't right: use an https:// link" + (LINK_PLACEHOLDERS[field[1]] && !/^https/.test(LINK_PLACEHOLDERS[field[1]]) ? " or " + LINK_PLACEHOLDERS[field[1]] : "") + ".", "error");
+            return;
+          }
         }
         status(profileForm, explain(error), "error");
       });
@@ -943,6 +1058,7 @@
 
     function renderIdentities(focus) {
       var list = me.identities || [];
+      githubNote();
       var last = list.length <= 1;
       identityList.innerHTML = list.map(function (item) {
         var id = esc(item.id);
@@ -1470,7 +1586,9 @@
       linking: false,
       me: {
         user: { username: "peter", displayName: "Peter", bio: "Building QuotaBar. Burns a Codex week by Wednesday, mostly on purpose.", region: "global", joinedAt: NOW - 38 * 86400,
-          links: { website: "https://quota.bar", github: "https://github.com/gentpan", x: "" } },
+          links: { website: "https://quota.bar", blog: "https://blog.example.com", github: "https://github.com/gentpan", x: null,
+            bluesky: "https://bsky.app/profile/peter.example.com", mastodon: "https://mastodon.example/@peter" },
+          timezone: null, showActivity: true, showGithub: true },
         devices: [
           { deviceId: "dev_7f3a91", name: "Peter's MacBook Pro", ranked: true, lastSeenAt: NOW - 240, current: false, appVersion: "0.5.3" },
           { deviceId: "dev_29c1e4", name: "Mac Studio", ranked: false, lastSeenAt: NOW - 2 * 86400 - 3600, current: false, appVersion: "0.5.2" },
@@ -1482,8 +1600,8 @@
           { name: "Tidewire", url: "https://tidewire.example", description: "A small sync engine for local-first notes. Conflict-free merges, no server required.", github: "", builtWith: ["claude", "cursor"] },
         ],
         identities: [
-          { id: "idn_gh01", provider: "github", email: "peter@example.com", name: "Peter", linkedAt: NOW - 38 * 86400 },
-          { id: "idn_em02", provider: "email", email: "peter@example.com", name: null, linkedAt: NOW - 12 * 86400 },
+          { id: "idn_gh01", provider: "github", email: "peter@example.com", name: "Peter", login: "gentpan", linkedAt: NOW - 38 * 86400 },
+          { id: "idn_em02", provider: "email", email: "peter@example.com", name: null, login: null, linkedAt: NOW - 12 * 86400 },
         ],
         // 和 demo.js 的示例主页对得上：Codex、Cursor 核实过，Claude 只绑定；第二个 Codex 账号（工作账号）归别人
         providerAccounts: params.get("accounts") === "0" ? [] : [
@@ -1564,11 +1682,13 @@
           if ((body.displayName || "").length > 40) fail(400, "invalid_display_name", "displayName is at most 40 characters.");
           Object.assign(state.me.user, { displayName: body.displayName || state.me.user.username, bio: body.bio, region: body.region });
           var links = body.links || {};
-          state.me.user.links = {
-            website: links.website || "",
-            github: links.github && !/^https:/.test(links.github) ? "https://github.com/" + links.github.replace(/^@/, "") : links.github || "",
-            x: links.x && !/^https:/.test(links.x) ? "https://x.com/" + links.x.replace(/^@/, "") : links.x || "",
-          };
+          // 示例里只换算 GitHub 和 X 的用户名；其余平台原样存（真接口会换成地址或报 invalid_links）
+          var saved = {};
+          Q.LINK_KINDS.forEach(function (k) { saved[k.kind] = links[k.kind] || null; });
+          saved.github = links.github && !/^https:/.test(links.github) ? "https://github.com/" + links.github.replace(/^@/, "") : links.github || null;
+          saved.x = links.x && !/^https:/.test(links.x) ? "https://x.com/" + links.x.replace(/^@/, "") : links.x || null;
+          state.me.user.links = saved;
+          Object.assign(state.me.user, { timezone: body.timezone || null, showActivity: body.showActivity !== false, showGithub: body.showGithub !== false });
           return { user: state.me.user };
         }
         if (method === "PUT" && path === "/projects") {

@@ -1,7 +1,7 @@
 /* Quota Run 的示例数据（?demo=1）。common.js 只在示例模式下按需加载这个文件。
  *
  * 按公开接口的路径和查询串作答，形状照 docs/quota-run.md：/boards、/leaderboard（含 summary 和
- * to90/to50）、/runs/<runId>（用量曲线）、/insights、/users/<username>、/stats。
+ * to90/to50）、/runs/<runId>（用量曲线）、/insights、/users/<username>（含热力图）、/users/<username>/github、/stats。
  * 人和成绩按种子生成，每次打开都一样；时间相对「现在」。Codex Pro 20x 本周的前六名与设计稿一致。
  *   &empty=1   没有任何榜单（线上刚开张时访客看到的样子）
  *   &fail=1    接口出错
@@ -427,7 +427,10 @@
       username: person[0], displayName: person[1], region: person[2],
       joinedAt: NOW - Math.round((mine ? 38 : 10 + r() * 50) * 86400),
       bio: mine ? "Building QuotaBar. Burns a Codex week by Wednesday, mostly on purpose." : "",
-      links: mine ? { website: "https://quota.bar", github: "https://github.com/gentpan", x: "" } : {},
+      links: mine ? { website: "https://quota.bar", blog: "https://blog.example.com", github: "https://github.com/gentpan", x: null,
+        bluesky: "https://bsky.app/profile/peter.example.com", mastodon: "https://mastodon.example/@peter" } : {},
+      activity: activityOf(username),
+      github: mine ? { login: "gentpan", url: "https://github.com/gentpan" } : null,
       stats: mine ? { runs: 86, verifiedRuns: 71, providers: 3, activeDays: 41 }
         : { runs: 12 + Math.floor(r() * 60), verifiedRuns: 8 + Math.floor(r() * 30), providers: 2, activeDays: 6 + Math.floor(r() * 30) },
       bests: bests,
@@ -437,6 +440,78 @@
         { name: "Tidewire", url: "https://tidewire.example", github: "", description: "A small sync engine for local-first notes. Conflict-free merges, no server required.", builtWith: ["claude", "cursor"] },
         { name: "shiori-cli", url: "https://shiori.example/cli", github: "https://github.com/example/shiori-cli", description: "Bookmarks from the terminal, searchable offline, synced as plain Markdown.", builtWith: ["codex"] },
       ] : [],
+    };
+  }
+
+  /* ── 个人主页的热力图与 GitHub ───────────────────────────────────── */
+
+  function localDay(ms) {
+    var d = new Date(ms);
+    return d.getFullYear() + "-" + Q.pad(d.getMonth() + 1) + "-" + Q.pad(d.getDate());
+  }
+
+  // 从 52 周前的星期一到今天，按浏览器的时区分日；忙的人工作日几乎天天有用量，周末少一些
+  function eachDay(fn) {
+    var today = new Date();
+    today.setHours(12, 0, 0, 0);
+    var back = (today.getDay() + 6) % 7 + 52 * 7;
+    for (var i = back; i >= 0; i--) {
+      var d = new Date(today);
+      d.setDate(today.getDate() - i);
+      fn(d, i);
+    }
+    var first = new Date(today);
+    first.setDate(today.getDate() - back);
+    return { from: localDay(first.getTime()), to: localDay(today.getTime()) };
+  }
+
+  function activityOf(username) {
+    var r = rng("activity:" + username);
+    var busy = username === "peter" ? 0.8 : 0.35 + r() * 0.3;
+    var scale = username === "peter" ? 2.2e6 : 4e5 + r() * 8e5;
+    var days = [], total = 0;
+    var range = eachDay(function (d, back) {
+      var weekend = d.getDay() === 0 || d.getDay() === 6;
+      // 一年前刚开始用，越近越勤
+      if (r() > busy * (weekend ? 0.5 : 1) * (back > 280 ? 0.35 : back > 150 ? 0.75 : 1)) return;
+      var sources = { claude: Math.round(Math.pow(r(), 2) * scale) + 1800 };
+      if (r() < 0.65) sources.codex = Math.round(Math.pow(r(), 2) * scale * 0.7) + 900;
+      if (r() < 0.08) sources.opencode = Math.round(r() * 1.5e5) + 400;
+      var tokens = Object.keys(sources).reduce(function (sum, k) { return sum + sources[k]; }, 0);
+      var sorted = {};
+      Object.keys(sources).sort(function (a, b) { return sources[b] - sources[a]; }).forEach(function (k) { sorted[k] = sources[k]; });
+      total += tokens;
+      days.push({ date: localDay(d.getTime()), tokens: tokens, sources: sorted });
+    });
+    var zone = "UTC";
+    try { zone = Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC"; } catch (e) { /* 老浏览器 */ }
+    return { timezone: zone, from: range.from, to: range.to, days: days, totalTokens: total };
+  }
+
+  function githubOf(username) {
+    if (username !== "peter") return { login: null, url: null, calendar: null, totals: null, repos: [], pending: false, fetchedAt: null };
+    var r = rng("github:" + username);
+    var days = [], total = 0;
+    var range = eachDay(function (d) {
+      var weekend = d.getDay() === 0 || d.getDay() === 6;
+      if (r() > (weekend ? 0.45 : 0.82)) return;
+      var count = Math.max(1, Math.round(Math.pow(r(), 2.2) * 60));
+      total += count;
+      days.push({ date: localDay(d.getTime()), count: count });
+    });
+    var weeks = [];
+    for (var w = 0; w < 52; w++) weeks.push(w < 20 ? 0 : Math.round(r() * r() * 90));
+    var commits = weeks.reduce(function (a, b) { return a + b; }, 0);
+    return {
+      login: "gentpan", url: "https://github.com/gentpan",
+      calendar: { total: total, from: range.from, to: range.to, days: days },
+      totals: { commits: Math.round(total * 0.82), pullRequests: Math.round(total * 0.06), issues: Math.round(total * 0.03), reviews: Math.round(total * 0.05), private: Math.round(total * 0.2) },
+      repos: [
+        { repo: "gentpan/QuotaBar", url: "https://github.com/gentpan/QuotaBar", description: "Every AI coding limit, at a glance", stars: 1284, forks: 63, language: "Swift", pushedAt: NOW - 3 * 3600, archived: false, weeks: weeks, commits: commits, fetchedAt: NOW - 1800 },
+        { repo: "example/shiori-cli", missing: true, fetchedAt: NOW - 1800 },
+      ],
+      pending: false,
+      fetchedAt: NOW - 1800,
     };
   }
 
@@ -458,6 +533,10 @@
     if (route === "/insights") return insights(q);
     if (route === "/stats") return stats();
     if ((m = /^\/runs\/([A-Za-z0-9_-]{1,40})$/.exec(route))) return run(m[1]);
+    if ((m = /^\/users\/([^\/]+)\/github$/.exec(route))) {
+      user(decodeURIComponent(m[1]));   // 没这个人时同样 404
+      return githubOf(decodeURIComponent(m[1]));
+    }
     if ((m = /^\/users\/([^\/]+)$/.exec(route))) return user(decodeURIComponent(m[1]));
     throw status(404, "not_found");
   }

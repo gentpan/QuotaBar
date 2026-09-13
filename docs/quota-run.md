@@ -18,8 +18,8 @@ and this file disagree, this file wins until it is changed on purpose.
   never uploads a finished result.
 - **Web** (`site/leaderboard.html`, `site/u.html` → `web-run/`): the leaderboard
   at `quota.run` (`quota.run/zh/`) and public profiles `quota.run/@username`,
-  static pages reading the public API. quota.bar is the product site only; its
-  early `/leaderboard` and `/@username` addresses redirect here.
+  static pages reading the public API. quota.bar is the product site only and
+  carries no Quota Run pages or redirects.
 
 ## Principles
 
@@ -255,7 +255,47 @@ device (burst 5) → 429.
 | `GET /stats` | `{users, runs, verifiedRuns, providers, updatedAt}` |
 | `GET /boards?region=global` | `{boards: [{provider, plan, planLabel, windowKey, windowSeconds, windowTitle, runners, season}]}` — boards with at least one rankable run in the current season, most runners first |
 | `GET /leaderboard?provider=codex&plan=pro20x&window=604800:&metric=speed&season=current&region=global&tier=all&limit=100` | `{board: {...}, season, metric, entries: [{rank, username, displayName, value, unit, tier, accountVerified, achievedAt, peakPercent}], updatedAt}` — one entry per user (their best run); `unit` is `seconds` or `percent` |
-| `GET /users/<username>` | `{username, displayName, bio, region, joinedAt, links: {website, github, x}, projects: [...], bests: [{provider, plan, planLabel, windowKey, windowSeconds, windowTitle, metric, value, rank, runners, percentile, tier, accountVerified, season}], recent: [run... (each with accountVerified)], stats: {runs, verifiedRuns, providers, activeDays}}` |
+| `GET /users/<username>` | `{username, displayName, bio, region, joinedAt, links: {website, blog, github, gitlab, x, bluesky, mastodon, linkedin, youtube, telegram, huggingface, bilibili, zhihu, juejin, v2ex, weibo, xiaohongshu}, projects: [...], bests: [{provider, plan, planLabel, windowKey, windowSeconds, windowTitle, metric, value, rank, runners, percentile, tier, accountVerified, season}], recent: [run... (each with accountVerified)], stats: {runs, verifiedRuns, providers, activeDays}, activity, github}` — every link key is present, `null` when unset, in that order |
+| `GET /users/<username>/github` | see *Profile heatmaps and GitHub* |
+
+### Profile heatmaps and GitHub
+
+- **`activity`** on `/users/<username>` is `null` when the owner turned it off
+  (`showActivity: false`), else `{timezone, from, to, days: [{date, tokens,
+  sources: {claude, codex, opencode}}], totalTokens}`: tokens per day from the
+  ranked device's activity minutes (`counted`), days split at midnight in
+  `timezone` (the owner's choice; unset → `Asia/Shanghai` for region `china`,
+  `UTC` otherwise), from the Monday 52 weeks before the week of `to` (today in
+  that zone) through `to`. Only days with tokens are listed; `sources` is ordered
+  by tokens. Minutes are summed in 15-minute buckets before the date is taken, so
+  half- and quarter-hour zones split correctly.
+- **`github`** on `/users/<username>` is `{login, url}` when the account has a
+  **GitHub sign-in identity** and `showGithub` is on, else `null`. A GitHub link
+  typed into the profile never counts: the calendar belongs to the signed-in
+  GitHub account.
+- **`GET /users/<username>/github`** → `{login, url, calendar: {total, from, to,
+  days: [{date, count}]} | null, totals: {commits, pullRequests, issues, reviews,
+  private} | null, repos: [...], pending, fetchedAt}`.
+  - `calendar` is the last year of contributions (only days with a count are
+    listed); `totals` needs `QUOTA_RUN_GITHUB_TOKEN` (GraphQL
+    `contributionsCollection`), otherwise the calendar comes from the public
+    `github.com/users/<login>/contributions` page and `totals` is `null`. The
+    login is looked up by the identity's numeric id each time, so a renamed
+    GitHub account follows (the identity's `login` is updated).
+  - `repos`: one entry per distinct GitHub repository in the profile's projects
+    (at most 12, project order): `{repo, url, description, stars, forks, language,
+    pushedAt, archived, weeks: [52 weekly commit counts, oldest first] | null,
+    commits, fetchedAt}`; `weeks` is `null` while GitHub is still computing the
+    statistics; a repository that is not public is `{repo, missing: true, fetchedAt}`.
+    Returned even when the calendar is off.
+  - Data is cached on the server for 6 hours (failures retry after 15 minutes,
+    commit statistics that GitHub is still computing after 2 minutes). Stale data
+    is served while a background refresh runs; when nothing is cached yet the
+    request waits up to 8 s and then answers with what it has and `pending: true`
+    (with `Cache-Control: no-store`); pages retry a few seconds later. Unused
+    entries are dropped after 14 days; deleting the account drops its calendar.
+  - Without a token, REST calls authenticate with the GitHub OAuth app's client id
+    and secret (5,000 requests an hour) when those are configured.
 
 `region` is `global` or `china` (a user attribute, chosen when joining; used as a
 filter). Omit it for everyone.
@@ -292,8 +332,9 @@ filter). Omit it for everyone.
   runs that reached 100% (null when none). Cached like the other public endpoints.
 - **`GET /users/<username>`**: `bests[]` gain `runId, secondsTo50, secondsTo90,
   secondsTo100`; `recent[]` gain `runId`.
-- Publicly visible: results, the per-run usage curve above, and the time
-  achieved. The consent screen in the app says so.
+- Publicly visible: results, the per-run usage curve above, the time
+  achieved, and (unless turned off on the account page) tokens per day by tool
+  on the profile heatmap. The consent screen in the app says so.
 
 ### Device-signed
 
@@ -316,10 +357,10 @@ session no device is `current`.
 
 | Method & path | Body | Returns |
 |---|---|---|
-| `GET /me` | — | `{user: {username, displayName, bio, region, links, joinedAt}, devices: [{deviceId, name, ranked, lastSeenAt, current, appVersion}], rankedChangeAvailableAt, lastUploadAt, projects, identities: [{id, provider, email, name, linkedAt}], providerAccounts: [providerAccount]}` |
+| `GET /me` | — | `{user: {username, displayName, bio, region, links, joinedAt, timezone, showActivity, showGithub}, devices: [{deviceId, name, ranked, lastSeenAt, current, appVersion}], rankedChangeAvailableAt, lastUploadAt, projects, identities: [{id, provider, email, name, login, linkedAt}], providerAccounts: [providerAccount]}` |
 | `POST /accounts/lookup` | `{digests: [≤20 lower-case hex SHA-256]}` | `{accounts: [{digest, account: providerAccount \| null}]}` — `null` when this user never uploaded it; device signature only (the web has no digests) |
 | `DELETE /accounts/<id>` | — | `{providerAccounts}`; `404 account_not_found` |
-| `PUT /profile` | `{displayName ≤40, bio ≤160, region, links: {website, github, x}}` | `{user}` |
+| `PUT /profile` | `{displayName ≤40, bio ≤160, region, links: {…any of the link keys}, timezone, showActivity, showGithub}` — all optional; a missing field (or link key) keeps its value, `null` or `""` clears it; unknown link keys are ignored. Links are stored as https URLs: `website`, `blog` and `mastodon` take any https URL (`mastodon` also `@name@instance`); the others must be on their platform's host or be a handle (`github`, `gitlab`, `x`, `bluesky`, `linkedin`, `youtube`, `telegram`, `huggingface`, `v2ex` usernames; `bilibili`, `juejin`, `weibo` numeric ids; `zhihu` profile slug; `xiaohongshu` URL only) → `400 invalid_links` naming `links.<key>`. `timezone` is an IANA name → `400 invalid_timezone`; the switches are booleans → `400 invalid_profile` | `{user}` |
 | `PUT /projects` | `{projects: [≤12 {name ≤40, url, description ≤140, github?, builtWith: [provider…]}]}` | `{projects}` — URLs must be `https://` |
 | `POST /devices/ranked` | `{deviceId}` | `{devices, rankedChangeAvailableAt}`; `409 {error: "cooldown", availableAt}` |
 | `DELETE /devices/<deviceId>` | — | `{devices}`; with a device signature not the current device and not the ranked one; with a session any device |
@@ -400,7 +441,9 @@ No links carrying the code. Sent over SMTP in a background thread.
 `QUOTA_RUN_GOOGLE_CLIENT_SECRET`, `QUOTA_RUN_SMTP_HOST`, `QUOTA_RUN_SMTP_PORT`
 (465 = TLS, otherwise STARTTLS), `QUOTA_RUN_SMTP_USER`,
 `QUOTA_RUN_SMTP_PASSWORD`, `QUOTA_RUN_MAIL_FROM`. A provider without its
-settings reports `false` in `/auth/providers`.
+settings reports `false` in `/auth/providers`. `QUOTA_RUN_GITHUB_TOKEN`
+(optional, a token with no scopes) lets profiles show commit, pull request and
+review counts next to the GitHub calendar.
 
 **Local testing only:** `QUOTA_RUN_DEV_LOGIN=1` adds `POST /auth/dev {email}`,
 which signs in as that email identity at once (refused unless the server listens
@@ -434,16 +477,25 @@ floating trays and the active sidebar item.
   becomes a scrolling row of board chips; wide tables scroll inside their box.
 
 - `/@username` (Caddy rewrites to `/u.html`, `/zh/@username` to `/zh/u.html`):
-  header (initial avatar, name, @username, bio, links, joined), stat strip,
-  bests table (board, to 50/90/100%, rank, percentile, tier, Account verified,
-  linking to that board), recent runs as small tracks, projects as cards.
-  404 state when the user does not exist.
+  header (initial avatar, name, @username, bio, every link with its platform,
+  joined), stat strip, **Activity** (53-week heatmaps, one square a day, four
+  green levels by quartile of the non-zero days, hover or tap for the day's
+  numbers: AI coding tokens per day with total, active days, longest and current
+  streak and best day; GitHub contributions with commits, PRs, reviews and issues
+  when the server has a token), bests table (board, to 50/90/100%, rank,
+  percentile, tier, Account verified, linking to that board), recent runs as
+  small tracks, projects as cards (with a GitHub repository: stars, forks,
+  language, last push and 52 weekly commit bars). 404 state when the user does
+  not exist.
 - `/rules`: how Quota Run works — what is uploaded, binding and ownership of
   provider accounts, tiers, seasons, privacy — in the same style.
 - `/login`: Continue with GitHub, Continue with Google (only those configured),
   or an email address → 6-digit code; then, for a new identity, choose username
   (checked live), display name and region. Goes to `next` (default `/account`).
-- `/account`: profile, projects, Macs (ranked badge, last seen, make ranked,
+- `/account`: profile (name, region, bio, website/GitHub/X, more links — one row per
+  platform picked from a list —, the two heatmap switches with a note on where the
+  GitHub calendar comes from, and the heatmap time zone, defaulting to the
+  browser's), projects, Macs (ranked badge, last seen, make ranked,
   remove), provider accounts (provider, first bound, "Account verified" or
   "Owned by another Quota account", runs, unbind with a note that a Mac still
   signed in to it binds it again unless it is unbound in the app), sign-in methods (link GitHub / Google / email, remove), view profile,

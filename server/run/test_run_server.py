@@ -9,6 +9,7 @@ P-256 密钥，像应用那样签名请求；网页那一侧用带 cookie 罐的
 """
 import base64
 import contextlib
+import datetime
 import hashlib
 import http.client
 import io
@@ -21,6 +22,7 @@ import sys
 import tempfile
 import threading
 import unittest
+from unittest import mock
 from urllib.parse import parse_qs, parse_qsl, urlencode, urlsplit
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -105,6 +107,8 @@ class FakeProviders:
                               {"email": "Octo@Example.com", "primary": True, "verified": True}]
         self.google_user = {"sub": "google-sub-1", "email": "gee@example.com", "email_verified": True,
                             "name": "Gee Gee"}
+        # 其他地址（GitHub 的公开数据）：URL → 函数(method, headers, body) → (状态码, 响应体 bytes)
+        self.routes = {}
 
     def forms(self, url):
         return [dict(parse_qsl(call["body"].decode("ascii"))) for call in self.calls if call["url"] == url]
@@ -133,6 +137,8 @@ class FakeProviders:
             if headers.get("Authorization") != f"Bearer {self.GOOGLE_TOKEN}":
                 return reply(401, {})
             return reply(200, self.google_user)
+        if url in self.routes:
+            return self.routes[url](method, headers, body)
         return reply(404, {})
 
 
@@ -754,7 +760,8 @@ class SessionTests(ServerTestCase):
         status, data, _ = browser.call("POST", "/signup", {"username": "newcomer", "displayName": "", "region": "china"})
         self.assertEqual(status, 201, data)
         self.assertEqual(data["user"], {"username": "newcomer", "displayName": "newcomer", "bio": "", "region": "china",
-                                        "links": {"website": None, "github": None, "x": None}, "joinedAt": NOW})
+                                        "links": dict.fromkeys(run_server.LINK_KINDS), "joinedAt": NOW,
+                                        "timezone": None, "showActivity": True, "showGithub": True})
         self.assertEqual(browser.call("GET", "/me")[0], 200)
         _, data, _ = browser.call("GET", "/session")
         self.assertEqual((data["needsSignup"], data["user"], data["suggestedUsername"]),
@@ -1118,7 +1125,8 @@ class OAuthTests(ServerTestCase):
         _, me, _ = browser.call("GET", "/me")
         self.assertEqual(me["user"]["username"], "gee")
         self.assertEqual(me["identities"][1], {"id": me["identities"][1]["id"], "provider": "google",
-                                               "email": "gee@example.com", "name": "Gee Gee", "linkedAt": NOW})
+                                               "email": "gee@example.com", "name": "Gee Gee", "login": None,
+                                               "linkedAt": NOW})
         self.assertNotIn(FakeProviders.GOOGLE_TOKEN, self.dump())
 
     def test_google_unverified_email_is_not_linked(self):
@@ -1180,7 +1188,7 @@ class SharedEndpointTests(ServerTestCase):
                                           "lastSeenAt": NOW, "current": False, "appVersion": "0.6.0"}])
         identity = me["identities"][0]
         self.assertEqual(identity, {"id": identity["id"], "provider": "email", "email": "webby@example.com",
-                                    "name": None, "linkedAt": NOW})
+                                    "name": None, "login": None, "linkedAt": NOW})
         status, data, _ = browser.call("PUT", "/profile", {"displayName": "Web By", "links": {"github": "gentpan"}})
         self.assertEqual((status, data["user"]["displayName"]), (200, "Web By"))
         status, data, _ = browser.call("PUT", "/projects", {"projects": [{"name": "Site", "url": "https://web.by"}]})
@@ -2076,8 +2084,8 @@ class ProfileTests(ServerTestCase):
             "displayName": "The Builder", "bio": "Ships things.", "region": "china",
             "links": {"website": "https://builder.dev", "github": "@gentpan", "x": "https://x.com/gentpan"}})
         self.assertEqual(status, 200, data)
-        self.assertEqual(data["user"]["links"], {"website": "https://builder.dev",
-                                                 "github": "https://github.com/gentpan", "x": "https://x.com/gentpan"})
+        self.assertEqual(data["user"]["links"], dict(dict.fromkeys(run_server.LINK_KINDS), website="https://builder.dev",
+                                                     github="https://github.com/gentpan", x="https://x.com/gentpan"))
         status, data, _ = mac.call("PUT", "/profile", {"links": {"website": "http://builder.dev"}})
         self.assertEqual((status, data["error"]), (400, "invalid_links"))
         status, data, _ = mac.call("PUT", "/profile", {"bio": "x" * 161})
@@ -2141,6 +2149,254 @@ class ProfileTests(ServerTestCase):
 
         _, me, _ = mac.call("GET", "/me")
         self.assertEqual(len(me["projects"]), 2)
+
+
+def contribution_page(end, counts, cells=365):
+    """github.com/users/<login>/contributions 的样子：每天一个 td，数字在 for 指向它的 tool-tip 里。"""
+    tds, tips = [], []
+    for i in range(cells):
+        day = (end - datetime.timedelta(days=cells - 1 - i)).isoformat()
+        n = counts.get(day, 0)
+        cell = f"contribution-day-component-{i % 7}-{i // 7}"
+        tds.append(f'<td tabindex="0" data-ix="{i // 7}" style="width: 10px" data-date="{day}" id="{cell}"'
+                   f' data-level="{min(n, 4)}" role="gridcell" data-view-component="true" class="ContributionCalendar-day"></td>')
+        text = f"{n:,} contribution{'' if n == 1 else 's'} on May 1st." if n else "No contributions on May 1st."
+        tips.append(f'<tool-tip id="tooltip-{i}" for="{cell}" popover="manual" data-type="label" class="sr-only">{text}</tool-tip>')
+    return ('<table class="ContributionCalendar-grid"><tbody><tr>' + "".join(tds) + "</tr></tbody></table>"
+            + "".join(tips)).encode("utf-8")
+
+
+class ProfilePageTests(ServerTestCase):
+    def wait_github(self):
+        for job in list(self.service._github_jobs.values()):
+            job.join(10)
+
+    def test_more_links_time_zone_and_switches(self):
+        mac = self.joined("linker")
+        browser = mac.browser
+        status, data, _ = browser.call("PUT", "/profile", {"links": {
+            "blog": "https://blog.linker.dev/", "gitlab": "@linker", "bluesky": "@linker.bsky.social",
+            "mastodon": "@linker@Hachyderm.io", "linkedin": "linker-dev", "youtube": "@linkerdev",
+            "telegram": "linker_dev", "huggingface": "linker", "bilibili": "123456", "zhihu": "linker",
+            "juejin": "4096", "v2ex": "linker", "weibo": "1234567890",
+            "xiaohongshu": "https://www.xiaohongshu.com/user/profile/5f00", "unknown": "ignored"}})
+        self.assertEqual(status, 200, data)
+        expected = dict(
+            dict.fromkeys(run_server.LINK_KINDS), blog="https://blog.linker.dev/", gitlab="https://gitlab.com/linker",
+            bluesky="https://bsky.app/profile/linker.bsky.social", mastodon="https://hachyderm.io/@linker",
+            linkedin="https://www.linkedin.com/in/linker-dev", youtube="https://www.youtube.com/@linkerdev",
+            telegram="https://t.me/linker_dev", huggingface="https://huggingface.co/linker",
+            bilibili="https://space.bilibili.com/123456", zhihu="https://www.zhihu.com/people/linker",
+            juejin="https://juejin.cn/user/4096", v2ex="https://www.v2ex.com/member/linker",
+            weibo="https://weibo.com/u/1234567890", xiaohongshu="https://www.xiaohongshu.com/user/profile/5f00")
+        self.assertEqual(data["user"]["links"], expected)
+        self.assertEqual(list(data["user"]["links"]), list(run_server.LINK_KINDS))
+
+        # 应用只认 website、github、x，也只传这三个：其余链接保持原样
+        status, data, _ = mac.call("PUT", "/profile", {"links": {"website": "https://linker.dev", "github": None, "x": None}})
+        expected["website"] = "https://linker.dev"
+        self.assertEqual((status, data["user"]["links"]), (200, expected))
+        status, data, _ = browser.call("PUT", "/profile", {"links": {"blog": "", "weibo": None}})
+        expected.update(blog=None, weibo=None)
+        self.assertEqual((status, data["user"]["links"]), (200, expected))
+        for field, value in (("linkedin", "https://evil.example/in/linker"), ("xiaohongshu", "linker"),
+                             ("blog", "http://blog.linker.dev"), ("mastodon", "http://hachyderm.io/@linker"),
+                             ("bilibili", "https://user:pw@space.bilibili.com/1"), ("telegram", 42)):
+            status, data, _ = browser.call("PUT", "/profile", {"links": {field: value}})
+            self.assertEqual((status, data["error"]), (400, "invalid_links"), field)
+            self.assertIn(f"links.{field} ", data["message"])
+        self.assertEqual(self.get("/users/linker")[1]["links"], expected)
+
+        status, data, _ = browser.call("PUT", "/profile", {"timezone": "Asia/Kolkata", "showActivity": False,
+                                                           "showGithub": False})
+        self.assertEqual(status, 200, data)
+        self.assertEqual((data["user"]["timezone"], data["user"]["showActivity"], data["user"]["showGithub"]),
+                         ("Asia/Kolkata", False, False))
+        for body, code in (({"timezone": "Mars/Olympus_Mons"}, "invalid_timezone"),
+                           ({"timezone": "../../etc/passwd"}, "invalid_timezone"), ({"timezone": 8}, "invalid_timezone"),
+                           ({"showActivity": "yes"}, "invalid_profile"), ({"showGithub": 1}, "invalid_profile")):
+            status, data, _ = browser.call("PUT", "/profile", body)
+            self.assertEqual((status, data["error"]), (400, code), body)
+        self.assertEqual(browser.call("GET", "/me")[1]["user"]["timezone"], "Asia/Kolkata")
+        self.assertIsNone(browser.call("PUT", "/profile", {"timezone": ""})[1]["user"]["timezone"])
+        public = self.get("/users/linker")[1]
+        self.assertEqual((public["activity"], public["github"]), (None, None))
+        self.assertNotIn("timezone", public)
+
+    def test_activity_heatmap(self):
+        mac = self.joined("heater", region="china")
+        other = self.paired(mac)                 # 不计分的那台：它的活动分钟不算
+        evening = NOW - 3600                     # 2026-09-16 11:00 UTC，上海 19:00
+        early = NOW - 18 * 3600 - 30 * 60        # 2026-09-15 17:30 UTC，上海已经是 16 日 01:30
+        monday = NOW - 2 * DAY                   # 2026-09-14
+        mac.upload([], [{"minute": evening, "source": "claude", "tokens": 1000},
+                        {"minute": evening + 60, "source": "claude", "tokens": 20},
+                        {"minute": early, "source": "codex", "tokens": 500},
+                        {"minute": monday, "source": "claude", "tokens": 200},
+                        {"minute": monday + 60, "source": "codex", "tokens": 0}])
+        other.upload([], [{"minute": evening, "source": "codex", "tokens": 99_999}])
+
+        activity = self.get("/users/heater")[1]["activity"]
+        # 从 52 周前的星期一画到今天（上海时间）
+        self.assertEqual({key: activity[key] for key in ("timezone", "from", "to", "totalTokens")},
+                         {"timezone": "Asia/Shanghai", "from": "2025-09-15", "to": "2026-09-16", "totalTokens": 1720})
+        self.assertEqual(activity["days"], [
+            {"date": "2026-09-14", "tokens": 200, "sources": {"claude": 200}},
+            {"date": "2026-09-16", "tokens": 1520, "sources": {"claude": 1020, "codex": 500}}])
+
+        mac.browser.call("PUT", "/profile", {"timezone": "UTC"})
+        days = self.get("/users/heater")[1]["activity"]["days"]
+        self.assertEqual([(d["date"], d["tokens"]) for d in days], [("2026-09-14", 200), ("2026-09-15", 500), ("2026-09-16", 1020)])
+
+        # 半点的时区：UTC 18:45 在加尔各答已经是 16 日 00:15，17:30 还是 15 日 23:00
+        mac.upload([], [{"minute": NOW - 17 * 3600 - 15 * 60, "source": "codex", "tokens": 7}])
+        mac.browser.call("PUT", "/profile", {"timezone": "Asia/Kolkata"})
+        days = self.get("/users/heater")[1]["activity"]["days"]
+        self.assertEqual([(d["date"], d["tokens"]) for d in days], [("2026-09-14", 200), ("2026-09-15", 500), ("2026-09-16", 1027)])
+
+        mac.browser.call("PUT", "/profile", {"showActivity": False})
+        self.assertIsNone(self.get("/users/heater")[1]["activity"])
+
+    def test_github_contributions_and_repositories(self):
+        browser = self.account("octo")
+        _, params = self.oauth_start(browser, "github", link="1")
+        self.oauth_callback(browser, "github", params["state"])
+        status, data, _ = browser.call("PUT", "/projects", {"projects": [
+            {"name": "QuotaBar", "url": "https://quota.bar", "github": "gentpan/QuotaBar"},
+            {"name": "Again", "url": "https://again.dev", "github": "https://github.com/GentPan/quotabar.git"},
+            {"name": "Gone", "url": "https://gone.dev", "github": "nobody/missing"},
+            {"name": "No repo", "url": "https://plain.dev"}]})
+        self.assertEqual(status, 200, data)
+        api = run_server.GITHUB_API
+        routes = self.providers.routes
+        user = {"id": 101, "login": "Octo-Cat"}
+        page = {"status": 200, "body": contribution_page(datetime.date(2026, 9, 16),
+                                                          {"2025-09-20": 1, "2026-09-01": 1234, "2026-09-16": 3})}
+        stats = {"status": 202}
+        routes[f"{api}/user/101"] = lambda method, headers, body: (200, json.dumps(user).encode())
+        routes["https://github.com/users/Octo-Cat/contributions"] = lambda method, headers, body: (page["status"], page["body"])
+        routes[f"{api}/repos/gentpan/QuotaBar"] = lambda method, headers, body: (200, json.dumps({
+            "full_name": "gentpan/QuotaBar", "html_url": "https://github.com/gentpan/QuotaBar",
+            "description": "Menu bar quotas", "stargazers_count": 1200, "forks_count": 40, "language": "Swift",
+            "pushed_at": "2026-09-15T10:00:00Z", "archived": False}).encode())
+        routes[f"{api}/repos/gentpan/QuotaBar/stats/commit_activity"] = lambda method, headers, body: (
+            (202, b"") if stats["status"] == 202 else (200, json.dumps([{"total": n, "week": 0, "days": []} for n in range(50)]).encode()))
+
+        self.assertEqual(self.get("/users/octo")[1]["github"], {"login": "Octo-Cat", "url": "https://github.com/Octo-Cat"})
+        status, data, headers = self.http("GET", "/users/octo/github")
+        self.assertEqual(status, 200, data)
+        self.assertEqual(headers["cache-control"], "public, max-age=30")
+        self.assertEqual((data["login"], data["url"], data["pending"], data["totals"], data["fetchedAt"]),
+                         ("Octo-Cat", "https://github.com/Octo-Cat", False, None, NOW))
+        self.assertEqual(data["calendar"], {"total": 1238, "from": "2025-09-17", "to": "2026-09-16", "days": [
+            {"date": "2025-09-20", "count": 1}, {"date": "2026-09-01", "count": 1234}, {"date": "2026-09-16", "count": 3}]})
+        self.assertEqual([repo["repo"] for repo in data["repos"]], ["gentpan/QuotaBar", "nobody/missing"])
+        self.assertEqual(data["repos"][0], {
+            "repo": "gentpan/QuotaBar", "url": "https://github.com/gentpan/QuotaBar", "description": "Menu bar quotas",
+            "stars": 1200, "forks": 40, "language": "Swift", "pushedAt": NOW - 26 * 3600, "archived": False,
+            "weeks": None, "commits": None, "fetchedAt": NOW})
+        self.assertEqual(data["repos"][1], {"repo": "nobody/missing", "missing": True, "fetchedAt": NOW})
+        # 没有令牌时 API 用 OAuth 应用的 client id / secret；公开的贡献页面什么都不带
+        basic = "Basic " + base64.b64encode(f"gh-client:{GITHUB_SECRET}".encode()).decode()
+        data_calls = [c for c in self.providers.calls if c["url"].startswith((api + "/repos/", api + "/user/101"))]
+        self.assertTrue(data_calls and all(c["headers"].get("Authorization") == basic for c in data_calls))
+        page_calls = [c for c in self.providers.calls if c["url"].endswith("/contributions")]
+        self.assertEqual(len(page_calls), 1)
+        self.assertNotIn("Authorization", page_calls[0]["headers"])
+
+        # 缓存期内不再去取；提交统计还在算（202）的仓库两分钟后再取
+        count = len(self.providers.calls)
+        self.get("/users/octo/github")
+        self.wait_github()
+        self.assertEqual(len(self.providers.calls), count)
+        stats["status"] = 200
+        self.clock.advance(run_server.GITHUB_PENDING_RETRY + 1)
+        self.assertIsNone(self.get("/users/octo/github")[1]["repos"][0]["weeks"])   # 先给上一份，后台去取
+        self.wait_github()
+        repo = self.get("/users/octo/github")[1]["repos"][0]
+        self.assertEqual((repo["weeks"], repo["commits"]), ([0, 0] + list(range(50)), sum(range(50))))
+        self.assertEqual(len([c for c in self.providers.calls if c["url"].endswith("/contributions")]), 1)
+
+        # 有令牌：GraphQL 连提交、PR 的分项一起取；GitHub 上改了名跟着改
+        self.service.settings.github_token = "github_pat_for_tests"
+        user["login"] = "Octo-Renamed"
+        graph = {"data": {"user": {"contributionsCollection": {
+            "contributionCalendar": {"totalContributions": 5, "weeks": [{"contributionDays": [
+                {"date": "2026-09-22", "contributionCount": 0}, {"date": "2026-09-23", "contributionCount": 5}]}]},
+            "totalCommitContributions": 4, "totalPullRequestContributions": 1, "totalIssueContributions": 0,
+            "totalPullRequestReviewContributions": 2, "restrictedContributionsCount": 7}}}}
+        graph_status = {"value": 200}
+        routes[run_server.GITHUB_GRAPHQL_URL] = lambda method, headers, body: (graph_status["value"], json.dumps(graph).encode())
+        self.clock.advance(run_server.GITHUB_TTL)
+        self.get("/users/octo/github")
+        self.wait_github()
+        data = self.get("/users/octo/github")[1]
+        self.assertEqual((data["login"], data["totals"]),
+                         ("Octo-Renamed", {"commits": 4, "pullRequests": 1, "issues": 0, "reviews": 2, "private": 7}))
+        self.assertEqual(data["calendar"], {"total": 5, "from": "2026-09-22", "to": "2026-09-23",
+                                            "days": [{"date": "2026-09-23", "count": 5}]})
+        graphql = [c for c in self.providers.calls if c["url"] == run_server.GITHUB_GRAPHQL_URL][-1]
+        self.assertEqual(graphql["headers"]["Authorization"], "Bearer github_pat_for_tests")
+        self.assertEqual(json.loads(graphql["body"])["variables"], {"login": "Octo-Renamed"})
+        self.assertEqual(self.get("/users/octo")[1]["github"]["login"], "Octo-Renamed")
+        self.assertEqual(self.query("SELECT login FROM identities WHERE provider = 'github'"), [("Octo-Renamed",)])
+        self.assertNotIn("github_pat_for_tests", self.dump())
+
+        # GitHub 出错：留着上一份，十五分钟后再试
+        graph_status["value"] = 502
+        page["status"] = 500
+        self.clock.advance(run_server.GITHUB_TTL)
+        self.get("/users/octo/github")
+        self.wait_github()
+        self.assertEqual(self.get("/users/octo/github")[1]["totals"]["commits"], 4)
+        self.assertEqual(self.query("SELECT retry_at FROM github_cache WHERE key = 'user:101'"),
+                         [(int(self.clock()) + run_server.GITHUB_RETRY,)])
+
+        # 关掉 GitHub 的显示：日历不给，项目的仓库数据照给
+        browser.call("PUT", "/profile", {"showGithub": False})
+        self.assertIsNone(self.get("/users/octo")[1]["github"])
+        data = self.get("/users/octo/github")[1]
+        self.assertEqual((data["login"], data["calendar"], data["totals"], len(data["repos"])), (None, None, None, 2))
+
+        # 只填了 GitHub 链接、没关联 GitHub 登录的人没有贡献日历
+        plain = self.account("plainer")
+        plain.call("PUT", "/profile", {"links": {"github": "Octo-Cat"}})
+        self.assertIsNone(self.get("/users/plainer")[1]["github"])
+        self.assertEqual(self.get("/users/plainer/github")[1], {"login": None, "url": None, "calendar": None,
+                                                                "totals": None, "repos": [], "pending": False,
+                                                                "fetchedAt": None})
+        status, data = self.get("/users/nobody-here/github")
+        self.assertEqual((status, data["error"]), (404, "user_not_found"))
+
+        # 删号时这个人的贡献日历缓存一起删，仓库的留着
+        self.assertEqual(browser.call("DELETE", "/account")[0], 204)
+        self.assertEqual(self.query("SELECT key FROM github_cache ORDER BY key"),
+                         [("repo:gentpan/quotabar",), ("repo:nobody/missing",)])
+
+    def test_github_first_view_waits_then_says_pending(self):
+        browser = self.account("slowpoke")
+        _, params = self.oauth_start(browser, "github", link="1")
+        self.oauth_callback(browser, "github", params["state"])
+        release = threading.Event()
+        routes = self.providers.routes
+
+        def slow_user(method, headers, body):
+            release.wait(10)
+            return 200, json.dumps({"login": "Octo-Cat"}).encode()
+
+        routes[f"{run_server.GITHUB_API}/user/101"] = slow_user
+        routes["https://github.com/users/Octo-Cat/contributions"] = lambda method, headers, body: (
+            200, contribution_page(datetime.date(2026, 9, 16), {}, cells=12))   # 太少：页面改版了
+        with mock.patch.object(run_server, "GITHUB_WAIT", 0.05):
+            status, data, headers = self.http("GET", "/users/slowpoke/github")
+        self.assertEqual((status, data["pending"], data["login"], data["calendar"]), (200, True, "Octo-Cat", None))
+        self.assertEqual(headers["cache-control"], "no-store")
+        release.set()
+        self.wait_github()
+        data = self.get("/users/slowpoke/github")[1]
+        self.assertEqual((data["pending"], data["calendar"]), (False, None))
+        self.assertEqual(self.query("SELECT payload, retry_at FROM github_cache WHERE key = 'user:101'"),
+                         [(None, NOW + run_server.GITHUB_RETRY)])
 
 
 class AccountTests(ServerTestCase):
@@ -2275,7 +2531,7 @@ class ComputationTests(unittest.TestCase):
                 run_server.RunService(path, b"k" * 32).close()
             connection = sqlite3.connect(path)
             try:
-                self.assertEqual(connection.execute("SELECT version FROM schema_version").fetchall(), [(1,), (2,), (3,), (4,)])
+                self.assertEqual(connection.execute("SELECT version FROM schema_version").fetchall(), [(1,), (2,), (3,), (4,), (5,)])
             finally:
                 connection.close()
 
@@ -2357,7 +2613,7 @@ class ComputationTests(unittest.TestCase):
 
             connection = sqlite3.connect(path)
             try:
-                self.assertEqual(connection.execute("SELECT version FROM schema_version").fetchall(), [(1,), (2,), (3,), (4,)])
+                self.assertEqual(connection.execute("SELECT version FROM schema_version").fetchall(), [(1,), (2,), (3,), (4,), (5,)])
                 self.assertEqual(sorted(connection.execute(
                     "SELECT account_hmac, provider, user_id, via FROM account_owners").fetchall()),
                     sorted([(shared, "cursor", 1, "first"), (late_own, "cursor", 2, "email")]))
@@ -2394,13 +2650,13 @@ class ComputationTests(unittest.TestCase):
             # 退回到 schema 3 的样子：没有 public_id 列和索引
             connection.execute("DROP INDEX runs_public_id")
             connection.execute("ALTER TABLE runs DROP COLUMN public_id")
-            connection.execute("DELETE FROM schema_version WHERE version = 4")
+            connection.execute("DELETE FROM schema_version WHERE version >= 4")
             connection.close()
 
             run_server.RunService(path, b"k" * 32).close()
             connection = sqlite3.connect(path)
             try:
-                self.assertEqual(connection.execute("SELECT version FROM schema_version").fetchall(), [(1,), (2,), (3,), (4,)])
+                self.assertEqual(connection.execute("SELECT version FROM schema_version").fetchall(), [(1,), (2,), (3,), (4,), (5,)])
                 ids = [row[0] for row in connection.execute("SELECT public_id FROM runs ORDER BY id")]
                 self.assertEqual(len(set(ids)), 3)
                 self.assertTrue(all(re.fullmatch(r"[A-Za-z0-9_-]{12}", run_id) for run_id in ids))
