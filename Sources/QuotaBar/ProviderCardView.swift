@@ -135,22 +135,9 @@ struct ProviderCardView: View {
         }
     }
 
-    /// The window the ring follows, then the first window of the other
-    /// horizon — the 5-hour and the week for most plans — in the order the
-    /// provider reports them.
+    /// What the card shows before it is expanded; see `upFrontWindows`.
     private func primary(_ snapshot: UsageSnapshot) -> [UsageWindow] {
-        let withFigures = snapshot.windows.filter { $0.usedPercent != nil }
-        guard let lead = store.headlineWindow(for: id) ?? withFigures.first else {
-            return Array(snapshot.windows.prefix(2))
-        }
-        var picked = [lead]
-        if let other = withFigures.first(where: { $0.id != lead.id && $0.horizon != lead.horizon && $0.scope == nil })
-            ?? withFigures.first(where: { $0.id != lead.id })
-        {
-            picked.append(other)
-        }
-        let order = snapshot.windows.map(\.id)
-        return picked.sorted { (order.firstIndex(of: $0.id) ?? 0) < (order.firstIndex(of: $1.id) ?? 0) }
+        snapshot.upFrontWindows(for: id, picked: store.pickedHeadlineWindow(for: id))
     }
 
     private func rest(_ snapshot: UsageSnapshot) -> [UsageWindow] {
