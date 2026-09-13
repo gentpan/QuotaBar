@@ -223,18 +223,21 @@ public struct RunDevice: Codable, Equatable, Sendable, Identifiable {
     public var ranked: Bool
     public var lastSeenAt: Date?
     public var current: Bool
+    /// The QuotaBar version the Mac connected with; absent from older servers.
+    public var appVersion: String?
 
     public var id: String { deviceId }
 
-    public init(deviceId: String, name: String, ranked: Bool, lastSeenAt: Date? = nil, current: Bool = false) {
+    public init(deviceId: String, name: String, ranked: Bool, lastSeenAt: Date? = nil, current: Bool = false, appVersion: String? = nil) {
         self.deviceId = deviceId
         self.name = name
         self.ranked = ranked
         self.lastSeenAt = lastSeenAt
         self.current = current
+        self.appVersion = appVersion
     }
 
-    private enum CodingKeys: String, CodingKey { case deviceId, name, ranked, lastSeenAt, current }
+    private enum CodingKeys: String, CodingKey { case deviceId, name, ranked, lastSeenAt, current, appVersion }
 
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
@@ -243,6 +246,7 @@ public struct RunDevice: Codable, Equatable, Sendable, Identifiable {
         ranked = (try? c.decodeIfPresent(Bool.self, forKey: .ranked)) ?? false
         lastSeenAt = c.lenientDate(.lastSeenAt)
         current = (try? c.decodeIfPresent(Bool.self, forKey: .current)) ?? false
+        appVersion = (try? c.decodeIfPresent(String.self, forKey: .appVersion)).nilIfBlank
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -252,6 +256,68 @@ public struct RunDevice: Codable, Equatable, Sendable, Identifiable {
         try c.encode(ranked, forKey: .ranked)
         try c.encodeIfPresent(lastSeenAt.map { Int($0.timeIntervalSince1970) }, forKey: .lastSeenAt)
         try c.encode(current, forKey: .current)
+        try c.encodeIfPresent(appVersion, forKey: .appVersion)
+    }
+}
+
+/// One way into the account on quota.run: Google, GitHub or an email code.
+/// The app only shows these; linking and removing happen on the account page.
+public struct RunIdentity: Codable, Equatable, Sendable, Identifiable {
+    public var id: String
+    /// `google`, `github` or `email`.
+    public var provider: String
+    public var email: String?
+    public var name: String?
+    public var linkedAt: Date?
+
+    public init(id: String, provider: String, email: String? = nil, name: String? = nil, linkedAt: Date? = nil) {
+        self.id = id
+        self.provider = provider
+        self.email = email
+        self.name = name
+        self.linkedAt = linkedAt
+    }
+
+    private enum CodingKeys: String, CodingKey { case id, provider, email, name, linkedAt }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        // A row id, which a server may well send as a number.
+        if let text = try? c.decode(String.self, forKey: .id) {
+            id = text
+        } else {
+            id = String(try c.decode(Int.self, forKey: .id))
+        }
+        provider = (try? c.decodeIfPresent(String.self, forKey: .provider)) ?? ""
+        email = (try? c.decodeIfPresent(String.self, forKey: .email)).nilIfBlank
+        name = (try? c.decodeIfPresent(String.self, forKey: .name)).nilIfBlank
+        linkedAt = c.lenientDate(.linkedAt)
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(id, forKey: .id)
+        try c.encode(provider, forKey: .provider)
+        try c.encodeIfPresent(email, forKey: .email)
+        try c.encodeIfPresent(name, forKey: .name)
+        try c.encodeIfPresent(linkedAt.map { Int($0.timeIntervalSince1970) }, forKey: .linkedAt)
+    }
+
+    /// "GitHub", "Google", "Email".
+    public var providerName: String {
+        switch provider {
+        case "github": "GitHub"
+        case "google": "Google"
+        case "email": L10n.t("Email", "邮箱")
+        default: provider.capitalized
+        }
+    }
+
+    /// "GitHub · gentpan", "Google · peter@example.com", "Email · peter@example.com":
+    /// the name GitHub knows, the address for the other two.
+    public var label: String {
+        let detail = provider == "github" ? (name ?? email) : (email ?? name)
+        return [providerName, detail].compactMap { $0 }.joined(separator: " · ")
     }
 }
 
@@ -331,16 +397,19 @@ public struct RunMe: Codable, Equatable, Sendable {
     public var rankedChangeAvailableAt: Date?
     public var lastUploadAt: Date?
     public var projects: [RunProject]
+    /// How the account signs in on quota.run.
+    public var identities: [RunIdentity]
 
-    public init(user: RunUser, devices: [RunDevice] = [], rankedChangeAvailableAt: Date? = nil, lastUploadAt: Date? = nil, projects: [RunProject] = []) {
+    public init(user: RunUser, devices: [RunDevice] = [], rankedChangeAvailableAt: Date? = nil, lastUploadAt: Date? = nil, projects: [RunProject] = [], identities: [RunIdentity] = []) {
         self.user = user
         self.devices = devices
         self.rankedChangeAvailableAt = rankedChangeAvailableAt
         self.lastUploadAt = lastUploadAt
         self.projects = projects
+        self.identities = identities
     }
 
-    private enum CodingKeys: String, CodingKey { case user, devices, rankedChangeAvailableAt, lastUploadAt, projects }
+    private enum CodingKeys: String, CodingKey { case user, devices, rankedChangeAvailableAt, lastUploadAt, projects, identities }
 
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
@@ -349,6 +418,7 @@ public struct RunMe: Codable, Equatable, Sendable {
         rankedChangeAvailableAt = c.lenientDate(.rankedChangeAvailableAt)
         lastUploadAt = c.lenientDate(.lastUploadAt)
         projects = (try? c.decodeIfPresent([RunProject].self, forKey: .projects)) ?? []
+        identities = (try? c.decodeIfPresent([RunIdentity].self, forKey: .identities)) ?? []
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -358,16 +428,25 @@ public struct RunMe: Codable, Equatable, Sendable {
         try c.encodeIfPresent(rankedChangeAvailableAt.map { Int($0.timeIntervalSince1970) }, forKey: .rankedChangeAvailableAt)
         try c.encodeIfPresent(lastUploadAt.map { Int($0.timeIntervalSince1970) }, forKey: .lastUploadAt)
         try c.encode(projects, forKey: .projects)
+        try c.encode(identities, forKey: .identities)
     }
 
     /// The device this request came from, as the server sees it.
     public var currentDevice: RunDevice? { devices.first { $0.current } }
 }
 
+/// Who this Mac became once quota.run approved it: the account, the device id
+/// the signatures carry from now on, and whether its readings count.
 public struct RunRegistration: Decodable, Equatable, Sendable {
     public var user: RunUser
     public var deviceId: String
     public var ranked: Bool
+
+    public init(user: RunUser, deviceId: String, ranked: Bool) {
+        self.user = user
+        self.deviceId = deviceId
+        self.ranked = ranked
+    }
 
     private enum CodingKeys: String, CodingKey { case user, deviceId, ranked }
 
@@ -399,22 +478,51 @@ public struct RunUploadReceipt: Decodable, Equatable, Sendable {
     }
 }
 
-public struct RunPairCode: Decodable, Equatable, Sendable {
-    public var code: String
-    public var expiresAt: Date?
+/// `POST /connect/start`: the code to compare, the page to approve it on, and
+/// how long and how often to ask.
+public struct RunConnectStart: Decodable, Equatable, Sendable {
+    public var requestId: String
+    /// `ABCD-EFGH`.
+    public var userCode: String
+    public var verifyURL: URL
+    public var expiresAt: Date
+    /// Seconds between polls.
+    public var interval: TimeInterval
 
-    public init(code: String, expiresAt: Date?) {
-        self.code = code
+    public init(requestId: String, userCode: String, verifyURL: URL, expiresAt: Date, interval: TimeInterval = 3) {
+        self.requestId = requestId
+        self.userCode = userCode
+        self.verifyURL = verifyURL
         self.expiresAt = expiresAt
+        self.interval = interval
     }
 
-    private enum CodingKeys: String, CodingKey { case code, expiresAt }
+    private enum CodingKeys: String, CodingKey { case requestId, userCode, verifyURL, expiresAt, interval }
 
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
-        code = try c.decode(String.self, forKey: .code)
-        expiresAt = c.lenientDate(.expiresAt)
+        requestId = try c.decode(String.self, forKey: .requestId)
+        userCode = try c.decode(String.self, forKey: .userCode)
+        // Only a web page goes to the browser, whatever the answer says.
+        guard let url = URL(string: try c.decode(String.self, forKey: .verifyURL)),
+              let scheme = url.scheme?.lowercased(), scheme == "https" || scheme == "http"
+        else {
+            throw DecodingError.dataCorruptedError(forKey: .verifyURL, in: c, debugDescription: "not a web address")
+        }
+        verifyURL = url
+        // The contract gives the code 10 minutes.
+        expiresAt = c.lenientDate(.expiresAt) ?? Date().addingTimeInterval(600)
+        let seconds = (try? c.decodeIfPresent(Double.self, forKey: .interval)) ?? 3
+        interval = min(max(seconds, 1), 30)
     }
+}
+
+/// `POST /connect/poll`.
+public enum RunConnectStatus: Equatable, Sendable {
+    case pending
+    case denied
+    case expired
+    case approved(RunRegistration)
 }
 
 extension KeyedDecodingContainer {
@@ -431,43 +539,6 @@ extension Optional where Wrapped == String {
     var nilIfBlank: String? {
         guard let trimmed = self?.trimmingCharacters(in: .whitespacesAndNewlines), !trimmed.isEmpty else { return nil }
         return trimmed
-    }
-}
-
-// MARK: - Usernames
-
-public enum RunUsername {
-    public static let reserved: Set<String> = [
-        "admin", "api", "app", "about", "help", "leaderboard", "run", "quota", "quotabar", "settings", "support",
-        "www", "zh", "en", "me", "user", "users", "login", "logout", "signup", "register", "profile", "u",
-    ]
-
-    public enum Problem: Equatable, Sendable {
-        case empty
-        case invalid
-        case reserved
-
-        public var message: String {
-            switch self {
-            case .empty: L10n.t("Choose a username.", "请填写用户名。")
-            case .invalid: L10n.t(
-                "3–20 characters: lower-case letters, digits, _ and -, starting with a letter or digit.",
-                "3–20 个字符：小写字母、数字、_ 和 -，以字母或数字开头。")
-            case .reserved: L10n.t("That name is reserved.", "这个用户名是保留字，不能使用。")
-            }
-        }
-    }
-
-    /// Case-folded and trimmed, as the server stores it.
-    public static func normalize(_ raw: String) -> String {
-        raw.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-    }
-
-    public static func problem(_ raw: String) -> Problem? {
-        let name = normalize(raw)
-        guard !name.isEmpty else { return .empty }
-        guard name.range(of: "^[a-z0-9][a-z0-9_-]{2,19}$", options: .regularExpression) != nil else { return .invalid }
-        return reserved.contains(name) ? .reserved : nil
     }
 }
 
@@ -565,10 +636,15 @@ public struct QuotaRunError: LocalizedError, Equatable, Sendable {
                     "这台 Mac 的时钟比 quota.run 慢了 \(minutes) 分钟。请在系统设置里打开「自动设置日期与时间」。")
         }
         switch code {
-        case "username_taken": return L10n.t("That username is taken.", "这个用户名已被占用。")
-        case "invalid_username": return RunUsername.Problem.invalid.message
-        case "pair_code_invalid": return L10n.t("That pairing code is wrong or has expired.", "配对码不正确或已过期。")
-        case "current_device": return L10n.t("This Mac cannot remove itself; leave Quota Run instead.", "不能移除本机；如需退出请使用「退出 Quota Run」。")
+        case "connect_request_invalid":
+            return L10n.t("quota.run no longer knows this sign-in request. Sign in again.", "quota.run 已找不到这次登录请求，请重新登录。")
+        case "key_registered":
+            return L10n.t("This Mac's new key is already connected to an account. Sign in again.", "这台 Mac 的新密钥已经连接过账户，请重新登录。")
+        case "not_signed_in": return L10n.t("Sign in on quota.run first.", "请先在 quota.run 登录。")
+        case "needs_signup":
+            return L10n.t("Finish creating your account on quota.run first.", "请先在 quota.run 完成账户创建。")
+        case "invalid_region": return L10n.t("quota.run does not know that region.", "quota.run 不认识这个地区。")
+        case "current_device": return L10n.t("This Mac cannot remove itself here; use Disconnect This Mac.", "不能在这里移除本机，请使用「断开这台 Mac」。")
         case "ranked_device": return L10n.t("Make another Mac the ranked device before removing this one.", "请先把另一台 Mac 设为计分设备，再移除这台。")
         case "cooldown":
             if let availableAt {
@@ -584,8 +660,8 @@ public struct QuotaRunError: LocalizedError, Equatable, Sendable {
         default:
             if isAuthFailure {
                 return L10n.t(
-                    "quota.run no longer accepts this Mac's key. It may have been removed from your account.",
-                    "quota.run 不再接受这台 Mac 的密钥，可能已从你的账户中移除。")
+                    "quota.run no longer accepts this Mac's key; it may have been removed from your account. Disconnect this Mac and sign in again.",
+                    "quota.run 不再接受这台 Mac 的密钥，可能已从你的账户中移除。请断开这台 Mac 后重新登录。")
             }
             if status == 429 { return L10n.t("Too many requests; trying again later.", "请求太频繁，稍后再试。") }
             // The server's own sentence is English; better than a bare code.
@@ -632,7 +708,7 @@ public struct QuotaRunClient: Sendable {
 
     public var base: URL
     public var signer: RunSigner
-    /// Absent until registration hands one out.
+    /// Absent until quota.run approves the connection.
     public var deviceId: String?
     public var transport: Transport
     public var clock: @Sendable () -> Date
@@ -667,8 +743,10 @@ public struct QuotaRunClient: Sendable {
         return encoder
     }()
 
-    /// Builds and signs a request without sending it.
-    public func signedRequest(_ method: String, _ endpoint: String, body: Data? = nil) throws -> RunSignedRequest {
+    /// Builds and signs a request without sending it. `anonymous` leaves the
+    /// device id out: `connect/start` and `connect/poll` are verified with
+    /// the public key in their body, before there is a device.
+    public func signedRequest(_ method: String, _ endpoint: String, body: Data? = nil, anonymous: Bool = false) throws -> RunSignedRequest {
         var text = base.absoluteString
         while text.hasSuffix("/") { text.removeLast() }
         guard let url = URL(string: text + endpoint) else { throw QuotaRunError.badResponse }
@@ -689,14 +767,14 @@ public struct QuotaRunClient: Sendable {
             "X-Quota-Nonce": nonce,
             "X-Quota-Signature": Base64URL.encode(signature),
         ]
-        if let deviceId { headers["X-Quota-Device"] = deviceId }
+        if let deviceId, !anonymous { headers["X-Quota-Device"] = deviceId }
         if body != nil { headers["Content-Type"] = "application/json" }
         return RunSignedRequest(method: method.uppercased(), url: url, path: path, headers: headers, body: body, canonical: canonical)
     }
 
-    private func send(_ method: String, _ endpoint: String, json: (some Encodable)?) async throws -> Data {
+    private func send(_ method: String, _ endpoint: String, json: (some Encodable)?, anonymous: Bool = false) async throws -> Data {
         let body = try json.map { try Self.encoder.encode($0) }
-        let request = try signedRequest(method, endpoint, body: body)
+        let request = try signedRequest(method, endpoint, body: body, anonymous: anonymous)
         let response: HTTPResponse
         do {
             response = try await transport(request.method, request.url, request.headers, request.body)
@@ -727,30 +805,43 @@ public struct QuotaRunClient: Sendable {
 
     // MARK: Endpoints
 
-    public struct RegisterBody: Encodable, Sendable {
-        public var username: String?
-        public var displayName: String?
-        public var region: RunRegion?
-        public var pairCode: String?
+    public struct ConnectStartBody: Encodable, Sendable {
         public var publicKey: String
         public var deviceName: String
         public var platform = "macos"
         public var appVersion: String
+        /// `zh` sends the browser to `/zh/connect`.
+        public var lang: String
     }
 
-    public func register(username: String, displayName: String, region: RunRegion, deviceName: String, appVersion: String) async throws -> RunRegistration {
-        let body = RegisterBody(
-            username: RunUsername.normalize(username), displayName: displayName, region: region, pairCode: nil,
-            publicKey: Base64URL.encode(signer.publicKeyX963), deviceName: deviceName, appVersion: appVersion)
-        return try decode(RunRegistration.self, try await send("POST", "/register", json: body))
+    /// Asks quota.run for a code to approve this Mac's key with. The key is
+    /// the client's signer; nothing about the person goes with it.
+    public func connectStart(deviceName: String, appVersion: String, lang: String = L10n.isChinese ? "zh" : "en") async throws -> RunConnectStart {
+        let body = ConnectStartBody(
+            publicKey: Base64URL.encode(signer.publicKeyX963),
+            deviceName: String(deviceName.trimmingCharacters(in: .whitespacesAndNewlines).prefix(60)),
+            appVersion: String(appVersion.prefix(40)),
+            lang: lang)
+        return try decode(RunConnectStart.self, try await send("POST", "/connect/start", json: body, anonymous: true))
     }
 
-    public func register(pairCode: String, deviceName: String, appVersion: String) async throws -> RunRegistration {
-        let code = pairCode.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
-        let body = RegisterBody(
-            username: nil, displayName: nil, region: nil, pairCode: code,
-            publicKey: Base64URL.encode(signer.publicKeyX963), deviceName: deviceName, appVersion: appVersion)
-        return try decode(RunRegistration.self, try await send("POST", "/register", json: body))
+    /// Whether the code has been approved on quota.run yet.
+    public func connectPoll(requestId: String) async throws -> RunConnectStatus {
+        struct Body: Encodable {
+            let requestId: String
+            let publicKey: String
+        }
+        struct Answer: Decodable { let status: String }
+        let data = try await send(
+            "POST", "/connect/poll",
+            json: Body(requestId: requestId, publicKey: Base64URL.encode(signer.publicKeyX963)), anonymous: true)
+        switch try decode(Answer.self, data).status {
+        case "pending": return .pending
+        case "denied": return .denied
+        case "expired": return .expired
+        case "approved": return .approved(try decode(RunRegistration.self, data))
+        default: throw QuotaRunError.badResponse
+        }
     }
 
     public func me() async throws -> RunMe {
@@ -805,14 +896,15 @@ public struct QuotaRunClient: Sendable {
         return try decode(RankedChange.self, try await send("POST", "/devices/ranked", json: Body(deviceId: deviceId)))
     }
 
-    public func pair() async throws -> RunPairCode {
-        try decode(RunPairCode.self, try await send("POST", "/pair", json: Optional<Empty>.none))
-    }
-
     public func deleteDevice(_ deviceId: String) async throws -> [RunDevice] {
         struct Answer: Decodable { let devices: [RunDevice] }
         let escaped = deviceId.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed.subtracting(CharacterSet(charactersIn: "/"))) ?? deviceId
         return try decode(Answer.self, try await send("DELETE", "/devices/\(escaped)", json: Optional<Empty>.none)).devices
+    }
+
+    /// This Mac leaves the account; the account and its other Macs stay.
+    public func disconnectCurrentDevice() async throws {
+        _ = try await send("DELETE", "/devices/current", json: Optional<Empty>.none)
     }
 
     public func deleteAccount() async throws {

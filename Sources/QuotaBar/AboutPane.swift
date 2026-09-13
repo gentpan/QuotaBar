@@ -93,8 +93,8 @@ struct AboutPane: View {
                     .foregroundStyle(.secondary)
                 }
                 SettingFootnote(L10n.t(
-                    "With a proxy set, all of it goes through the proxy. Unless you join Quota Run, usage is never sent to QuotaBar's own server.",
-                    "设置了代理时，以上请求都经过代理。除非你加入 Quota Run，你的用量不会发送到 QuotaBar 自己的服务器。"))
+                    "With a proxy set, all of it goes through the proxy. Unless you sign in to Quota Run, usage is never sent to QuotaBar's own server.",
+                    "设置了代理时，以上请求都经过代理。除非你登录 Quota Run，你的用量不会发送到 QuotaBar 自己的服务器。"))
                     .padding(.top, 2)
             }
         }
@@ -140,8 +140,8 @@ struct AboutPane: View {
                    "GitHub，检查和下载更新，以及获取模型价目表；"),
             L10n.t("quota.bar, when you send feedback, and for updates when GitHub can't be reached.",
                    "quota.bar，在你提交反馈时，以及连不上 GitHub 时检查和下载更新。"),
-            L10n.t("Quota Run at quota.run, only after you join Quota Run: the readings, token counts and profile its consent screen lists.",
-                   "quota.run 上的 Quota Run，仅在你加入 Quota Run 之后：上传加入时同意页面列出的读数、token 数量和个人资料。"),
+            L10n.t("Quota Run at quota.run, only after you sign in there in your browser: the readings, token counts and profile its consent screen lists.",
+                   "quota.run 上的 Quota Run，仅在你通过浏览器在 quota.run 登录之后：上传登录前同意页面列出的读数、token 数量和个人资料。"),
         ]
     }
 

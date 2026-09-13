@@ -5,8 +5,8 @@ import QuotaCore
 
 // MARK: - Quota Run
 
-/// Personal records for everyone, and the leaderboard membership for those
-/// who join. The records come first and never depend on the rest: they are
+/// Personal records for everyone, and the leaderboard account for those who
+/// sign in. The records come first and never depend on the rest: they are
 /// the part that works with no account, and the part most people will use.
 struct RunPane: View {
     @ObservedObject var store: UsageStore
@@ -25,10 +25,9 @@ struct RunPane: View {
                 .id("profile-\(run.editorRevision)")
             RunProjectsCard(run: run, account: account)
                 .id("projects-\(run.editorRevision)")
-            RunPairCard(run: run, now: now ?? Date())
-            RunLeaveCard(run: run)
+            RunLeaveCard(run: run, account: account)
         } else {
-            RunJoinCard(run: run)
+            RunSignInCard(run: run, now: now)
         }
     }
 }
@@ -400,105 +399,153 @@ enum RunShare {
     }
 }
 
-// MARK: Joining
+// MARK: Signing in
 
-struct RunJoinCard: View {
+struct RunSignInCard: View {
     @ObservedObject var run: RunCenter
-    @State private var username: String
-    @State private var displayName: String
-    @State private var region: RunRegion
+    /// Pinned by the previews; otherwise the expiry counts down on its own.
+    var now: Date?
     @State private var agreed: Bool
-    @State private var pairCode: String
 
-    init(run: RunCenter, username: String = "", displayName: String = "", region: RunRegion? = nil, agreed: Bool = false, pairCode: String = "") {
+    init(run: RunCenter, now: Date? = nil, agreed: Bool = false) {
         self.run = run
-        _username = State(initialValue: username)
-        _displayName = State(initialValue: displayName)
-        _region = State(initialValue: region ?? (L10n.isChinese ? .china : .global))
+        self.now = now
         _agreed = State(initialValue: agreed)
-        _pairCode = State(initialValue: pairCode)
     }
 
-    private var usernameProblem: RunUsername.Problem? { RunUsername.problem(username) }
-    private var cleanCode: String { pairCode.trimmingCharacters(in: .whitespacesAndNewlines) }
-
     var body: some View {
-        SettingsCard(L10n.t("Join Quota Run", "加入 Quota Run")) {
+        SettingsCard(L10n.t("Sign in to Quota Run", "登录 Quota Run")) {
             SettingFootnote(L10n.t(
-                "Quota Run is QuotaBar's opt-in leaderboard at quota.run: how fast a subscription window gets used up, and a public profile with what you build. Nothing is uploaded until you join, and only from one ranked Mac.",
-                "Quota Run 是 QuotaBar 的自愿排行榜，在 quota.run 上比谁用满订阅额度窗口更快，并有一个展示你作品的公开主页。加入之前什么都不会上传；加入之后也只从一台计分设备上传。"))
+                "Quota Run is QuotaBar's opt-in leaderboard at quota.run: how fast a subscription window gets used up, and a public profile with what you build. Nothing is uploaded until you sign in, and then only from one ranked Mac.",
+                "Quota Run 是 QuotaBar 的自愿排行榜，在 quota.run 上比谁用满订阅额度窗口更快，并有一个展示你作品的公开主页。登录之前什么都不会上传；登录之后也只从一台计分设备上传。"))
 
-            SettingRow(L10n.t("Username", "用户名"), caption: "quota.run/@\(username.isEmpty ? L10n.t("name", "用户名") : RunUsername.normalize(username))") {
-                VStack(alignment: .leading, spacing: Design.space1) {
-                    GlassTextField(placeholder: L10n.t("3–20 letters, digits, _ or -", "3–20 位小写字母、数字、_ 或 -"), text: $username)
-                        .frame(maxWidth: 320)
-                    if !username.isEmpty, let usernameProblem {
-                        RunInlineError(usernameProblem.message)
-                    }
-                }
+            switch run.signInPhase {
+            case let .waiting(code, _, expiresAt):
+                RunSignInWaiting(run: run, code: code, expiresAt: expiresAt, now: now)
+            case .starting, .approved:
+                RunSignInWaiting(run: run, code: nil, expiresAt: nil, now: now)
+            case .idle, .denied, .expired, .failed:
+                form
             }
-            SettingRow(L10n.t("Display name", "显示名称")) {
-                GlassTextField(placeholder: L10n.t("How your name appears on the board", "排行榜上显示的名字"), text: $displayName, monospaced: false)
-                    .frame(maxWidth: 320)
-            }
-            SettingRow(L10n.t("Region", "地区"), caption: L10n.t("A filter on the boards.", "用于排行榜筛选。")) {
-                GlassSegmented(
-                    options: RunRegion.allCases.map { (value: $0, label: $0.displayName) },
-                    selection: region,
-                    onSelect: { region = $0 })
-                .frame(maxWidth: 220)
-            }
-
-            RunConsent()
-
-            Button {
-                agreed.toggle()
-            } label: {
-                HStack(alignment: .top, spacing: Design.space2) {
-                    Image(systemName: agreed ? "checkmark.square.fill" : "square")
-                        .font(.system(size: 14))
-                        .foregroundStyle(agreed ? Color.primary : Color.secondary)
-                    Text(L10n.t(
-                        "I agree to upload what is listed above, including readings from the last 7 days already on this Mac.",
-                        "我同意上传上面列出的内容，包括本机已记录的最近 7 天读数。"))
-                        .font(.system(size: 13))
-                        .fixedSize(horizontal: false, vertical: true)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                }
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-
-            HStack(spacing: Design.space3) {
-                Button(run.joinPhase.isWorking ? L10n.t("Joining…", "正在加入…") : L10n.t("Join", "加入")) {
-                    run.join(username: username, displayName: displayName.isEmpty ? RunUsername.normalize(username) : displayName, region: region)
-                }
-                .glassAction(prominent: true)
-                .disabled(!agreed || usernameProblem != nil || run.joinPhase.isWorking)
-                RunPhaseLabel(phase: run.joinPhase)
-                Spacer(minLength: 0)
-            }
-
-            Divider()
-
-            SettingRow(L10n.t("Pairing code", "配对码"), caption: L10n.t("Joined on another Mac?", "已在别的 Mac 加入？")) {
-                HStack(spacing: Design.space3) {
-                    GlassTextField(placeholder: "ABCD1234", text: $pairCode)
-                        .frame(width: 150)
-                    Button(L10n.t("Join with Code", "用配对码加入")) { run.join(pairCode: cleanCode) }
-                        .glassAction()
-                        .disabled(!agreed || cleanCode.count != 8 || run.joinPhase.isWorking)
-                    Spacer(minLength: 0)
-                }
-            }
-            SettingFootnote(L10n.t(
-                "On the Mac that joined, open Settings → Quota Run → Pair another Mac. A code works for 10 minutes; the consent above applies to this Mac too.",
-                "在已加入的 Mac 上打开 设置 → Quota Run → 添加另一台 Mac 获取配对码，10 分钟内有效。上面的同意条款同样适用于这台 Mac。"))
         }
+    }
+
+    @ViewBuilder
+    private var form: some View {
+        RunConsent()
+
+        Button {
+            agreed.toggle()
+        } label: {
+            HStack(alignment: .top, spacing: Design.space2) {
+                Image(systemName: agreed ? "checkmark.square.fill" : "square")
+                    .font(.system(size: 14))
+                    .foregroundStyle(agreed ? Color.primary : Color.secondary)
+                Text(L10n.t(
+                    "I agree to upload what is listed above, including readings from the last 7 days already on this Mac.",
+                    "我同意上传上面列出的内容，包括本机已记录的最近 7 天读数。"))
+                    .font(.system(size: 13))
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+
+        HStack(spacing: Design.space3) {
+            Button {
+                run.signIn()
+            } label: {
+                Label(L10n.t("Sign In with quota.run", "用 quota.run 登录"), systemImage: "arrow.up.right")
+            }
+            .glassAction(prominent: true)
+            .disabled(!agreed)
+            if let message = run.signInPhase.message {
+                RunInlineError(message)
+                    .lineLimit(3)
+            }
+            Spacer(minLength: 0)
+        }
+        SettingFootnote(L10n.t(
+            "The browser opens quota.run with a code to approve. Already signed in on another Mac? Sign in here with the same account to add this one.",
+            "浏览器会打开 quota.run，显示一个待批准的代码。已在别的 Mac 上登录？在这里用同一个账户登录，就能添加这台 Mac。"))
     }
 }
 
-/// Exactly what leaves the Mac after joining, and what never does — the
+/// The code and the wait: compare, approve in the browser, or call it off.
+private struct RunSignInWaiting: View {
+    @ObservedObject var run: RunCenter
+    /// Nil while quota.run is still being asked for one.
+    let code: String?
+    let expiresAt: Date?
+    let now: Date?
+    @Environment(\.glassDisabled) private var rendering
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: Design.space3) {
+            if let code {
+                VStack(alignment: .leading, spacing: Design.space1) {
+                    Text(L10n.t("Check that quota.run shows this code", "请确认 quota.run 上显示的是这个代码"))
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(.secondary)
+                    Text(code)
+                        .font(.system(size: 28, weight: .semibold, design: .monospaced))
+                        .textSelection(.enabled)
+                }
+            }
+            HStack(spacing: Design.space2) {
+                if rendering {
+                    // The spinner is an AppKit view the renderer cannot draw.
+                    Image(systemName: "hourglass")
+                        .font(.system(size: 12))
+                        .foregroundStyle(.secondary)
+                } else {
+                    ProgressView().controlSize(.small)
+                }
+                Text(code == nil
+                     ? L10n.t("Opening quota.run…", "正在打开 quota.run…")
+                     : L10n.t("Waiting for approval in your browser…", "正在等待你在浏览器中批准…"))
+                    .font(.system(size: 13))
+                if let expiresAt {
+                    if let now {
+                        expiry(expiresAt, now: now)
+                    } else {
+                        TimelineView(.periodic(from: .now, by: 1)) { context in
+                            expiry(expiresAt, now: context.date)
+                        }
+                    }
+                }
+                Spacer(minLength: 0)
+            }
+            HStack(spacing: Design.space3) {
+                Button {
+                    run.openBrowserAgain()
+                } label: {
+                    Label(L10n.t("Open Browser Again", "重新打开浏览器"), systemImage: "arrow.up.right")
+                }
+                .glassAction()
+                .disabled(code == nil)
+                Button(L10n.t("Cancel", "取消")) { run.cancelSignIn() }
+                    .glassAction()
+                Spacer(minLength: 0)
+            }
+        }
+        .padding(Design.space3)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(RoundedRectangle(cornerRadius: Design.radiusTile, style: .continuous).fill(Design.surfaceStrong))
+    }
+
+    private func expiry(_ date: Date, now: Date) -> some View {
+        Text(date > now
+             ? L10n.t("· code expires \(RunMembershipCard.relative(date, now: now))", "· 代码\(RunMembershipCard.relative(date, now: now))过期")
+             : L10n.t("· code expired", "· 代码已过期"))
+            .font(.system(size: 12))
+            .foregroundStyle(.secondary)
+            .monospacedDigit()
+    }
+}
+
+/// Exactly what leaves the Mac after signing in, and what never does — the
 /// contract's principles, in the words the owner agrees to.
 private struct RunConsent: View {
     private var uploaded: [String] {
@@ -522,11 +569,16 @@ private struct RunConsent: View {
     }
 
     var body: some View {
-        HStack(alignment: .top, spacing: Design.space2) {
-            list(L10n.t("Uploaded after you join", "加入后会上传"), symbol: "arrow.up.circle", items: uploaded)
-            list(L10n.t("Never uploaded", "永远不会上传"), symbol: "nosign", items: never)
+        VStack(alignment: .leading, spacing: Design.space2) {
+            HStack(alignment: .top, spacing: Design.space2) {
+                list(L10n.t("Uploaded after you sign in", "登录后会上传"), symbol: "arrow.up.circle", items: uploaded)
+                list(L10n.t("Never uploaded", "永远不会上传"), symbol: "nosign", items: never)
+            }
+            .fixedSize(horizontal: false, vertical: true)
+            SettingFootnote(L10n.t(
+                "You sign in on quota.run with Google, GitHub or an email code; the app never sees a password. The sign-in email is never shown publicly — not on your profile, not on the boards.",
+                "登录在 quota.run 上完成，可用 Google、GitHub 或邮箱验证码，本应用不经手任何密码。登录邮箱永远不会公开，不会出现在你的主页或排行榜上。"))
         }
-        .fixedSize(horizontal: false, vertical: true)
     }
 
     private func list(_ title: String, symbol: String, items: [String]) -> some View {
@@ -585,7 +637,7 @@ private struct RunPhaseLabel: View {
     }
 }
 
-// MARK: Joined
+// MARK: Signed in
 
 private struct RunMembershipCard: View {
     @ObservedObject var run: RunCenter
@@ -596,11 +648,13 @@ private struct RunMembershipCard: View {
         SettingsCard {
             HStack(spacing: Design.space3) {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(account.displayName)
+                    Text("@\(account.username)")
                         .font(.system(size: 15, weight: .semibold))
-                    Text("@\(account.username) · \(account.region.displayName)")
+                        .lineLimit(1)
+                    Text("\(account.displayName) · \(account.region.displayName)")
                         .font(.system(size: 12))
                         .foregroundStyle(.secondary)
+                        .lineLimit(1)
                 }
                 Spacer(minLength: Design.space2)
                 Button {
@@ -610,6 +664,18 @@ private struct RunMembershipCard: View {
                 }
                 .glassAction()
                 .help(account.profileURL.absoluteString)
+                Button {
+                    NSWorkspace.shared.open(RunAccountState.accountURL())
+                } label: {
+                    Label(L10n.t("Manage Account on quota.run", "在 quota.run 管理账户"), systemImage: "arrow.up.right")
+                }
+                .glassAction()
+                .help(RunAccountState.accountURL().absoluteString)
+            }
+
+            SettingRow(L10n.t("Signs in with", "登录方式")) {
+                identities
+                    .frame(minHeight: Design.fieldHeight, alignment: .leading)
             }
 
             SettingRow(L10n.t("Uploads", "上传")) {
@@ -633,6 +699,34 @@ private struct RunMembershipCard: View {
                     }
                 }
             }
+        }
+    }
+
+    /// Chips in a row, or stacked when three addresses will not fit across.
+    @ViewBuilder
+    private var identities: some View {
+        let list = account.me?.identities ?? []
+        if list.isEmpty {
+            Text(L10n.t("Google, GitHub or email, on quota.run", "在 quota.run 上用 Google、GitHub 或邮箱"))
+                .font(.system(size: 12))
+                .foregroundStyle(.secondary)
+        } else {
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: Design.space2) { chips(list) }
+                VStack(alignment: .leading, spacing: Design.space1) { chips(list) }
+            }
+        }
+    }
+
+    private func chips(_ list: [RunIdentity]) -> some View {
+        ForEach(list) { identity in
+            Text(identity.label)
+                .font(.system(size: 11, weight: .medium))
+                .lineLimit(1)
+                .padding(.horizontal, Design.space2)
+                .padding(.vertical, 2)
+                .background(Capsule().fill(Design.surfaceStrong))
+                .help(identity.linkedAt.map { L10n.t("Linked \(QuotaFormat.age(of: $0, now: now))", "关联于 \(QuotaFormat.age(of: $0, now: now))") } ?? "")
         }
     }
 
@@ -702,19 +796,28 @@ private struct RunDevicesCard: View {
             Button(L10n.t("Remove", "移除"), role: .destructive) { run.removeDevice(device.deviceId) }
             Button(L10n.t("Cancel", "取消"), role: .cancel) {}
         } message: { device in
-            Text(L10n.t("\(device.name) will need a new pairing code to upload again.", "\(device.name) 之后需要新的配对码才能再次上传。"))
+            Text(L10n.t("\(device.name) will need to sign in again to upload.", "\(device.name) 之后需要重新登录才能再次上传。"))
         }
     }
 
     private var cooldownNote: String {
         let base = L10n.t(
-            "Only the ranked Mac's readings count on the boards. It can change once every 7 days.",
-            "只有计分设备的读数计入排行榜，每 7 天最多更换一次。")
+            "Only the ranked Mac's readings count on the boards. It can change once every 7 days. To add another Mac, sign in on it with the same account.",
+            "只有计分设备的读数计入排行榜，每 7 天最多更换一次。要添加另一台 Mac，在那台 Mac 上用同一个账户登录即可。")
         guard let cooldown else { return base }
         let formatter = DateFormatter()
         formatter.locale = L10n.locale
         formatter.setLocalizedDateFormatFromTemplate("MMMdjm")
         return base + " " + L10n.t("Next change: \(formatter.string(from: cooldown)).", "下次可更换：\(formatter.string(from: cooldown))。")
+    }
+
+    /// "Seen 2m ago · QuotaBar 0.6.0".
+    private func detail(_ device: RunDevice) -> String? {
+        let parts = [
+            device.lastSeenAt.map { L10n.t("Seen \(QuotaFormat.age(of: $0, now: now))", "最近活动：\(QuotaFormat.age(of: $0, now: now))") },
+            device.appVersion.map { "QuotaBar \($0)" },
+        ].compactMap { $0 }
+        return parts.isEmpty ? nil : parts.joined(separator: " · ")
     }
 
     private func row(_ device: RunDevice) -> some View {
@@ -736,10 +839,11 @@ private struct RunDevicesCard: View {
                             .background(Capsule().fill(Design.surfaceStrong))
                     }
                 }
-                if let seen = device.lastSeenAt {
-                    Text(L10n.t("Seen \(QuotaFormat.age(of: seen, now: now))", "最近活动：\(QuotaFormat.age(of: seen, now: now))"))
+                if let detail = detail(device) {
+                    Text(detail)
                         .font(.system(size: 11))
                         .foregroundStyle(.secondary)
+                        .lineLimit(1)
                 }
             }
             Spacer(minLength: Design.space2)
@@ -1000,62 +1104,65 @@ private struct RunProjectEditor: View {
     }
 }
 
-private struct RunPairCard: View {
-    @ObservedObject var run: RunCenter
-    let now: Date
-
-    var body: some View {
-        SettingsCard(L10n.t("Pair another Mac", "添加另一台 Mac")) {
-            HStack(spacing: Design.space3) {
-                Button(run.pairPhase.isWorking ? L10n.t("Asking…", "正在获取…") : L10n.t("Show Pairing Code", "显示配对码")) { run.pair() }
-                    .glassAction()
-                    .disabled(run.pairPhase.isWorking)
-                if let code = run.pairCode, (code.expiresAt ?? .distantFuture) > now {
-                    Text(code.code)
-                        .font(.system(size: 20, weight: .semibold, design: .monospaced))
-                        .textSelection(.enabled)
-                    if let expires = code.expiresAt {
-                        Text(L10n.t("Expires \(RunMembershipCard.relative(expires, now: now))", "\(RunMembershipCard.relative(expires, now: now))过期"))
-                            .font(.system(size: 12))
-                            .foregroundStyle(.secondary)
-                    }
-                }
-                RunPhaseLabel(phase: run.pairPhase)
-                Spacer(minLength: 0)
-            }
-            SettingFootnote(L10n.t(
-                "On the other Mac, open Settings → Quota Run and join with the code. It joins as a second device; only the ranked one counts.",
-                "在另一台 Mac 上打开 设置 → Quota Run，用配对码加入。它会作为第二台设备加入，只有计分设备的读数计入成绩。"))
-        }
-    }
-}
-
+/// Two ways out, told apart: this Mac leaves the account, or the account goes.
 private struct RunLeaveCard: View {
     @ObservedObject var run: RunCenter
-    @State private var confirming = false
+    let account: RunAccountState
+    @State private var confirmingDisconnect = false
+    @State private var confirmingDelete = false
+
+    private var busy: Bool { run.disconnectPhase.isWorking || run.deletePhase.isWorking }
 
     var body: some View {
-        SettingsCard(L10n.t("Leave", "退出")) {
-            SettingFootnote(L10n.t(
-                "Deletes your profile, projects, runs, devices and every reading from quota.run, and forgets this Mac's key. Your records on this Mac stay.",
-                "从 quota.run 删除你的主页、项目、成绩、设备和所有读数，并清除这台 Mac 的密钥。本机上的个人记录会保留。"))
-            HStack(spacing: Design.space3) {
-                Button(run.leavePhase.isWorking ? L10n.t("Deleting…", "正在删除…") : L10n.t("Leave Quota Run and Delete My Data", "退出 Quota Run 并删除我的数据"), role: .destructive) {
-                    confirming = true
+        SettingsCard(L10n.t("Disconnect or delete", "断开或删除")) {
+            SettingRow(L10n.t("This Mac", "这台 Mac")) {
+                VStack(alignment: .leading, spacing: Design.space2) {
+                    HStack(spacing: Design.space3) {
+                        Button(run.disconnectPhase.isWorking ? L10n.t("Disconnecting…", "正在断开…") : L10n.t("Disconnect This Mac", "断开这台 Mac")) {
+                            confirmingDisconnect = true
+                        }
+                        .glassAction()
+                        .disabled(busy)
+                        RunPhaseLabel(phase: run.disconnectPhase)
+                        Spacer(minLength: 0)
+                    }
+                    SettingFootnote(L10n.t(
+                        "Takes this Mac off @\(account.username) and forgets its key. The account, your other Macs and the records on this Mac stay; sign in again any time.",
+                        "把这台 Mac 从 @\(account.username) 移除，并清除它的密钥。账户、你的其他 Mac 和本机上的个人记录都会保留，之后随时可以重新登录。"))
                 }
-                .glassAction()
-                .disabled(run.leavePhase.isWorking)
-                RunPhaseLabel(phase: run.leavePhase)
-                Spacer(minLength: 0)
+                .alert(L10n.t("Disconnect this Mac?", "断开这台 Mac？"), isPresented: $confirmingDisconnect) {
+                    Button(L10n.t("Disconnect", "断开")) { run.disconnectThisMac() }
+                    Button(L10n.t("Cancel", "取消"), role: .cancel) {}
+                } message: {
+                    Text(L10n.t(
+                        "This Mac stops uploading and forgets its key. If it is the ranked device, the account has none until you choose another on quota.run or sign in on another Mac.",
+                        "这台 Mac 会停止上传并清除密钥。如果它是计分设备，在你到 quota.run 上另选一台或在另一台 Mac 上登录之前，账户将没有计分设备。"))
+                }
             }
-        }
-        .alert(L10n.t("Leave Quota Run?", "退出 Quota Run？"), isPresented: $confirming) {
-            Button(L10n.t("Leave and Delete", "退出并删除"), role: .destructive) { run.leave() }
-            Button(L10n.t("Cancel", "取消"), role: .cancel) {}
-        } message: {
-            Text(L10n.t(
-                "Everything quota.run holds about you is deleted and cannot be restored. Joining again starts from nothing.",
-                "quota.run 上关于你的所有数据都会被删除，无法恢复。再次加入需要从头开始。"))
+            SettingRow(L10n.t("Account", "账户")) {
+                VStack(alignment: .leading, spacing: Design.space2) {
+                    HStack(spacing: Design.space3) {
+                        Button(run.deletePhase.isWorking ? L10n.t("Deleting…", "正在删除…") : L10n.t("Delete Account…", "删除账户…"), role: .destructive) {
+                            confirmingDelete = true
+                        }
+                        .glassAction()
+                        .disabled(busy)
+                        RunPhaseLabel(phase: run.deletePhase)
+                        Spacer(minLength: 0)
+                    }
+                    SettingFootnote(L10n.t(
+                        "Deletes your profile, projects, runs, Macs, sign-in methods and every reading from quota.run, and forgets this Mac's key. Your records on this Mac stay.",
+                        "从 quota.run 删除你的主页、项目、成绩、设备、登录方式和所有读数，并清除这台 Mac 的密钥。本机上的个人记录会保留。"))
+                }
+                .alert(L10n.t("Delete your Quota Run account?", "删除你的 Quota Run 账户？"), isPresented: $confirmingDelete) {
+                    Button(L10n.t("Delete Account", "删除账户"), role: .destructive) { run.deleteAccount() }
+                    Button(L10n.t("Cancel", "取消"), role: .cancel) {}
+                } message: {
+                    Text(L10n.t(
+                        "Everything quota.run holds about @\(account.username) is deleted, on every Mac, and cannot be restored. Signing in again starts from nothing.",
+                        "quota.run 上关于 @\(account.username) 的所有数据都会被删除，所有 Mac 都受影响，无法恢复。再次登录需要从头开始。"))
+                }
+            }
         }
     }
 }

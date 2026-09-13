@@ -1,17 +1,18 @@
 import Foundation
 
-// MARK: - Joining and uploading, the parts that are not UI
+// MARK: - Signing in and uploading, the parts that are not UI
 
-/// What this Mac knows about its Quota Run membership. Absent until the owner
-/// joins; deleted, with the key, when they leave. Holds nothing secret — the
-/// key lives in the keychain.
+/// What this Mac knows about its Quota Run account. Absent until the owner
+/// signs in and quota.run approves this Mac; deleted, with the key, when the
+/// Mac disconnects or the account is deleted. Holds nothing secret — the key
+/// lives in the keychain.
 public struct RunAccountState: Codable, Equatable, Sendable {
     public var username: String
     public var displayName: String
     public var region: RunRegion
     public var deviceId: String
     public var joinedAt: Date
-    /// Whether this Mac's readings count, as `/me` or registration last said.
+    /// Whether this Mac's readings count, as `/me` or the approval last said.
     public var ranked: Bool
     public var me: RunMe?
     public var meFetchedAt: Date?
@@ -56,6 +57,12 @@ public struct RunAccountState: Codable, Equatable, Sendable {
     /// `https://quota.run/@username`.
     public var profileURL: URL {
         URL(string: "https://quota.run/@\(username)") ?? URL(string: "https://quota.run/")!
+    }
+
+    /// The account page on quota.run — sign-in methods, Macs, deletion — in
+    /// the interface's language.
+    public static func accountURL(chinese: Bool = L10n.isChinese) -> URL {
+        URL(string: chinese ? "https://quota.run/zh/account" : "https://quota.run/account")!
     }
 }
 

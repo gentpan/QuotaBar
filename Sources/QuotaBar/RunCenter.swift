@@ -12,8 +12,45 @@ enum RunPhase: Equatable {
     var isWorking: Bool { self == .working }
 }
 
+/// Signing in through the browser, from the button to an approved Mac.
+///
+/// `denied`, `expired` and `failed` are where an attempt ends without an
+/// account: the key is already gone again, the button is back, and the state
+/// only carries the sentence to show beside it.
+enum RunSignIn: Equatable {
+    case idle
+    /// Creating the key and asking quota.run for a code.
+    case starting
+    /// The code is shown and the browser is open; polling.
+    case waiting(userCode: String, verifyURL: URL, expiresAt: Date)
+    case approved
+    case denied
+    case expired
+    case failed(String)
+
+    /// An attempt is under way: no second one, and the form stays hidden.
+    var isBusy: Bool {
+        switch self {
+        case .starting, .waiting, .approved: true
+        case .idle, .denied, .expired, .failed: false
+        }
+    }
+
+    /// What to say where the attempt ended.
+    var message: String? {
+        switch self {
+        case .denied:
+            L10n.t("The request was denied on quota.run. Nothing was connected.", "已在 quota.run 上拒绝了这次请求，没有连接任何账户。")
+        case .expired:
+            L10n.t("The code expired before it was approved. Sign in again for a new one.", "代码在批准之前已过期，请重新登录获取新代码。")
+        case let .failed(text): text
+        case .idle, .starting, .waiting, .approved: nil
+        }
+    }
+}
+
 /// Quota Run on this Mac: the personal records, which need nothing, and the
-/// membership, which exists only after the owner joins.
+/// account, which this Mac has only after the owner signs in.
 ///
 /// Its own object rather than more `@Published` on the store: the status item
 /// redraws on every store change, and nothing here should make it.
@@ -34,17 +71,16 @@ final class RunCenter: ObservableObject {
     /// Readings the server would still take that have not gone yet.
     @Published private(set) var queued = 0
     @Published private(set) var isUploading = false
-    @Published private(set) var pairCode: RunPairCode?
     /// Bumped when the server's copy of the profile or projects arrives, so
     /// the editors take it — including the addresses it expanded.
     @Published private(set) var editorRevision = 0
 
-    @Published var joinPhase: RunPhase = .idle
+    @Published private(set) var signInPhase: RunSignIn = .idle
     @Published var profilePhase: RunPhase = .idle
     @Published var projectsPhase: RunPhase = .idle
     @Published var devicesPhase: RunPhase = .idle
-    @Published var pairPhase: RunPhase = .idle
-    @Published var leavePhase: RunPhase = .idle
+    @Published var disconnectPhase: RunPhase = .idle
+    @Published var deletePhase: RunPhase = .idle
 
     /// Previews and the off-screen renderer: sample data, no files, no key,
     /// no network.
@@ -57,6 +93,10 @@ final class RunCenter: ObservableObject {
     private var computeAgain = false
     var retryTask: Task<Void, Never>?
     private var dailyTask: Task<Void, Never>?
+    private var signInTask: Task<Void, Never>?
+    /// Bumped by every start and cancel, so an attempt that was called off
+    /// cannot touch the keychain or the state a newer one owns.
+    private var signInAttempt = 0
 
     init() {
         isInert = false
@@ -221,8 +261,8 @@ final class RunCenter: ObservableObject {
 
     private var missingKey: String {
         L10n.t(
-            "This Mac's Quota Run key is not in the keychain. Leave and join again, or pair this Mac.",
-            "钥匙串里找不到这台 Mac 的 Quota Run 密钥。请退出后重新加入，或用配对码添加这台 Mac。")
+            "This Mac's Quota Run key is not in the keychain. Disconnect this Mac and sign in again.",
+            "钥匙串里找不到这台 Mac 的 Quota Run 密钥。请断开这台 Mac，然后重新登录。")
     }
 
     static var deviceName: String {
@@ -237,57 +277,126 @@ final class RunCenter: ObservableObject {
         (error as? QuotaRunError)?.errorDescription ?? error.localizedDescription
     }
 
-    // MARK: Joining
+    // MARK: Signing in
 
-    func join(username: String, displayName: String, region: RunRegion) {
-        register { client in
-            try await client.register(
-                username: username, displayName: displayName.trimmingCharacters(in: .whitespacesAndNewlines),
-                region: region, deviceName: Self.deviceName, appVersion: Self.appVersion)
+    /// A new key, connected through the browser. The key is created only now
+    /// — not when the page opens, not for someone who never signs in — and
+    /// deleted again unless quota.run approves it.
+    func signIn() {
+        guard !isInert, account == nil, !signInPhase.isBusy else { return }
+        signInAttempt &+= 1
+        let attempt = signInAttempt
+        signInPhase = .starting
+        signInTask = Task { [weak self] in
+            await self?.connect(attempt: attempt)
         }
     }
 
-    func join(pairCode: String) {
-        register { client in
-            try await client.register(pairCode: pairCode, deviceName: Self.deviceName, appVersion: Self.appVersion)
-        }
+    func openBrowserAgain() {
+        guard case let .waiting(_, url, _) = signInPhase else { return }
+        NSWorkspace.shared.open(url)
     }
 
-    /// A new key, registered. The key is created only now — not when the page
-    /// opens, not for someone who never joins — and deleted again if the
-    /// server says no.
-    private func register(_ call: @escaping (QuotaRunClient) async throws -> RunRegistration) {
-        guard !isInert, account == nil, !joinPhase.isWorking else { return }
-        joinPhase = .working
-        Task {
-            do {
-                let key: (signer: RunSigner, kind: RunDeviceKey.Kind)
+    /// Calls the attempt off here and now: the key goes at once, and the
+    /// attempt, finding itself superseded, leaves everything alone.
+    func cancelSignIn() {
+        guard signInPhase.isBusy, account == nil else { return }
+        signInAttempt &+= 1
+        signInTask?.cancel()
+        signInTask = nil
+        RunDeviceKey.delete()
+        signInPhase = .idle
+    }
+
+    private func connect(attempt: Int) async {
+        // Cancelled before the task got to run: no key at all.
+        guard attempt == signInAttempt else { return }
+        let key: RunSigner
+        do {
+            key = try RunDeviceKey.create().signer
+        } catch {
+            signInPhase = .failed(L10n.t("The keychain refused to store this Mac's key.", "钥匙串拒绝保存这台 Mac 的密钥。"))
+            return
+        }
+        let client = QuotaRunClient(signer: key)
+        do {
+            let start = try await client.connectStart(deviceName: Self.deviceName, appVersion: Self.appVersion)
+            guard attempt == signInAttempt else { return }
+            signInPhase = .waiting(userCode: start.userCode, verifyURL: start.verifyURL, expiresAt: start.expiresAt)
+            NSWorkspace.shared.open(start.verifyURL)
+
+            var wait = start.interval
+            // One poll past the expiry, so an approval at the last second
+            // still lands; after that quota.run would only say "expired".
+            var last = false
+            while true {
+                try await Task.sleep(for: .seconds(wait))
+                guard attempt == signInAttempt else { return }
+                if Date() >= start.expiresAt {
+                    if last { throw RunSignInEnd.expired }
+                    last = true
+                }
+                let status: RunConnectStatus
                 do {
-                    key = try RunDeviceKey.create()
-                } catch {
-                    joinPhase = .failed(L10n.t("The keychain refused to store this Mac's key.", "钥匙串拒绝保存这台 Mac 的密钥。"))
+                    status = try await client.connectPoll(requestId: start.requestId)
+                    wait = start.interval
+                } catch let error as QuotaRunError where error.code == "network" || error.status == 429 || error.status >= 500 {
+                    // Offline for a moment, or asked to slow down: keep the
+                    // code on screen and ask again later.
+                    wait = max(start.interval, error.retryAfter ?? start.interval * 2)
+                    continue
+                }
+                guard attempt == signInAttempt else {
+                    if case let .approved(registration) = status { Self.disconnectAbandoned(key: key, deviceId: registration.deviceId) }
                     return
                 }
-                let registration = try await call(QuotaRunClient(signer: key.signer))
-                signer = key.signer
-                account = RunAccountState(
-                    username: registration.user.username,
-                    displayName: registration.user.displayName,
-                    region: registration.user.region,
-                    deviceId: registration.deviceId,
-                    joinedAt: Date(),
-                    ranked: registration.ranked)
-                // From the start of the ledger: the upload skips what is past
-                // the server's seven days on its own.
-                upload = RunUploadState()
-                persist()
-                joinPhase = .idle
-                await refreshMe()
-                uploadIfDue()
-            } catch {
-                RunDeviceKey.delete()
-                joinPhase = .failed(Self.message(error))
+                switch status {
+                case .pending: continue
+                case .denied: throw RunSignInEnd.denied
+                case .expired: throw RunSignInEnd.expired
+                case let .approved(registration):
+                    signer = key
+                    account = RunAccountState(
+                        username: registration.user.username,
+                        displayName: registration.user.displayName,
+                        region: registration.user.region,
+                        deviceId: registration.deviceId,
+                        joinedAt: Date(),
+                        ranked: registration.ranked)
+                    // From the start of the ledger: the upload skips what is
+                    // past the server's seven days on its own.
+                    upload = RunUploadState()
+                    persist()
+                    signInPhase = .approved
+                    signInTask = nil
+                    await refreshMe()
+                    uploadIfDue()
+                    return
+                }
             }
+        } catch {
+            guard attempt == signInAttempt else { return }
+            RunDeviceKey.delete()
+            signInTask = nil
+            switch error {
+            case RunSignInEnd.denied: signInPhase = .denied
+            case RunSignInEnd.expired: signInPhase = .expired
+            case is CancellationError: signInPhase = .idle
+            default: signInPhase = .failed(Self.message(error))
+            }
+        }
+    }
+
+    private enum RunSignInEnd: Error {
+        case denied
+        case expired
+    }
+
+    /// Approved just after Cancel: the Mac was added all the same, so take it
+    /// off the account again rather than leave a device nothing can sign for.
+    private nonisolated static func disconnectAbandoned(key: RunSigner, deviceId: String) {
+        Task.detached(priority: .utility) {
+            try? await QuotaRunClient(signer: key, deviceId: deviceId).disconnectCurrentDevice()
         }
     }
 
@@ -407,60 +516,81 @@ final class RunCenter: ObservableObject {
         }
     }
 
-    func pair() {
-        guard let client = client() else { pairPhase = .failed(missingKey); return }
-        pairPhase = .working
-        Task {
-            do {
-                pairCode = try await client.pair()
-                pairPhase = .idle
-            } catch {
-                pairPhase = .failed(Self.message(error))
-            }
-        }
-    }
-
     // MARK: Leaving
 
-    /// Deletes everything the server holds, then the key and the membership
-    /// on this Mac. The records stay: they were never the server's.
-    func leave() {
-        guard account != nil, !leavePhase.isWorking else { return }
-        leavePhase = .working
+    /// Takes this Mac off the account, then forgets the key and the account
+    /// here. The account, its other Macs and the records on this Mac stay.
+    func disconnectThisMac() {
+        guard account != nil, !disconnectPhase.isWorking, !deletePhase.isWorking else { return }
+        disconnectPhase = .working
         Task {
-            if let client = client() {
-                do {
-                    try await client.deleteAccount()
-                } catch let error as QuotaRunError where error.isAuthFailure || error.status == 404 {
-                    // Already gone on the server, or this key was removed
-                    // there: nothing left to delete but what is here.
-                } catch {
-                    leavePhase = .failed(Self.message(error))
-                    return
-                }
-            } else {
+            guard let client = client() else {
                 // No key, no way to ask the server for anything. Staying
-                // joined on this Mac would only strand the page, so forget it
-                // here and say plainly what is left behind.
+                // signed in on this Mac would only strand the page, so forget
+                // it here and say plainly what is left behind.
                 forgetMembership()
-                leavePhase = .idle
-                joinPhase = .failed(L10n.t(
-                    "Left on this Mac. Its key was missing, so quota.run could not be asked to delete your data; leave from another joined Mac, or write to hello@quota.bar.",
-                    "已在本机退出。由于找不到本机密钥，无法请求 quota.run 删除你的数据；请在另一台已加入的 Mac 上退出，或发邮件到 hello@quota.bar。"))
+                disconnectPhase = .idle
+                signInPhase = .failed(L10n.t(
+                    "Disconnected on this Mac. Its key was missing, so quota.run still lists this Mac; remove it from your account on quota.run.",
+                    "已在本机断开。由于找不到本机密钥，quota.run 上仍列着这台 Mac；请在 quota.run 的账户页面里移除它。"))
+                return
+            }
+            do {
+                try await client.disconnectCurrentDevice()
+            } catch let error as QuotaRunError where error.isAuthFailure || error.status == 404 {
+                // Already removed on quota.run, or the account is gone:
+                // nothing left to undo but what is here.
+            } catch {
+                disconnectPhase = .failed(Self.message(error))
                 return
             }
             forgetMembership()
-            leavePhase = .idle
+            disconnectPhase = .idle
         }
     }
 
-    /// The membership, the key and the upload cursor — not the records.
+    /// Deletes everything the server holds, then the key and the account on
+    /// this Mac. The records stay: they were never the server's.
+    func deleteAccount() {
+        guard account != nil, !deletePhase.isWorking, !disconnectPhase.isWorking else { return }
+        deletePhase = .working
+        Task {
+            let unreachable = L10n.t(
+                "Signed out on this Mac, but quota.run could not be asked to delete your account from here: this Mac's key is missing or no longer accepted. Delete it from the account page on quota.run, or write to hello@quota.bar.",
+                "已在本机退出，但无法从这里请求 quota.run 删除你的账户：本机密钥丢失或已不被接受。请在 quota.run 的账户页面删除，或发邮件到 hello@quota.bar。")
+            guard let client = client() else {
+                forgetMembership()
+                deletePhase = .idle
+                signInPhase = .failed(unreachable)
+                return
+            }
+            do {
+                try await client.deleteAccount()
+            } catch let error as QuotaRunError where error.status == 404 {
+                // Already gone on the server.
+            } catch let error as QuotaRunError where error.isAuthFailure {
+                // This key was removed from the account, which may well
+                // still exist: say where to finish.
+                forgetMembership()
+                deletePhase = .idle
+                signInPhase = .failed(unreachable)
+                return
+            } catch {
+                deletePhase = .failed(Self.message(error))
+                return
+            }
+            forgetMembership()
+            deletePhase = .idle
+        }
+    }
+
+    /// The account, the key and the upload cursor — not the records.
     func forgetMembership() {
         retryTask?.cancel()
         RunDeviceKey.delete()
         signer = nil
         account = nil
-        pairCode = nil
+        signInPhase = .idle
         upload = RunUploadState()
         queued = 0
         persist()
@@ -472,11 +602,14 @@ final class RunCenter: ObservableObject {
 extension RunCenter {
     enum PreviewState {
         case records
-        case join
-        case joined
+        /// Not signed in, over an empty ledger.
+        case signIn
+        /// The code on screen, waiting for the browser.
+        case signingIn
+        case signedIn
     }
 
-    /// Sample records and a sample membership, built through the same
+    /// Sample records and a sample account, built through the same
     /// arithmetic as the real thing so the page shows numbers that add up.
     static func preview(_ state: PreviewState, now: Date) -> RunCenter {
         let clock = Int(now.timeIntervalSince1970)
@@ -510,7 +643,7 @@ extension RunCenter {
         let runs = RunMath.runs(from: readings) { _, _, _ in true }
 
         var account: RunAccountState?
-        if state == .joined {
+        if state == .signedIn {
             let me = RunMe(
                 user: RunUser(
                     username: "gentpan", displayName: "Peter Pan",
@@ -519,14 +652,18 @@ extension RunCenter {
                     links: RunLinks(website: "https://quota.bar", github: "gentpan", x: "@gentpan"),
                     joinedAt: now.addingTimeInterval(-12 * 86_400)),
                 devices: [
-                    RunDevice(deviceId: "d1", name: "Peter's MacBook Pro", ranked: true, lastSeenAt: now.addingTimeInterval(-120), current: true),
-                    RunDevice(deviceId: "d2", name: "Mac Studio", ranked: false, lastSeenAt: now.addingTimeInterval(-3 * 86_400)),
+                    RunDevice(deviceId: "d1", name: "Peter's MacBook Pro", ranked: true, lastSeenAt: now.addingTimeInterval(-120), current: true, appVersion: "0.6.0"),
+                    RunDevice(deviceId: "d2", name: "Mac Studio", ranked: false, lastSeenAt: now.addingTimeInterval(-3 * 86_400), appVersion: "0.5.3"),
                 ],
                 rankedChangeAvailableAt: now.addingTimeInterval(4 * 86_400),
                 lastUploadAt: now.addingTimeInterval(-180),
                 projects: [
                     RunProject(name: "QuotaBar", url: "https://quota.bar", description: L10n.t("Every AI coding limit, at a glance.", "每个 AI 编码额度，抬眼就看见。"), github: "https://github.com/gentpan/QuotaBar", builtWith: ["codex", "claude"]),
                     RunProject(name: "notch-kit", url: "https://notch.dev", description: L10n.t("A notch island for any app.", "给任何应用加一个刘海岛。"), builtWith: ["claude"]),
+                ],
+                identities: [
+                    RunIdentity(id: "i1", provider: "github", email: "peter@quota.bar", name: "gentpan", linkedAt: now.addingTimeInterval(-12 * 86_400)),
+                    RunIdentity(id: "i2", provider: "email", email: "peter@quota.bar", linkedAt: now.addingTimeInterval(-2 * 86_400)),
                 ])
             account = RunAccountState(
                 username: "gentpan", displayName: "Peter Pan", region: .china, deviceId: "d1",
@@ -535,11 +672,17 @@ extension RunCenter {
         var upload = RunUploadState()
         upload.lastUploadAt = now.addingTimeInterval(-180)
         let center = RunCenter(inert: RunLedgerStore(fileURL: nil), account: account, upload: upload)
-        if state != .join {
+        if state == .records || state == .signedIn {
             center.inProgress = RunMath.inProgress(runs, now: clock)
             center.bests = RunMath.bests(from: runs)
         }
-        center.queued = state == .joined ? 3 : 0
+        if state == .signingIn {
+            center.signInPhase = .waiting(
+                userCode: "KXPT-7M4Q",
+                verifyURL: URL(string: "https://quota.run/connect?code=KXPT-7M4Q")!,
+                expiresAt: now.addingTimeInterval(8 * 60 + 20))
+        }
+        center.queued = state == .signedIn ? 3 : 0
         center.recordsReady = true
         return center
     }
