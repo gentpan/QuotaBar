@@ -402,6 +402,46 @@ enum Snapshot {
     /// Glass and vibrancy do not survive `ImageRenderer` — the flat stand-in is
     /// what comes out. Read this for spacing, alignment and truncation; judge
     /// the material on screen.
+    /// A release as the update card would show it, for previews.
+    static var sampleRelease: UpdateRelease {
+        let notes = """
+        ### 2026-09-14
+
+        #### Added
+
+        - The menu bar icon's right-click menu is redone, with Show in Menu Bar, Check for Updates, Feedback and About.
+        - Provider cards in the panel can be dragged into a new order.
+
+        #### Style
+
+        - Each Settings section's title and its explanation share one line.
+
+        #### Fixed
+
+        - With automatic update checks turned off, Check now did nothing.
+
+        ---
+
+        ### 2026-09-14
+
+        #### 新增
+
+        - 菜单栏图标的右键菜单重做：显示在菜单栏、检查更新、反馈、关于。
+        - 下拉面板里的服务商卡片可以按住拖动排序。
+
+        #### 样式
+
+        - 设置窗口右侧每个分区的标题和说明文字改为同一行显示。
+
+        #### 修复
+
+        - 关闭自动检查更新后，「立即检查」点了没有反应。
+        """
+        return UpdateRelease(
+            version: "0.5.4", downloadURL: URL(string: "https://quota.bar/download/QuotaBar-0.5.4.zip")!,
+            pageURL: URL(string: "https://quota.bar/changelog.html")!, notes: notes, publishedAt: Date())
+    }
+
     static func settingsPreview(directory: String) {
         let base = URL(fileURLWithPath: directory)
         try? FileManager.default.createDirectory(at: base, withIntermediateDirectories: true)
@@ -474,42 +514,7 @@ enum Snapshot {
         }
 
         // The update card: found, and downloaded and verified.
-        let notes = """
-        ### 2026-09-14
-
-        #### Added
-
-        - The menu bar icon's right-click menu is redone, with Show in Menu Bar, Check for Updates, Feedback and About.
-        - Provider cards in the panel can be dragged into a new order.
-
-        #### Style
-
-        - Each Settings section's title and its explanation share one line.
-
-        #### Fixed
-
-        - With automatic update checks turned off, Check now did nothing.
-
-        ---
-
-        ### 2026-09-14
-
-        #### 新增
-
-        - 菜单栏图标的右键菜单重做：显示在菜单栏、检查更新、反馈、关于。
-        - 下拉面板里的服务商卡片可以按住拖动排序。
-
-        #### 样式
-
-        - 设置窗口右侧每个分区的标题和说明文字改为同一行显示。
-
-        #### 修复
-
-        - 关闭自动检查更新后，「立即检查」点了没有反应。
-        """
-        let sample = UpdateRelease(
-            version: "0.5.4", downloadURL: URL(string: "https://quota.bar/download/QuotaBar-0.5.4.zip")!,
-            pageURL: URL(string: "https://quota.bar/changelog.html")!, notes: notes, publishedAt: Date())
+        let sample = Self.sampleRelease
         for language in [L10n.Language.zhHans, .en] {
             L10n.override = language
             let suffix = language == .en ? "en" : "zh"

@@ -140,6 +140,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 MenuPanelController.shared.open(from: nil)
             }
         }
+        if arguments.contains("--update-window") {
+            // The update card with a sample release, for looking at the window.
+            DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+                store.updateStage = .available(Snapshot.sampleRelease)
+                UpdateWindow.show(store: store)
+            }
+        }
         if arguments.contains("--share-studio") {
             DispatchQueue.main.asyncAfter(deadline: .now() + 2) { ShareStudio.open(store: store) }
         }
