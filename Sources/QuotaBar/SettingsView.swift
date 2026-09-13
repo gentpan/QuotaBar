@@ -719,14 +719,29 @@ struct ProviderSettingsRow: View {
             Spacer(minLength: Design.space2)
 
             if isExpanded {
+                // A chip, not a field-height button: in the header it sits
+                // among the status badge and the pills, and at 30pt it towered
+                // over them and pushed the open row taller than the closed ones.
                 Button(action: test) {
-                    if case .running = testPhase {
-                        Text(L10n.t("Testing…", "测试中…"))
-                    } else {
-                        Text(L10n.t("Test connection", "测试连接"))
+                    HStack(spacing: 4) {
+                        if case .running = testPhase {
+                            ProgressView().controlSize(.mini)
+                            Text(L10n.t("Testing…", "测试中…"))
+                        } else {
+                            Image(systemName: "bolt.horizontal")
+                                .font(.system(size: 9, weight: .semibold))
+                            Text(L10n.t("Test connection", "测试连接"))
+                        }
                     }
+                    .font(.system(size: 11))
+                    .foregroundStyle(.secondary)
+                    .padding(.horizontal, Design.space2)
+                    .frame(height: 20)
+                    .background(Capsule().fill(Color.primary.opacity(0.05)))
+                    .overlay(Capsule().strokeBorder(Color.primary.opacity(0.1), lineWidth: 1))
+                    .contentShape(Capsule())
                 }
-                .glassAction(compact: true)
+                .buttonStyle(.plain)
                 .disabled({ if case .running = testPhase { return true }; return false }())
                 .transition(.opacity)
             }
@@ -918,6 +933,11 @@ private struct CredentialEditor: View {
                             .lineLimit(1)
                         Spacer(minLength: 0)
                     }
+                    // The label is set down to centre on a 30pt control; this
+                    // row is text, so it comes down the same way — one point
+                    // more for the 12pt figure under a 13pt label — or its
+                    // baseline rides above the label's.
+                    .padding(.top, Design.rowLabelInset + 1)
                 }
             }
 

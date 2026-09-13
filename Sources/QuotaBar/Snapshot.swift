@@ -423,19 +423,28 @@ enum Snapshot {
 
         // One provider expanded, which is the only state that shows the
         // credential field, the action row and the label column together.
-        // Codex has no action row of its own — the test and the console sit
-        // in its header — and Cursor keeps one for browser sign-in.
+        // One open provider row on its own — the whole pane clips at the
+        // top — for the header's quick actions and the label column's
+        // baselines. Codex has no action row; Cursor keeps one. Both get a
+        // status reading, so the service-status row is drawn too.
+        for id in [ProviderID.codex, .cursor] {
+            store.serviceStatus[id] = ServiceStatus(
+                level: .operational,
+                description: "CLI, VS Code extension, Codex API, Codex Web",
+                pageURL: URL(string: "https://status.openai.com")!,
+                checkedAt: Date())
+        }
         for language in [L10n.Language.zhHans, .en] {
             L10n.override = language
             let suffix = language == .en ? "en" : "zh"
             for id in [ProviderID.codex, .cursor] {
-                for dark in [false, true] {
-                    write(
-                        SettingsView(store: store, scrollable: false, section: .providers, expanded: id),
-                        to: base,
-                        name: "settings-providers-expanded-\(id.rawValue)-\(suffix)\(dark ? "-dark" : "")",
-                        dark: dark)
-                }
+                write(
+                    ProviderSettingsRow(store: store, id: id, isExpanded: true, onToggle: {})
+                        .frame(width: 620)
+                        .padding(Design.space4),
+                    to: base,
+                    name: "settings-row-expanded-\(id.rawValue)-\(suffix)",
+                    dark: false)
             }
         }
         L10n.override = ConfigStore.shared.language
