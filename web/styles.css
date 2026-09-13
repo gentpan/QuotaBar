@@ -49,7 +49,7 @@
 
 @font-face {
   font-family: "Instrument Sans";
-  src: url("assets/fonts/InstrumentSans-Variable.ttf?v=544371bc") format("truetype-variations");
+  src: url("assets/fonts/InstrumentSans-Variable.ttf?v=7fe88ced") format("truetype-variations");
   font-weight: 400 700;
   font-stretch: 75% 100%;
   font-display: swap;
@@ -140,21 +140,21 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
 .desktop__wall {
   position: absolute;
   inset: 0;
-  background: #1b2438 url("assets/wallpaper-dark.webp?v=544371bc") center 62% / cover no-repeat;
+  background: #1b2438 url("assets/wallpaper-dark.webp?v=7fe88ced") center 62% / cover no-repeat;
 }
 @media (max-width: 900px) {
-  .desktop__wall { background-image: url("assets/wallpaper-dark-1280.webp?v=544371bc"); }
+  .desktop__wall { background-image: url("assets/wallpaper-dark-1280.webp?v=7fe88ced"); }
 }
 /* 外观：没选时跟随系统；控制中心里选了浅色或深色，就在 <html> 上记成 data-theme */
 @media (prefers-color-scheme: light) {
-  :root:not([data-theme="dark"]) .desktop__wall { background-color: #7aa3d6; background-image: url("assets/wallpaper-light.webp?v=544371bc"); }
+  :root:not([data-theme="dark"]) .desktop__wall { background-color: #7aa3d6; background-image: url("assets/wallpaper-light.webp?v=7fe88ced"); }
 }
 @media (prefers-color-scheme: light) and (max-width: 900px) {
-  :root:not([data-theme="dark"]) .desktop__wall { background-image: url("assets/wallpaper-light-1280.webp?v=544371bc"); }
+  :root:not([data-theme="dark"]) .desktop__wall { background-image: url("assets/wallpaper-light-1280.webp?v=7fe88ced"); }
 }
-:root[data-theme="light"] .desktop__wall { background-color: #7aa3d6; background-image: url("assets/wallpaper-light.webp?v=544371bc"); }
+:root[data-theme="light"] .desktop__wall { background-color: #7aa3d6; background-image: url("assets/wallpaper-light.webp?v=7fe88ced"); }
 @media (max-width: 900px) {
-  :root[data-theme="light"] .desktop__wall { background-image: url("assets/wallpaper-light-1280.webp?v=544371bc"); }
+  :root[data-theme="light"] .desktop__wall { background-image: url("assets/wallpaper-light-1280.webp?v=7fe88ced"); }
 }
 /* 底部压暗，让 Dock 立得住，也和下面的内容区接得上 */
 .desktop__wall::before {
@@ -383,17 +383,17 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
   background: #333 center / cover no-repeat;
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.18);
 }
-.cc-swatch--light { background-image: url("assets/wallpaper-light-1280.webp?v=544371bc"); }
-.cc-swatch--dark { background-image: url("assets/wallpaper-dark-1280.webp?v=544371bc"); }
+.cc-swatch--light { background-image: url("assets/wallpaper-light-1280.webp?v=7fe88ced"); }
+.cc-swatch--dark { background-image: url("assets/wallpaper-dark-1280.webp?v=7fe88ced"); }
 /* 自动：左半边白天、右半边夜里 */
 .cc-swatch--auto::after {
   content: "";
   position: absolute;
   inset: 0 50% 0 0;
   border-radius: 7px 0 0 7px;
-  background: url("assets/wallpaper-light-1280.webp?v=544371bc") left center / 144px 46px no-repeat;
+  background: url("assets/wallpaper-light-1280.webp?v=7fe88ced") left center / 144px 46px no-repeat;
 }
-.cc-swatch--auto { position: relative; background: url("assets/wallpaper-dark-1280.webp?v=544371bc") right center / 144px 46px no-repeat; }
+.cc-swatch--auto { position: relative; background: url("assets/wallpaper-dark-1280.webp?v=7fe88ced") right center / 144px 46px no-repeat; }
 .cc-choice[aria-checked="true"] .cc-swatch { box-shadow: 0 0 0 2px #0a84ff, inset 0 0 0 1px rgba(255, 255, 255, 0.18); }
 .cc-choice[aria-checked="true"] > span:last-child { color: #fff; font-weight: 600; }
 

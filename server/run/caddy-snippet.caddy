@@ -31,11 +31,20 @@ quota.run {
 
 	# 用 handle 而不是 handle_path：签名覆盖完整路径 /api/v1/…，前缀不能剥掉。
 	# 服务端自己按 1 MB 回 JSON 的 413；这里的 2 MB 只是兜底。
+	# 服务端按 X-Forwarded-For 的最后一项限流。经 Cloudflare 进来的请求，直连方是 Cloudflare 的边缘节点，
+	# 这时改用它给的 CF-Connecting-IP；其余请求用直连地址——不在 Cloudflare 网段里的人自己带这个头不算数。
+	# 网段来自 https://www.cloudflare.com/ips-v4/ 与 /ips-v6/。
+	@viaCloudflare remote_ip 173.245.48.0/20 103.21.244.0/22 103.22.200.0/22 103.31.4.0/22 141.101.64.0/18 108.162.192.0/18 190.93.240.0/20 188.114.96.0/20 197.234.240.0/22 198.41.128.0/17 162.158.0.0/15 104.16.0.0/13 104.24.0.0/14 172.64.0.0/13 131.0.72.0/22 2400:cb00::/32 2606:4700::/32 2803:f800::/32 2405:b500::/32 2405:8100::/32 2a06:98c0::/29 2c0f:f248::/32
 	handle /api/* {
 		request_body {
 			max_size 2MB
 		}
-		reverse_proxy 127.0.0.1:8788
+		reverse_proxy @viaCloudflare 127.0.0.1:8788 {
+			header_up X-Forwarded-For {http.request.header.CF-Connecting-IP}
+		}
+		reverse_proxy 127.0.0.1:8788 {
+			header_up X-Forwarded-For {http.request.remote.host}
+		}
 	}
 
 	handle {
