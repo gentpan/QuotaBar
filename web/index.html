@@ -537,6 +537,13 @@
       </div>
       <div class="log">
         <article class="log__day">
+          <header class="log__head"><time datetime="2026-09-13">2026-09-13</time><span class="log__tag">Unreleased</span></header>
+          <p class="log__counts">1 style</p>
+          <ul class="log__list">
+            <li><span class="badge badge--style">Style</span>An expanded row in Settings → Providers no longer gives "Test connection" and "Console" a line of their own: "Console" follows the provider's name and "Test connection" sits on the right ahead of the service status, level with the name; the test's result still appears below. Providers that need Save, browser sign-in or keychain authorisation keep those buttons on a line below.</li>
+          </ul>
+        </article>
+        <article class="log__day">
           <header class="log__head"><time datetime="2026-09-13">2026-09-13</time><span class="log__tag">0.5.3</span></header>
           <p class="log__counts">1 added · 1 fixed</p>
           <ul class="log__list">
@@ -552,18 +559,6 @@
             <li><span class="badge badge--add">Added</span>Provider cards in the panel can be dragged into a new order: the card lifts slightly and follows the pointer, trades places with a neighbour once it is halfway over it while the others slide aside, and settles into its slot on release. The new order is used by the dock, the notch island and desktop cards too. Clicks inside a card (used or left, reset times and so on) still work, since a drag starts only after a few points of movement, and releasing outside the panel still settles the card and saves the order.</li>
             <li><span class="badge badge--style">Style</span>The About page's GitHub link shows the repository's new name, gentpan/QuotaBar, and the feedback and update-check addresses use it too.</li>
           </ul>
-        </article>
-        <article class="log__day">
-          <header class="log__head"><time datetime="2026-09-13">2026-09-13</time><span class="log__tag">0.5.1</span></header>
-          <p class="log__counts">3 added · 7 style · 3 fixed</p>
-          <ul class="log__list">
-            <li><span class="badge badge--add">Added</span>Providers can be hidden per place instead of turned off: the panel, the edge dock, the notch island and desktop cards each choose which providers they show. A hidden provider is still read, still alerts and still counts towards spend; only turning it off stops reading it. Settings → Presentation has a new "What each place shows" card, one row per provider, where clicking a place's tag shows or hides it there. You can also right-click a card in the panel and choose "Hide from Panel", or right-click a dock icon and choose "Hide from the dock".</li>
-            <li><span class="badge badge--add">Added</span>When providers are hidden, the bottom of the panel says "N hidden here" with their icons; "Reveal" brings them back one at a time or opens Settings to manage them. The dock's right-click menu lists its hidden providers too.</li>
-            <li><span class="badge badge--add">Added</span>In-app updates check and download from the quota.bar server when GitHub can't be reached, so networks that block GitHub still get updates. The download must still carry the developer's signature and Apple's notarization before it installs. The About page's "Your data" list of connections now includes it.</li>
-            <li><span class="badge badge--style">Style</span>The refresh note in the panel footer reads "Updated just now" for a minute after "Refresh Everything" or an automatic refresh, then "Auto-refresh in Xm"; hovering shows when it last updated, when it refreshes next and the interval. It used to say "refresh in 5m" the moment a refresh finished, which looked as if the button had done nothing.</li>
-            <li><span class="badge badge--style">Style</span>The pacing note now reads "~8% left at reset" instead of the vaguer "about 8% to spare". Hovering spells out the working, for example "87% of this window has passed and 80% is used. At this rate it reaches about 92% by the reset, leaving 8%."</li>
-          </ul>
-          <a class="log__more" href="changelog.html#d-2026-09-13">8 more →</a>
         </article>
       </div>
       <p class="log__all"><a href="changelog.html">Full changelog →</a></p>

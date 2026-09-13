@@ -534,6 +534,13 @@
       </div>
       <div class="log">
         <article class="log__day">
+          <header class="log__head"><time datetime="2026-09-13">2026-09-13</time><span class="log__tag">未发布</span></header>
+          <p class="log__counts">样式 1</p>
+          <ul class="log__list">
+            <li><span class="badge badge--style">样式</span>设置 → 服务商里展开一行时，「测试连接」和「控制台」不再单独占一行：「控制台」紧跟在服务商名字后面，「测试连接」放在右侧服务状态之前，与名字水平对齐；测试结果仍显示在展开内容下方。需要保存凭据、浏览器登录或授权钥匙串的服务商，这些按钮仍在下方一行。</li>
+          </ul>
+        </article>
+        <article class="log__day">
           <header class="log__head"><time datetime="2026-09-13">2026-09-13</time><span class="log__tag">0.5.3</span></header>
           <p class="log__counts">新增 1 · 修复 1</p>
           <ul class="log__list">
@@ -549,18 +556,6 @@
             <li><span class="badge badge--add">新增</span>下拉面板里的服务商卡片可以按住拖动排序：拖动时卡片微微浮起、跟着鼠标走，经过相邻卡片一半时两张互换位置，其他卡片滑开让位；松手后卡片落位，新顺序同时用于停靠条、刘海岛和桌面卡片。卡片里的点击（切换已用和剩余、重置时间等）不受影响，移动超过几个点才开始拖动；在面板外松手也会正常落位并保存。</li>
             <li><span class="badge badge--style">样式</span>关于页的 GitHub 链接显示为仓库的新名字 gentpan/QuotaBar，反馈、更新检查等地址也一并换成新地址。</li>
           </ul>
-        </article>
-        <article class="log__day">
-          <header class="log__head"><time datetime="2026-09-13">2026-09-13</time><span class="log__tag">0.5.1</span></header>
-          <p class="log__counts">新增 3 · 样式 7 · 修复 3</p>
-          <ul class="log__list">
-            <li><span class="badge badge--add">新增</span>服务商可以按位置隐藏，而不必停用：下拉面板、停靠条、刘海岛、桌面卡片各自决定显示哪些服务商。隐藏的服务商仍会读取数据、发提醒、计入花费，停用才会停止读取。设置 → 展示方式新增「各处显示的服务商」，每个服务商一行，点位置标签即可显示或隐藏；也可以右键下拉面板里的卡片选「在下拉面板中隐藏」，右键停靠条图标选「在停靠条中隐藏」。</li>
-            <li><span class="badge badge--add">新增</span>下拉面板底部在有隐藏的服务商时显示「N 个已在面板隐藏」和它们的图标，点「显示」可逐个恢复或打开设置管理；停靠条右键菜单也列出已隐藏的服务商。</li>
-            <li><span class="badge badge--add">新增</span>应用内更新在连不上 GitHub 时改从 quota.bar 服务器检查和下载，打不开 GitHub 的网络也能收到更新；下载到的安装包照旧要验证开发者签名和 Apple 公证才会安装。关于页「你的数据」里的联网说明相应补上这一项。</li>
-            <li><span class="badge badge--style">样式</span>下拉面板页脚的刷新提示：点「全部刷新」或自动刷新完成后的一分钟内显示「刚刚更新」，之后显示「X 分钟后自动刷新」；鼠标悬停显示上次更新和下次自动刷新的具体时间及刷新间隔。以前刷新完立刻显示「5 分钟后刷新」，看起来像按钮没起作用。</li>
-            <li><span class="badge badge--style">样式</span>节奏提示的文案改为「预计重置时剩 8%」，不再写成含糊的「约 8% 余量」；鼠标悬停时写出算法和用到的数字，例如「这个窗口已过 87%，已用 80%。按这段时间的平均速度，到重置时约用到 92%，剩 8%」。</li>
-          </ul>
-          <a class="log__more" href="changelog.html#d-2026-09-13">还有 8 项 →</a>
         </article>
       </div>
       <p class="log__all"><a href="changelog.html">查看完整更新日志 →</a></p>

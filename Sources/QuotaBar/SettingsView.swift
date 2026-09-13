@@ -644,12 +644,15 @@ struct ProviderSettingsRow: View {
 
     private var configured: Bool { store.isConfigured(id) }
     private var isManual: Bool { id.credentialHint != nil }
+    /// Lives on the row, not the editor: the button that starts a test sits
+    /// in the header, the result it produces under the editor.
+    @State private var testPhase: ProviderTestPhase = .idle
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             header
             if isExpanded {
-                CredentialEditor(store: store, id: id)
+                CredentialEditor(store: store, id: id, testPhase: $testPhase)
                     .padding(.top, Design.space2)
             }
         }
@@ -689,7 +692,36 @@ struct ProviderSettingsRow: View {
                         "按这个服务的公开实现编写，还没有用真实账号验证过。数字不对请在反馈里告诉我们。"))
             }
 
+            // Open, the header carries the row's two quick actions, so they
+            // need no line of their own: the console link beside the name,
+            // the connection test ahead of the status columns.
+            if isExpanded, let url = id.dashboardURL {
+                Button {
+                    NSWorkspace.shared.open(url)
+                } label: {
+                    Label(L10n.t("Console", "控制台"), systemImage: "arrow.up.right")
+                        .font(.system(size: 11))
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(.secondary)
+                .help(url.absoluteString)
+                .transition(.opacity)
+            }
+
             Spacer(minLength: Design.space2)
+
+            if isExpanded {
+                Button(action: test) {
+                    if case .running = testPhase {
+                        Text(L10n.t("Testing…", "测试中…"))
+                    } else {
+                        Text(L10n.t("Test connection", "测试连接"))
+                    }
+                }
+                .glassAction(compact: true)
+                .disabled({ if case .running = testPhase { return true }; return false }())
+                .transition(.opacity)
+            }
 
             // A fixed column, empty when there is nothing to say, so the
             // pills after it line up down the list whatever the badges say.
@@ -731,6 +763,48 @@ struct ProviderSettingsRow: View {
         }
         return StatusPill(text: L10n.t("Set up", "待配置"), tone: .attention)
     }
+
+    private func test() {
+        testPhase = .running
+        // Both caches exist so a refresh does not hit the keychain eleven times
+        // a minute, and both would answer this button from a memo up to a
+        // minute old. That is exactly wrong here: someone pressing "test" has
+        // usually just changed the thing being tested — pasted a cookie, or
+        // re-run `claude` to renew an expired session — and a stale "still
+        // failing" reads as the app being broken at the moment they are fixing
+        // it. This button asks the source, not the memo.
+        ConfigStore.shared.invalidateCredentialCache()
+        LocalCredentials.invalidateClaudeToken()
+        let provider = ProviderRegistry.make(id)
+        Task {
+            do {
+                // "Test" is a click, so for Claude it may raise the keychain
+                // dialog; a refresh never does.
+                if id == .claude { _ = await LocalCredentials.authorizeClaudeAccessAsync() }
+                let snapshot = try await provider.fetch(config: ConfigStore.shared)
+                let connected = L10n.t("Connected", "连接成功")
+                if let percent = snapshot.headlinePercent {
+                    testPhase = .ok(
+                        "\(connected) — \(QuotaFormat.percent(percent))"
+                            + (snapshot.planName.map { " · \($0)" } ?? ""))
+                } else if let first = snapshot.windows.first {
+                    testPhase = .ok("\(connected) — \(first.detail ?? first.title)")
+                } else {
+                    testPhase = .ok(connected)
+                }
+            } catch {
+                testPhase = .failed(error.localizedDescription)
+            }
+        }
+    }
+}
+
+/// Where a provider row's connection test has got to.
+enum ProviderTestPhase {
+    case idle
+    case running
+    case ok(String)
+    case failed(String)
 }
 
 /// The expanded half of a provider row.
@@ -749,25 +823,23 @@ private struct CredentialEditor: View {
     @State private var credential: String
     @State private var saved: String
     @State private var reveal = false
-    @State private var testPhase: TestPhase = .idle
+    @Binding var testPhase: ProviderTestPhase
 
-    init(store: UsageStore, id: ProviderID) {
+    init(store: UsageStore, id: ProviderID, testPhase: Binding<ProviderTestPhase>) {
         self.store = store
         self.id = id
+        _testPhase = testPhase
         let value = ConfigStore.shared.credential(for: id) ?? ""
         _credential = State(initialValue: value)
         _saved = State(initialValue: value)
     }
 
-    enum TestPhase {
-        case idle
-        case running
-        case ok(String)
-        case failed(String)
-    }
-
-    private var provider: any QuotaProvider { ProviderRegistry.make(id) }
     private var isManual: Bool { id.credentialHint != nil }
+    /// Saving, clearing, authorising, signing in — what is left for a line of
+    /// its own once the test and the console moved into the header.
+    private var hasActions: Bool {
+        isManual || (id == .claude && store.claudeNeedsAuthorization) || BrowserLogin.supports(id)
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: Design.space3) {
@@ -841,7 +913,9 @@ private struct CredentialEditor: View {
                 }
             }
 
-            actions
+            if hasActions {
+                actions
+            }
 
             testResult
         }
@@ -875,29 +949,7 @@ private struct CredentialEditor: View {
                     .glassAction(prominent: saved.isEmpty)
             }
 
-            Button(action: test) {
-                if case .running = testPhase {
-                    Text(L10n.t("Testing…", "测试中…"))
-                } else {
-                    Text(L10n.t("Test connection", "测试连接"))
-                }
-            }
-            .glassAction()
-            .disabled({ if case .running = testPhase { return true }; return false }())
-
             Spacer(minLength: 0)
-
-            if let url = id.dashboardURL {
-                Button {
-                    NSWorkspace.shared.open(url)
-                } label: {
-                    Label(L10n.t("Console", "控制台"), systemImage: "arrow.up.right")
-                        .font(.system(size: 11))
-                }
-                .buttonStyle(.plain)
-                .foregroundStyle(.secondary)
-                .help(url.absoluteString)
-            }
         }
     }
 
@@ -940,38 +992,6 @@ private struct CredentialEditor: View {
         testPhase = .idle
     }
 
-    private func test() {
-        testPhase = .running
-        // Both caches exist so a refresh does not hit the keychain eleven times
-        // a minute, and both would answer this button from a memo up to a
-        // minute old. That is exactly wrong here: someone pressing "test" has
-        // usually just changed the thing being tested — pasted a cookie, or
-        // re-run `claude` to renew an expired session — and a stale "still
-        // failing" reads as the app being broken at the moment they are fixing
-        // it. This button asks the source, not the memo.
-        ConfigStore.shared.invalidateCredentialCache()
-        LocalCredentials.invalidateClaudeToken()
-        Task {
-            do {
-                // "Test" is a click, so for Claude it may raise the keychain
-                // dialog; a refresh never does.
-                if id == .claude { _ = await LocalCredentials.authorizeClaudeAccessAsync() }
-                let snapshot = try await provider.fetch(config: ConfigStore.shared)
-                let connected = L10n.t("Connected", "连接成功")
-                if let percent = snapshot.headlinePercent {
-                    testPhase = .ok(
-                        "\(connected) — \(QuotaFormat.percent(percent))"
-                            + (snapshot.planName.map { " · \($0)" } ?? ""))
-                } else if let first = snapshot.windows.first {
-                    testPhase = .ok("\(connected) — \(first.detail ?? first.title)")
-                } else {
-                    testPhase = .ok(connected)
-                }
-            } catch {
-                testPhase = .failed(error.localizedDescription)
-            }
-        }
-    }
 }
 
 // MARK: - Appearance

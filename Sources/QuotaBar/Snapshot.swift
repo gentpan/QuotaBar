@@ -423,13 +423,20 @@ enum Snapshot {
 
         // One provider expanded, which is the only state that shows the
         // credential field, the action row and the label column together.
-        L10n.override = .zhHans
-        for dark in [false, true] {
-            write(
-                SettingsView(store: store, scrollable: false, section: .providers, expanded: .cursor),
-                to: base,
-                name: "settings-providers-expanded-zh\(dark ? "-dark" : "")",
-                dark: dark)
+        // Codex has no action row of its own — the test and the console sit
+        // in its header — and Cursor keeps one for browser sign-in.
+        for language in [L10n.Language.zhHans, .en] {
+            L10n.override = language
+            let suffix = language == .en ? "en" : "zh"
+            for id in [ProviderID.codex, .cursor] {
+                for dark in [false, true] {
+                    write(
+                        SettingsView(store: store, scrollable: false, section: .providers, expanded: id),
+                        to: base,
+                        name: "settings-providers-expanded-\(id.rawValue)-\(suffix)\(dark ? "-dark" : "")",
+                        dark: dark)
+                }
+            }
         }
         L10n.override = ConfigStore.shared.language
         FileHandle.standardOutput.write(Data("Wrote settings preview to \(base.path)\n".utf8))

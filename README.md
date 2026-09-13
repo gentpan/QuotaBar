@@ -50,9 +50,18 @@ English and Simplified Chinese and follows the system language unless you pick o
 <!-- changelog:start -->
 <!-- Generated from CHANGELOG.en.md by Scripts/sync_changelog.py. Do not edit by hand. -->
 
-Latest release **0.5.3** (2026-09-13) · [full changelog](CHANGELOG.en.md)
+Latest release **0.5.3** (2026-09-13) · **1** changes in development · [full changelog](CHANGELOG.en.md)
 
 <details open>
+<summary><b>2026-09-13</b> · Unreleased · 1 style</summary>
+
+**Style**
+
+- An expanded row in Settings → Providers no longer gives "Test connection" and "Console" a line of their own: "Console" follows the provider's name and "Test connection" sits on the right ahead of the service status, level with the name; the test's result still appears below. Providers that need Save, browser sign-in or keychain authorisation keep those buttons on a line below.
+
+</details>
+
+<details>
 <summary><b>2026-09-13</b> · 0.5.3 · 1 added · 1 fixed</summary>
 
 **Added**
@@ -76,33 +85,6 @@ Latest release **0.5.3** (2026-09-13) · [full changelog](CHANGELOG.en.md)
 **Style**
 
 - The About page's GitHub link shows the repository's new name, gentpan/QuotaBar, and the feedback and update-check addresses use it too.
-
-</details>
-
-<details>
-<summary><b>2026-09-13</b> · 0.5.1 · 3 added · 7 style · 3 fixed</summary>
-
-**Added**
-
-- Providers can be hidden per place instead of turned off: the panel, the edge dock, the notch island and desktop cards each choose which providers they show. A hidden provider is still read, still alerts and still counts towards spend; only turning it off stops reading it. Settings → Presentation has a new "What each place shows" card, one row per provider, where clicking a place's tag shows or hides it there. You can also right-click a card in the panel and choose "Hide from Panel", or right-click a dock icon and choose "Hide from the dock".
-- When providers are hidden, the bottom of the panel says "N hidden here" with their icons; "Reveal" brings them back one at a time or opens Settings to manage them. The dock's right-click menu lists its hidden providers too.
-- In-app updates check and download from the quota.bar server when GitHub can't be reached, so networks that block GitHub still get updates. The download must still carry the developer's signature and Apple's notarization before it installs. The About page's "Your data" list of connections now includes it.
-
-**Style**
-
-- The refresh note in the panel footer reads "Updated just now" for a minute after "Refresh Everything" or an automatic refresh, then "Auto-refresh in Xm"; hovering shows when it last updated, when it refreshes next and the interval. It used to say "refresh in 5m" the moment a refresh finished, which looked as if the button had done nothing.
-- The pacing note now reads "~8% left at reset" instead of the vaguer "about 8% to spare". Hovering spells out the working, for example "87% of this window has passed and 80% is used. At this rate it reaches about 92% by the reset, leaving 8%."
-- Service status says "Service OK" instead of "Running normally". Hovering the dot or the label names the source — for example "From the official status page status.claude.com, judged by Claude Code and Claude API, checked 3m ago" — to make clear it reflects the provider's own service status, not your login or quota reading.
-- Approaching the edge dock now opens just the icons, without popping the card beside them. Once the dock has fully opened, pointing at an icon shows that provider's card, and moving between icons switches the card straight away. With "Keep open" on, hovering an icon shows its card at once.
-- The edge dock opens in two moves: the small capsule first grows wider, then taller, with the rings fading and sliding in inside the shape rather than spilling past the black. Closing reverses it: shorter first, then narrow again.
-- The QuotaBar wordmark changes from Sora to Instrument Sans SemiBold across the settings sidebar, the About page, the panel, the notch island, share cards and copied images; the About page's acknowledgements now credit Instrument Sans.
-- The usage share card window no longer has a separate grey title bar: the title bar is transparent and the card preview and the settings beside it run to the top of the window, one piece like the Settings window. The card and the heading on the right keep clear of the traffic-light buttons and line up with each other.
-
-**Fixed**
-
-- In English, the "Keychain" tag in Settings → Providers broke over two lines ("Keychai" / "n"): the tag's slot is wider and the text stays on one line.
-- Pacing gave wild estimates right after a window began — 3% used three minutes into a 5-hour window was projected to run out. It now waits until at least 5% of the window, and no less than 15 minutes, has passed before saying how much will be left, that it will run out, or when; a window already used up still shows at once.
-- The edge dock jumped off the screen edge for an instant when it opened on hover, leaving a gap. The window no longer changes size as the dock opens and closes; only the black shape grows inside it, flush to the edge throughout, and the undrawn transparent area lets the pointer through.
 
 </details>
 

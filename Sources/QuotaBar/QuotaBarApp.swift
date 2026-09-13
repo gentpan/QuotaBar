@@ -80,9 +80,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             NSApp.terminate(nil)
         }
         if let index = arguments.firstIndex(of: "--settings-window") {
-            // `--settings-window status` opens straight to a section.
+            // `--settings-window status` opens straight to a section;
+            // `--settings-window providers codex` also opens that provider's row.
             let section = index + 1 < arguments.count ? SettingsSection(rawValue: arguments[index + 1]) : nil
-            Diagnostics.settingsWindow(section: section ?? .providers)
+            let expanded = index + 2 < arguments.count ? ProviderID(rawValue: arguments[index + 2]) : nil
+            Diagnostics.settingsWindow(section: section ?? .providers, expanded: expanded)
             return
         }
         if arguments.contains("--windows") {
