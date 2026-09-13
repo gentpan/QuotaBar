@@ -19,6 +19,11 @@
 	rewrite @quotaRunProfile /u.html
 	@quotaRunProfileZh path_regexp quotaRunProfileZh ^/zh/@[A-Za-z0-9][A-Za-z0-9_-]+/?$
 	rewrite @quotaRunProfileZh /zh/u.html
+	# 排行榜的干净地址：/leaderboard、/zh/leaderboard（canonical 用的就是这两个）。
+	@quotaRunBoard path /leaderboard /leaderboard/
+	rewrite @quotaRunBoard /leaderboard.html
+	@quotaRunBoardZh path /zh/leaderboard /zh/leaderboard/
+	rewrite @quotaRunBoardZh /zh/leaderboard.html
 # ---- END quota.bar ----
 
 # ---- BEGIN quota.run ----
