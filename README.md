@@ -50,10 +50,10 @@ English and Simplified Chinese and follows the system language unless you pick o
 <!-- changelog:start -->
 <!-- Generated from CHANGELOG.en.md by Scripts/sync_changelog.py. Do not edit by hand. -->
 
-Latest release **0.5.3** (2026-09-13) · **15** changes in development · [full changelog](CHANGELOG.en.md)
+Latest release **0.5.3** (2026-09-13) · **16** changes in development · [full changelog](CHANGELOG.en.md)
 
 <details open>
-<summary><b>2026-09-13</b> · Unreleased · 7 added · 5 style · 3 fixed</summary>
+<summary><b>2026-09-13</b> · Unreleased · 8 added · 5 style · 3 fixed</summary>
 
 **Added**
 
@@ -64,6 +64,7 @@ Latest release **0.5.3** (2026-09-13) · **15** changes in development · [full 
 - A reset calendar: Settings → Usage opens with "Resets in the next 7 days", listing by day when each enabled provider's windows start again (today, tomorrow, then dates and times) with how much is left or used, amber or red when close to the limit.
 - The dock rings' right-click menu gains the same three groups as a panel card's: Limits on the Card, Ring Follows and Show In.
 - Quota Run: a new Quota Run page in Settings. Without an account, every reading goes into a local run ledger (60 days) showing windows in progress and personal bests — fastest to 100%, time to 50% and 90%, highest peak — and a best can be copied or saved as a share image. To compete, tick the list of what is uploaded and choose Sign In with quota.run: the app opens the browser and shows a code; sign in on quota.run with Google, GitHub or an email code (picking a username the first time), check the code and approve this Mac. The app never handles a password or a third-party token. This Mac then signs with a key in the Secure Enclave and, as the ranked device, uploads quota readings and per-minute token counts to quota.run; the server computes results and ranks, shown at quota.run and on a public profile at quota.run/@username. Signed in, the page shows @username, how the account signs in and each Mac's QuotaBar version; edit a profile and up to 12 projects, or open the account page with Manage Account on quota.run. Another Mac joins by signing in with the same account, the ranked device changes once every 7 days, Disconnect This Mac keeps the account and local records, and Delete Account removes everything on quota.run, each after a confirmation. The sign-in email stays on quota.run for signing in and is never shown on a profile or board. Credentials, tokens, prompts, code, file paths and plain emails are never uploaded, and nothing at all is uploaded without joining. The About page's list of connections includes Quota Run.
+- Quota Run provider accounts: only readings that say which provider account they come from are uploaded and ranked, and the app uploads only a one-way digest of the account email, which never leaves the Mac. Each Codex, Claude or other provider account belongs to one Quota Run account: the first to upload it, unless another account signs in with that same email and claims it, which shows Account verified on its runs. Settings → Quota Run gains a Provider Accounts card listing the account each provider is signed in with on this Mac (email masked) and its status — Not uploaded yet, Bound, Account verified, or Owned by another Quota Run account with how to claim it — with Unbind (after a confirmation, deletes that account's readings and runs on quota.run and stops uploading it from this Mac) and Bind Again. Personal bests mark a run without a bound account as "Not bound to an account — won't rank".
 
 **Style**
 
