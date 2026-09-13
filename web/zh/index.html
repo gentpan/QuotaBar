@@ -534,6 +534,14 @@
       </div>
       <div class="log">
         <article class="log__day">
+          <header class="log__head"><time datetime="2026-09-13">2026-09-13</time><span class="log__tag">未发布</span></header>
+          <p class="log__counts">新增 1 · 样式 1</p>
+          <ul class="log__list">
+            <li><span class="badge badge--add">新增</span>边缘停靠条在服务商太多、屏幕放不下时可以滚动：条子最高到屏幕上下各留 24pt，其余圆环用滚轮或触控板在条子里滚动。系统滚动条换成内侧一条 2pt 的细线，静止时很淡，滚动时稍亮，停下后淡回去；上下还有更多圆环时，两端渐隐到黑色。滚动时悬停卡片先收起，悬停卡片与圆环的对齐会算上滚动距离；额度重置时，对应的圆环会先自动滚到可见处。</li>
+            <li><span class="badge badge--style">样式</span>关于页的 GitHub 链接显示为仓库的新名字 gentpan/QuotaBar，反馈、更新检查等地址也一并换成新地址。</li>
+          </ul>
+        </article>
+        <article class="log__day">
           <header class="log__head"><time datetime="2026-09-13">2026-09-13</time><span class="log__tag">0.5.1</span></header>
           <p class="log__counts">新增 3 · 样式 7 · 修复 3</p>
           <ul class="log__list">
@@ -556,18 +564,6 @@
             <li><span class="badge badge--add">新增</span>点击百分比在已用和剩余之间切换，点击重置时间在倒计时和具体时刻之间切换，所有界面同步生效。</li>
           </ul>
           <a class="log__more" href="changelog.html#d-2026-09-13">还有 58 项 →</a>
-        </article>
-        <article class="log__day">
-          <header class="log__head"><time datetime="2026-09-12">2026-09-12</time><span class="log__tag">0.5.0</span></header>
-          <p class="log__counts">新增 6 · 样式 1 · 修复 2</p>
-          <ul class="log__list">
-            <li><span class="badge badge--add">新增</span>悬浮卡片里双击某个额度窗口（5 小时、周窗口，或 Fable 这类按模型的额度），圆环、刘海岛、桌面卡片和菜单栏读数都改按这个窗口显示。再双击一次恢复为用得最满的那个。正在跟随的窗口名旁有圆点，手动选中时为品牌色实心点。</li>
-            <li><span class="badge badge--add">新增</span>展示方式新增「屏幕」选项：接了多块显示器时，可以选择停靠条、刘海岛和桌面卡片显示在哪块屏幕，默认自动。所选屏幕拔掉后自动回到默认，插拔显示器时各窗口会重新定位。</li>
-            <li><span class="badge badge--add">新增</span>服务状态页的每一行在折叠时就显示主服务最近 30 天的在线率和状态条。Claude 取 Claude Code，Codex 取 CLI，Cursor 取 IDE，Kimi 取 Open API，DeepSeek 取 API 服务。</li>
-            <li><span class="badge badge--add">新增</span>服务状态标记改为只看写代码相关的服务：Claude 看 Claude Code 和 Claude API，Codex 看 CLI、VS Code 插件、Codex API、Codex Web 和桌面端，Cursor 看 IDE、CLI 和云端 Agent。状态页其他组件的事件（如 Claude Cowork）不再让标记变黄，展开服务状态行时单独列在「其他组件」下。</li>
-            <li><span class="badge badge--add">新增</span>新增诊断命令 <code>QuotaBar --status</code>，列出各服务商状态标记依据的组件和其他组件的事件。</li>
-          </ul>
-          <a class="log__more" href="changelog.html#d-2026-09-12">还有 4 项 →</a>
         </article>
       </div>
       <p class="log__all"><a href="changelog.html">查看完整更新日志 →</a></p>

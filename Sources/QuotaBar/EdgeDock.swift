@@ -64,6 +64,13 @@ final class EdgeDockCoordinator {
     static let handleWidth: CGFloat = 18
     static let handleHeight: CGFloat = 92
     static let width: CGFloat = 74
+    /// Past this the strip stops growing and its rings scroll: it keeps
+    /// 24pt clear of the menu bar and of the screen's bottom edge.
+    static let screenMargin: CGFloat = Design.space6
+
+    /// How far the rings are scrolled from the top, reported by the view.
+    /// The callout lines up with a ring by arithmetic, so it has to know.
+    var scrollOffset: CGFloat = 0
 
     /// The reveal's time scale: 0.24 is normal. `QUOTABAR_DOCK_SLIDE=2`
     /// stretches the grow so a frame of it can actually be caught.
@@ -202,8 +209,10 @@ final class EdgeDockCoordinator {
         let stripFrame = strip.frame
         // The disc's centre, not the cell's: the cell has the dot row under
         // the disc, so its middle sits 5pt low.
-        let centreFromTop = Self.stripInsetTop + CGFloat(index) * Self.cellHeight + ProviderRing.defaultDiameter / 2
-        let centreY = stripFrame.maxY - centreFromTop
+        let centreFromTop = Self.stripInsetTop + CGFloat(index) * Self.cellHeight + ProviderRing.defaultDiameter / 2 - scrollOffset
+        // A ring scrolled half out of view still gets its card, held level
+        // with the strip rather than floating past its end.
+        let centreY = min(max(stripFrame.maxY - centreFromTop, stripFrame.minY), stripFrame.maxY)
         let height = max(size.height, 40)
         // On the inboard side of the strip, whichever edge it is docked to.
         let onLeft = ConfigStore.shared.dockEdge == .left
@@ -419,7 +428,11 @@ final class EdgeDockCoordinator {
         let config = ConfigStore.shared
         let visible = screen.visibleFrame
         let panelWidth = Self.width
-        let panelHeight = stripHeight(providers: store?.dockProviders.count ?? 0)
+        // As tall as the rings need, up to the screen less its margins; the
+        // rest scrolls inside the strip.
+        let panelHeight = min(
+            stripHeight(providers: store?.dockProviders.count ?? 0),
+            max(Self.handleHeight, visible.height - Self.screenMargin * 2))
         let x = config.dockEdge == .right ? visible.maxX - panelWidth : visible.minX
 
         // dockPosition is a fraction of the handle's travel from the top;
@@ -506,6 +519,13 @@ struct EdgeDockView: View {
     /// 14pt of strip and an 8pt gap; cleared at once, the card was gone
     /// before the pointer arrived.
     @State private var hoverClearTask: Task<Void, Never>?
+    /// Scrolling, when there are more rings than the screen holds: where the
+    /// list is, whether it is moving (the thin indicator brightens while it
+    /// is, then fades back), and the ring a reset asks to bring into view.
+    @State private var scrollOffset: CGFloat = 0
+    @State private var scrolling = false
+    @State private var scrollIdleTask: Task<Void, Never>?
+    @State private var revealRing: ProviderID?
 
     private var onLeft: Bool { store.dockEdge == .left }
 
@@ -537,7 +557,8 @@ struct EdgeDockView: View {
                         // Out of the docked edge as the height arrives, so the
                         // rings come from the screen's side rather than
                         // brightening in place.
-                        strip.transition(.move(edge: onLeft ? .leading : .trailing).combined(with: .opacity))
+                        strip(height: proxy.size.height)
+                            .transition(.move(edge: onLeft ? .leading : .trailing).combined(with: .opacity))
                     } else if !isWide {
                         handle
                             .offset(y: geometry.handleOffset)
@@ -616,6 +637,12 @@ struct EdgeDockView: View {
                 coordinator.hideCallout()
                 hovered = nil
                 detail = nil
+                // Folded, the rings are rebuilt at the top when the strip next
+                // opens; kept open, they stay where they were scrolled.
+                if !coordinator.alwaysVisible {
+                    scrollOffset = 0
+                    coordinator.scrollOffset = 0
+                }
             }
         }
     }
@@ -742,6 +769,9 @@ struct EdgeDockView: View {
         resetTask?.cancel()
         let id = banner.provider
         ringOverride[id] = banner.usedBefore
+        // Scrolled out of sight, the ring that reset is brought into view
+        // while the strip opens, before its card needs lining up with it.
+        revealRing = id
         coordinator.setExpanded(true) { expanded = $0 }
         resetTask = Task { @MainActor in
             // Out first — wider, then taller; the fill starts once it has arrived.
@@ -784,7 +814,7 @@ struct EdgeDockView: View {
         }
     }
 
-    private var strip: some View {
+    private var rings: some View {
         VStack(spacing: Design.space3) {
             ForEach(store.dockProviders) { id in
                 ProviderRing(
@@ -841,23 +871,134 @@ struct EdgeDockView: View {
         .padding(.top, EdgeDockCoordinator.stripInsetTop)
         .padding(.bottom, EdgeDockCoordinator.stripInsetBottom)
         .frame(width: EdgeDockCoordinator.width)
-        // No background of its own: the container owns the one black shape
-        // both states share.
-        .gesture(
-            DragGesture(minimumDistance: 4)
-                .onChanged { coordinator.move(byVertical: $0.translation.height) }
-                .onEnded { _ in coordinator.persistPosition() })
         .background(
             GeometryReader { proxy in
-                Color.clear.onChange(of: proxy.size.height, initial: true) { _, height in
-                    coordinator.setContentHeight(height)
-                }
+                Color.clear
+                    .onChange(of: proxy.size.height, initial: true) { _, height in
+                        coordinator.setContentHeight(height)
+                    }
             })
-
     }
 
+    /// The rings, scrolling when the screen cannot hold them all. The
+    /// system's scroller is replaced with a 2pt line on the inboard side:
+    /// faint while the list sits still, brighter while it moves. The ends
+    /// fade into the black where there is more to scroll to.
+    private func strip(height: CGFloat) -> some View {
+        let content = EdgeDockCoordinator.computedStripHeight(providers: store.dockProviders.count)
+        let overflow = content > height + 1
+        let maxOffset = max(1, content - height)
+        return ScrollViewReader { reader in
+            ScrollView(.vertical) {
+                rings.background(ScrollOffsetReader { offset in
+                    guard abs(offset - scrollOffset) > 0.5 else { return }
+                    scrollOffset = offset
+                    coordinator.scrollOffset = offset
+                    noteScrolled()
+                })
+            }
+            .scrollIndicators(.never)
+            .scrollDisabled(!overflow)
+            .frame(width: EdgeDockCoordinator.width, height: height)
+            .mask {
+                VStack(spacing: 0) {
+                    LinearGradient(colors: [overflow && scrollOffset > 1 ? .clear : .black, .black], startPoint: .top, endPoint: .bottom)
+                        .frame(height: Design.space4)
+                    Color.black
+                    LinearGradient(colors: [.black, overflow && scrollOffset < maxOffset - 1 ? .clear : .black], startPoint: .top, endPoint: .bottom)
+                        .frame(height: Design.space4)
+                }
+            }
+            .overlay(alignment: onLeft ? .topTrailing : .topLeading) {
+                if overflow {
+                    let track = height - Design.space6
+                    let thumb = max(Design.space4, track * height / content)
+                    let progress = min(max(scrollOffset / maxOffset, 0), 1)
+                    Capsule()
+                        .fill(Color.white.opacity(scrolling ? 0.4 : 0.14))
+                        .frame(width: 2, height: thumb)
+                        .offset(x: onLeft ? -3 : 3, y: Design.space3 + (track - thumb) * progress)
+                        .animation(Motion.animation(.easeOut(duration: 0.25)), value: scrolling)
+                        .allowsHitTesting(false)
+                }
+            }
+            .onChange(of: revealRing, initial: true) { _, id in
+                guard let id, overflow else { return }
+                withAnimation(Motion.animation(.easeInOut(duration: 0.3))) {
+                    reader.scrollTo(id, anchor: .center)
+                }
+                revealRing = nil
+            }
+            // Dragging moves the strip; the wheel and the trackpad scroll it.
+            .gesture(
+                DragGesture(minimumDistance: 4)
+                    .onChanged { coordinator.move(byVertical: $0.translation.height) }
+                    .onEnded { _ in coordinator.persistPosition() })
+        }
+    }
+
+    /// The card belongs to a ring that has just moved; it goes until the
+    /// pointer settles on a ring again.
+    private func noteScrolled() {
+        if hovered != nil, playing == nil {
+            hovered = nil
+            coordinator.hideCallout()
+        }
+        scrolling = true
+        scrollIdleTask?.cancel()
+        scrollIdleTask = Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(900))
+            guard !Task.isCancelled else { return }
+            scrolling = false
+        }
+    }
 }
 
+/// How far the scroll view around it is scrolled from the top.
+///
+/// Read from the NSScrollView itself: on macOS a GeometryReader inside a
+/// ScrollView is not re-evaluated as it scrolls, so a preference-based offset
+/// sat at zero while the rings moved. Reported on the next turn of the run
+/// loop — the scroll that `scrollTo` performs happens during a view update,
+/// and state set synchronously from it was dropped.
+private struct ScrollOffsetReader: NSViewRepresentable {
+    let onChange: (CGFloat) -> Void
+
+    func makeNSView(context: Context) -> Probe {
+        let probe = Probe()
+        probe.onChange = onChange
+        return probe
+    }
+
+    func updateNSView(_ probe: Probe, context: Context) {
+        probe.onChange = onChange
+    }
+
+    final class Probe: NSView {
+        var onChange: ((CGFloat) -> Void)?
+        private var observer: NSObjectProtocol?
+
+        override func viewDidMoveToWindow() {
+            super.viewDidMoveToWindow()
+            if let observer { NotificationCenter.default.removeObserver(observer) }
+            observer = nil
+            guard window != nil, let clip = enclosingScrollView?.contentView else { return }
+            clip.postsBoundsChangedNotifications = true
+            observer = NotificationCenter.default.addObserver(
+                forName: NSView.boundsDidChangeNotification, object: clip, queue: .main)
+            { [weak self] _ in
+                let fromTop = clip.isFlipped
+                    ? clip.bounds.origin.y
+                    : (clip.documentView.map { $0.frame.height - clip.bounds.maxY } ?? 0)
+                DispatchQueue.main.async { self?.onChange?(max(0, fromTop)) }
+            }
+        }
+
+        deinit {
+            if let observer { NotificationCenter.default.removeObserver(observer) }
+        }
+    }
+}
 
 /// A hosting view that takes the first click. The strip and the card float
 /// over other apps and are never key; AppKit spends the first click on a

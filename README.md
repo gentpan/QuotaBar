@@ -50,9 +50,22 @@ English and Simplified Chinese and follows the system language unless you pick o
 <!-- changelog:start -->
 <!-- Generated from CHANGELOG.en.md by Scripts/sync_changelog.py. Do not edit by hand. -->
 
-Latest release **0.5.1** (2026-09-13) · [full changelog](CHANGELOG.en.md)
+Latest release **0.5.1** (2026-09-13) · **2** changes in development · [full changelog](CHANGELOG.en.md)
 
 <details open>
+<summary><b>2026-09-13</b> · Unreleased · 1 added · 1 style</summary>
+
+**Added**
+
+- The edge dock scrolls when there are more providers than the screen can hold: the strip grows until it is 24 pt from the top and bottom of the screen, and the rest of the rings scroll inside it with the wheel or trackpad. The system scroller is replaced by a 2 pt line on the inboard side, faint at rest, brighter while scrolling, fading back once it stops; where there are more rings above or below, the ends fade into the black. Scrolling puts away the hover card, cards line up with their ring allowing for the scroll, and when a limit resets its ring is scrolled into view first.
+
+**Style**
+
+- The About page's GitHub link shows the repository's new name, gentpan/QuotaBar, and the feedback and update-check addresses use it too.
+
+</details>
+
+<details>
 <summary><b>2026-09-13</b> · 0.5.1 · 3 added · 7 style · 3 fixed</summary>
 
 **Added**
@@ -153,29 +166,6 @@ Latest release **0.5.1** (2026-09-13) · [full changelog](CHANGELOG.en.md)
 - The source list in the English spend explanation used Chinese enumeration commas; it now uses commas or enumeration commas by language.
 - Before any reading, desktop cards drew the gauge ring, provider grid and ranking bars full and green, with pacing "OK"; they now draw empty, with dashes for the figures and pacing.
 - The About page's network note missed one address: the model price list also comes from GitHub (LiteLLM's price list). It's now listed.
-
-</details>
-
-<details>
-<summary><b>2026-09-12</b> · 0.5.0 · 6 added · 1 style · 2 fixed</summary>
-
-**Added**
-
-- Double-click a window in the hover card (5-hour, weekly, or a per-model limit such as Fable) and the rings, notch island, desktop card and menu bar reading all follow that window. Double-click again to go back to whichever is most used. The window being followed has a dot beside its name, solid in the provider's colour when chosen by hand.
-- Presentation has a new "Screen" option: with several displays, choose which one shows the dock, notch island and desktop cards; the default is automatic. If the chosen display is unplugged it falls back to the default, and windows reposition when displays come and go.
-- Each row of the service status page shows the main service's 30-day uptime and status bar even when folded: Claude Code for Claude, the CLI for Codex, the IDE for Cursor, the Open API for Kimi, the API service for DeepSeek.
-- Service status marks look only at the services used for coding: Claude Code and Claude API for Claude; the CLI, the VS Code extension, the Codex API, Codex Web and the desktop app for Codex; the IDE, the CLI and cloud agents for Cursor. Incidents in other components of a status page (such as Claude Cowork) no longer turn the mark yellow, and are listed separately under "Elsewhere on the page" when a status row is opened.
-- New diagnostic command `QuotaBar --status` lists the components each provider's status mark is based on and incidents in other components.
-- New diagnostic command `QuotaBar --credentials` shows whether each local credential can be read and how, without printing any secrets.
-
-**Style**
-
-- The Settings window no longer flashes a scroll bar on the right, including when a service status row opens.
-
-**Fixed**
-
-- Codex's status couldn't find the CLI component: the OpenAI status page's summary leaves it out, so the full component list is now read when it's missing.
-- After reinstalling or updating, opening the app asked again for keychain access to "Claude Code-credentials". It now reads through the system's own security tool, the same way Claude Code does, so a change in the app's signature no longer prompts again.
 
 </details>
 

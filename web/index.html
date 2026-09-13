@@ -537,6 +537,14 @@
       </div>
       <div class="log">
         <article class="log__day">
+          <header class="log__head"><time datetime="2026-09-13">2026-09-13</time><span class="log__tag">Unreleased</span></header>
+          <p class="log__counts">1 added · 1 style</p>
+          <ul class="log__list">
+            <li><span class="badge badge--add">Added</span>The edge dock scrolls when there are more providers than the screen can hold: the strip grows until it is 24 pt from the top and bottom of the screen, and the rest of the rings scroll inside it with the wheel or trackpad. The system scroller is replaced by a 2 pt line on the inboard side, faint at rest, brighter while scrolling, fading back once it stops; where there are more rings above or below, the ends fade into the black. Scrolling puts away the hover card, cards line up with their ring allowing for the scroll, and when a limit resets its ring is scrolled into view first.</li>
+            <li><span class="badge badge--style">Style</span>The About page's GitHub link shows the repository's new name, gentpan/QuotaBar, and the feedback and update-check addresses use it too.</li>
+          </ul>
+        </article>
+        <article class="log__day">
           <header class="log__head"><time datetime="2026-09-13">2026-09-13</time><span class="log__tag">0.5.1</span></header>
           <p class="log__counts">3 added · 7 style · 3 fixed</p>
           <ul class="log__list">
@@ -559,18 +567,6 @@
             <li><span class="badge badge--add">Added</span>Click a percentage to switch between used and left, click a reset time to switch between a countdown and the exact time; every view follows.</li>
           </ul>
           <a class="log__more" href="changelog.html#d-2026-09-13">58 more →</a>
-        </article>
-        <article class="log__day">
-          <header class="log__head"><time datetime="2026-09-12">2026-09-12</time><span class="log__tag">0.5.0</span></header>
-          <p class="log__counts">6 added · 1 style · 2 fixed</p>
-          <ul class="log__list">
-            <li><span class="badge badge--add">Added</span>Double-click a window in the hover card (5-hour, weekly, or a per-model limit such as Fable) and the rings, notch island, desktop card and menu bar reading all follow that window. Double-click again to go back to whichever is most used. The window being followed has a dot beside its name, solid in the provider's colour when chosen by hand.</li>
-            <li><span class="badge badge--add">Added</span>Presentation has a new "Screen" option: with several displays, choose which one shows the dock, notch island and desktop cards; the default is automatic. If the chosen display is unplugged it falls back to the default, and windows reposition when displays come and go.</li>
-            <li><span class="badge badge--add">Added</span>Each row of the service status page shows the main service's 30-day uptime and status bar even when folded: Claude Code for Claude, the CLI for Codex, the IDE for Cursor, the Open API for Kimi, the API service for DeepSeek.</li>
-            <li><span class="badge badge--add">Added</span>Service status marks look only at the services used for coding: Claude Code and Claude API for Claude; the CLI, the VS Code extension, the Codex API, Codex Web and the desktop app for Codex; the IDE, the CLI and cloud agents for Cursor. Incidents in other components of a status page (such as Claude Cowork) no longer turn the mark yellow, and are listed separately under "Elsewhere on the page" when a status row is opened.</li>
-            <li><span class="badge badge--add">Added</span>New diagnostic command <code>QuotaBar --status</code> lists the components each provider's status mark is based on and incidents in other components.</li>
-          </ul>
-          <a class="log__more" href="changelog.html#d-2026-09-12">4 more →</a>
         </article>
       </div>
       <p class="log__all"><a href="changelog.html">Full changelog →</a></p>
