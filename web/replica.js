@@ -48,7 +48,7 @@
   // 指纹由 deploy_site.sh 统一改写（和 index.html、styles.css 里的字体一样）。
   // 写死 ?v=1 的话，指纹一升级，JS 渲染出的这些图不会跟着刷新。
   var LOGO = ROOT + "assets/logos/";
-  var LOGOV = "?v=e7c60b14";
+  var LOGOV = "?v=1a20cb83";
   /* ── 停靠条悬停卡片的内容 ────────────────────────────────────────
    * 行标题取 scope ?? title，和 ProviderCallout.row 一致：有作用域就显示
    * 作用域名（Fable），否则显示窗口名（周窗口）。
