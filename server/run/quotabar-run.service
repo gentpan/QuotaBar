@@ -1,0 +1,34 @@
+[Unit]
+Description=Quota Run leaderboard API (quota.bar/api/run)
+After=network.target
+
+[Service]
+Type=simple
+# 默认值写在这里；/etc/quotabar-run.env 里的同名变量会覆盖它们
+Environment=QUOTA_RUN_PORT=8788
+Environment=QUOTA_RUN_DB=/var/lib/quotabar-run/run.db
+Environment=QUOTA_RUN_SECRET_FILE=/etc/quotabar-run.secret
+Environment=PYTHONUNBUFFERED=1
+EnvironmentFile=-/etc/quotabar-run.env
+ExecStart=/usr/bin/python3 /opt/quotabar-run/run_server.py
+Restart=on-failure
+RestartSec=3
+User=quotabar-run
+Group=quotabar-run
+StateDirectory=quotabar-run
+StateDirectoryMode=0750
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+LockPersonality=true
+# SQLite 的 -wal/-shm 文件和数据库在同一目录，整个目录要可写；/etc 下的密钥只读
+ReadWritePaths=/var/lib/quotabar-run
+
+[Install]
+WantedBy=multi-user.target
