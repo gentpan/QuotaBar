@@ -1,6 +1,6 @@
-/* Quota Run：排行榜（leaderboard.html）和个人主页（u.html，Caddy 把 /@username 改写到它）。
+/* Quota Run（quota.run）：排行榜（index.html）和个人主页（u.html，Caddy 把 /@username 改写到它）。
  *
- * 只读同源的公开接口 /api/run/v1（契约见 docs/quota-run.md）。?demo=1 用下面内置的
+ * 只读同源的公开接口 /api/v1（契约见 docs/quota-run.md）。?demo=1 用下面内置的
  * 示例数据，不发任何请求——从 file:// 打开、或者服务端还没上线时，也能预览整页。
  * 文案按 <html lang> 取；数字、时长、相对时间也按页面语言排。没有依赖，没有构建步骤。
  */
@@ -13,7 +13,7 @@
   // 站点根目录和资源指纹都从脚本自己的地址取：中文页在下一层，/@username 又是改写出来的路径
   var ROOT = SRC.replace(/run\.js(\?.*)?$/, "");
   var V = (SRC.match(/\?v=[A-Za-z0-9]+/) || [""])[0];
-  var API = "/api/run/v1";
+  var API = "/api/v1";
   var params = new URLSearchParams(location.search);
   var DEMO = params.get("demo") === "1";
   var PAGE = document.body.getAttribute("data-run-page");
@@ -186,7 +186,7 @@
   }
 
   function boardHref(b, metric, season) {
-    return ROOT + (ZH ? "zh/" : "") + "leaderboard.html?" + query({
+    return ROOT + (ZH ? "zh/" : "") + (LOCAL ? "index.html" : "") + "?" + query({
       provider: b.provider, plan: b.plan, window: b.windowKey,
       metric: metric === "peak" ? "peak" : "", season: season || "", demo: DEMO ? "1" : "",
     });
@@ -554,8 +554,8 @@
       if (!el) { el = document.createElement("meta"); el.setAttribute(attr, key); head.appendChild(el); }
       el.setAttribute("content", value);
     }
-    var en = "https://quota.bar/@" + user.username;
-    var zh = "https://quota.bar/zh/@" + user.username;
+    var en = "https://quota.run/@" + user.username;
+    var zh = "https://quota.run/zh/@" + user.username;
     var name = (user.displayName || user.username) + " (@" + user.username + ")";
     document.title = name + " · Quota Run";
     link("canonical", ZH ? zh : en);
@@ -667,7 +667,7 @@
     var meta = ["@" + esc(user.username)];
     if (regionLabel(user.region)) meta.push(esc(regionLabel(user.region)));
     if (joined) meta.push(ZH ? esc(MONTH_FORMAT.format(joined)) + " 加入" : "Joined " + esc(MONTH_FORMAT.format(joined)));
-    var share = "quota.bar/@" + user.username;
+    var share = "quota.run/@" + user.username;
 
     var bests = user.bests || [];
     var projects = user.projects || [];
@@ -691,7 +691,7 @@
       "</section>" +
       statsList(user.stats, "run-stats--profile") +
       '<section class="run-sec" aria-labelledby="bestsHeading"><div class="run-sec__head"><h2 id="bestsHeading">' + t("Personal bests", "最好成绩") + "</h2>" +
-        '<a class="run-more" href="' + esc(ROOT + (ZH ? "zh/" : "") + "leaderboard.html" + (DEMO ? "?demo=1" : "")) + '">' + t("All boards →", "全部榜单 →") + "</a></div>" +
+        '<a class="run-more" href="' + esc(ROOT + (ZH ? "zh/" : "") + (LOCAL ? "index.html" : "") + (DEMO ? "?demo=1" : "")) + '">' + t("All boards →", "全部榜单 →") + "</a></div>" +
         (bests.length ? '<div class="run-bests">' + bests.map(bestCard).join("") + "</div>"
           : stateBox("empty", t("No ranked runs yet", "还没有上榜的成绩"), t("Bests show up here after the first full window from the ranked Mac.", "计分的那台 Mac 跑完第一个额度窗口后，成绩会出现在这里。"), "")) +
       "</section>" +
@@ -720,8 +720,8 @@
         : t("Which runner?", "要看谁的主页？")) + "</h1>" +
       "<p>" + (username
         ? t("The link may have a typo, or they left Quota Run — leaving deletes the profile with everything else.", "可能链接拼错了，也可能对方已经退出 Quota Run——退出时主页和其他数据一起删除。")
-        : t("Profiles live at quota.bar/@username.", "个人主页的地址是 quota.bar/@用户名。")) + "</p>" +
-      '<a class="run-btn" href="' + esc(ROOT + (ZH ? "zh/" : "") + "leaderboard.html" + (DEMO ? "?demo=1" : "")) + '">' + t("See the leaderboard", "去看排行榜") + "</a>" +
+        : t("Profiles live at quota.run/@username.", "个人主页的地址是 quota.run/@用户名。")) + "</p>" +
+      '<a class="run-btn" href="' + esc(ROOT + (ZH ? "zh/" : "") + (LOCAL ? "index.html" : "") + (DEMO ? "?demo=1" : "")) + '">' + t("See the leaderboard", "去看排行榜") + "</a>" +
       "</section>";
   }
 

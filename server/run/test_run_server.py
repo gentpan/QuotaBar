@@ -331,6 +331,18 @@ class RegistrationTests(ServerTestCase):
         self.assertEqual(second.call("GET", "/me")[1]["error"], "unknown_device")
 
 
+class PrefixTests(ServerTestCase):
+    def test_the_early_prefix_still_answers(self):
+        """quota.run/api/v1 is the address; the first builds used /api/run/v1 on quota.bar."""
+        for prefix in run_server.API_PREFIXES:
+            connection = http.client.HTTPConnection("127.0.0.1", self.port, timeout=20)
+            try:
+                connection.request("GET", prefix + "/stats")
+                self.assertEqual(connection.getresponse().status, 200)
+            finally:
+                connection.close()
+
+
 class SnapshotTests(ServerTestCase):
     def test_dedupe_and_validation(self):
         mac = self.joined("uploader")

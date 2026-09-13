@@ -59,7 +59,7 @@
       <div class="mb-drop" role="menu">
         <a role="menuitem" href="#top">[[About QuotaBar||关于 QuotaBar]]</a>
         <a role="menuitem" href="#providers">[[Supported Providers||支持的服务商]]</a>
-        <a role="menuitem" href="leaderboard.html">[[Quota Run Leaderboard||Quota Run 排行榜]]</a>
+        <a role="menuitem" href="{{run_url}}">[[Quota Run Leaderboard||Quota Run 排行榜]]</a>
         <hr>
         <a role="menuitem" href="{{dmg}}" download>[[Download for Mac||下载 for Mac]]</a>
         <a role="menuitem" href="{{github_dmg}}">[[Download from GitHub||从 GitHub 下载]]<span class="mb-drop__ext" aria-hidden="true">↗</span></a>
@@ -452,7 +452,7 @@
           </div>
           <div class="card__body">
             <h3 id="privacy">[[Usage stays on this Mac||用量不出这台 Mac]]</h3>
-            <p>[[Usage is read and worked out on your Mac. No analytics, no tracking. Automatic providers reuse the sign-in your CLI already has; credentials you enter go into the macOS keychain and never into a file. Only if you choose to join the <a href="leaderboard.html">Quota Run leaderboard</a> does one Mac send quota readings — never credentials, prompts or code.||用量在本机读取和计算，不做分析，不做追踪。自动型服务商复用你 CLI 已有的登录会话；手动填的凭据进 macOS 钥匙串，不写进任何文件。只有你主动加入 <a href="leaderboard.html">Quota Run 排行榜</a>，才会从一台 Mac 上传额度读数，凭据、提示词和代码永远不上传。]]</p>
+            <p>[[Usage is read and worked out on your Mac. No analytics, no tracking. Automatic providers reuse the sign-in your CLI already has; credentials you enter go into the macOS keychain and never into a file. Only if you choose to join the <a href="{{run_url}}">Quota Run leaderboard</a> does one Mac send quota readings — never credentials, prompts or code.||用量在本机读取和计算，不做分析，不做追踪。自动型服务商复用你 CLI 已有的登录会话；手动填的凭据进 macOS 钥匙串，不写进任何文件。只有你主动加入 <a href="{{run_url}}">Quota Run 排行榜</a>，才会从一台 Mac 上传额度读数，凭据、提示词和代码永远不上传。]]</p>
           </div>
         </div>
       </div>
@@ -493,7 +493,7 @@
         </details>
         <details class="qa">
           <summary class="qa__q">[[Are my credentials safe?||我的凭据安全吗？]]</summary>
-          <div class="qa__a"><div>[[Credentials you enter are stored only in the macOS login keychain, never in the config file. Automatic providers store nothing — each read goes to your CLI's existing session. The app reports no usage to us. Besides each provider's own API, it connects only to the providers' public status pages, open.er-api.com once a day for exchange rates, GitHub for new versions and the model price list, and quota.bar when you send feedback or when GitHub can't be reached for an update. With a proxy set, all of these go through it. Joining Quota Run is optional; after you join, one Mac also sends quota readings and per-minute token counts to quota.bar — see the leaderboard page for exactly what is and never is sent.||手动填写的凭据只存 macOS 登录钥匙串，不会写进配置文件。自动型服务商根本不存——每次直接读你 CLI 已有的会话。应用不向我们上报任何用量数据。除各服务商自己的接口外，它只会连接各家的公开状态页、每天取一次汇率的 open.er-api.com、GitHub（新版本和模型价目表），以及你主动提交反馈、或连不上 GitHub 检查更新时的 quota.bar。设置了代理时，这些请求都经过代理。Quota Run 排行榜是自愿加入的；加入后，一台 Mac 还会把额度读数和每分钟的 token 数上传到 quota.bar，具体上传什么、绝不上传什么，排行榜页面上写得很清楚。]]</div></div>
+          <div class="qa__a"><div>[[Credentials you enter are stored only in the macOS login keychain, never in the config file. Automatic providers store nothing — each read goes to your CLI's existing session. The app reports no usage to us. Besides each provider's own API, it connects only to the providers' public status pages, open.er-api.com once a day for exchange rates, GitHub for new versions and the model price list, and quota.bar when you send feedback or when GitHub can't be reached for an update. With a proxy set, all of these go through it. Joining Quota Run is optional; after you join, one Mac also sends quota readings and per-minute token counts to quota.run — see quota.run for exactly what is and never is sent.||手动填写的凭据只存 macOS 登录钥匙串，不会写进配置文件。自动型服务商根本不存——每次直接读你 CLI 已有的会话。应用不向我们上报任何用量数据。除各服务商自己的接口外，它只会连接各家的公开状态页、每天取一次汇率的 open.er-api.com、GitHub（新版本和模型价目表），以及你主动提交反馈、或连不上 GitHub 检查更新时的 quota.bar。设置了代理时，这些请求都经过代理。Quota Run 排行榜是自愿加入的；加入后，一台 Mac 还会把额度读数和每分钟的 token 数上传到 quota.run，具体上传什么、绝不上传什么，quota.run 上写得很清楚。]]</div></div>
         </details>
         <details class="qa">
           <summary class="qa__q">[[How accurate is the spend?||费用数字准不准？]]</summary>
@@ -530,7 +530,7 @@
     <div class="footer__links">
       <a href="{{dmg}}" download>[[Download||下载]]</a>
       <a href="{{github_dmg}}">[[Download from GitHub||GitHub 下载]]</a>
-      <a href="leaderboard.html">[[Leaderboard||排行榜]]</a>
+      <a href="{{run_url}}">[[Leaderboard||排行榜]]</a>
       <a href="https://github.com/gentpan/QuotaBar">[[Source||源码]]</a>
       <a href="https://github.com/gentpan/QuotaBar/issues">[[Feedback||反馈]]</a>
       <a href="{{other_url}}" hreflang="[[zh-CN||en]]" lang="[[zh-CN||en]]" data-lang="[[zh||en]]">[[简体中文||English]]</a>

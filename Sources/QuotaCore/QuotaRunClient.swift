@@ -558,11 +558,11 @@ public struct QuotaRunError: LocalizedError, Equatable, Sendable {
             let minutes = max(1, Int((abs(clockSkew) / 60).rounded()))
             return clockSkew > 0
                 ? L10n.t(
-                    "This Mac's clock is \(minutes) min ahead of quota.bar's. Turn on \"Set time and date automatically\" in System Settings.",
-                    "这台 Mac 的时钟比 quota.bar 快了 \(minutes) 分钟。请在系统设置里打开「自动设置日期与时间」。")
+                    "This Mac's clock is \(minutes) min ahead of quota.run's. Turn on \"Set time and date automatically\" in System Settings.",
+                    "这台 Mac 的时钟比 quota.run 快了 \(minutes) 分钟。请在系统设置里打开「自动设置日期与时间」。")
                 : L10n.t(
-                    "This Mac's clock is \(minutes) min behind quota.bar's. Turn on \"Set time and date automatically\" in System Settings.",
-                    "这台 Mac 的时钟比 quota.bar 慢了 \(minutes) 分钟。请在系统设置里打开「自动设置日期与时间」。")
+                    "This Mac's clock is \(minutes) min behind quota.run's. Turn on \"Set time and date automatically\" in System Settings.",
+                    "这台 Mac 的时钟比 quota.run 慢了 \(minutes) 分钟。请在系统设置里打开「自动设置日期与时间」。")
         }
         switch code {
         case "username_taken": return L10n.t("That username is taken.", "这个用户名已被占用。")
@@ -578,18 +578,18 @@ public struct QuotaRunError: LocalizedError, Equatable, Sendable {
             }
             return L10n.t("The ranked device changed less than 7 days ago.", "计分设备 7 天内只能更换一次。")
         case "network":
-            return L10n.t("Could not reach quota.bar (\(message)).", "连不上 quota.bar（\(message)）。")
-        case "bad_response": return L10n.t("quota.bar sent an answer this version cannot read.", "quota.bar 返回了这个版本读不懂的内容。")
+            return L10n.t("Could not reach quota.run (\(message)).", "连不上 quota.run（\(message)）。")
+        case "bad_response": return L10n.t("quota.run sent an answer this version cannot read.", "quota.run 返回了这个版本读不懂的内容。")
         case "signing": return L10n.t("This Mac's key could not sign the request.", "本机密钥无法签名请求。")
         default:
             if isAuthFailure {
                 return L10n.t(
-                    "quota.bar no longer accepts this Mac's key. It may have been removed from your account.",
-                    "quota.bar 不再接受这台 Mac 的密钥，可能已从你的账户中移除。")
+                    "quota.run no longer accepts this Mac's key. It may have been removed from your account.",
+                    "quota.run 不再接受这台 Mac 的密钥，可能已从你的账户中移除。")
             }
             if status == 429 { return L10n.t("Too many requests; trying again later.", "请求太频繁，稍后再试。") }
             // The server's own sentence is English; better than a bare code.
-            return message.isEmpty ? L10n.t("quota.bar answered HTTP \(status).", "quota.bar 返回 HTTP \(status)。") : message
+            return message.isEmpty ? L10n.t("quota.run answered HTTP \(status).", "quota.run 返回 HTTP \(status)。") : message
         }
     }
 
@@ -618,7 +618,7 @@ public struct RunSignedRequest: Sendable, Equatable {
 public struct QuotaRunClient: Sendable {
     public typealias Transport = @Sendable (_ method: String, _ url: URL, _ headers: [String: String], _ body: Data?) async throws -> HTTPResponse
 
-    public static let productionBase = URL(string: "https://quota.bar/api/run/v1")!
+    public static let productionBase = URL(string: "https://quota.run/api/v1")!
 
     /// `QUOTABAR_RUN_API` points a build at a local or staging server.
     public static var defaultBase: URL {

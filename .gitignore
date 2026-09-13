@@ -6,3 +6,8 @@ QuotaBar.app
 dist/
 .claude/
 __pycache__/
+# quota.run 从 web/ 复制来的共享资源（Scripts/sync_changelog.py 生成）
+web-run/styles.css
+web-run/app.js
+web-run/favicon.ico
+web-run/assets/

@@ -1,7 +1,7 @@
 # Quota Run 排行榜服务
 
 Quota Run 是 QuotaBar 的自愿加入排行榜。应用加入后，从「计分设备」签名上传额度读数和每分钟
-token 数到 `https://quota.bar/api/run/v1/`；这里是接收端：一个标准库 + `cryptography` 的
+token 数到 `https://quota.run/api/v1/`；这里是接收端：一个标准库 + `cryptography` 的
 Python 服务，数据放 SQLite（WAL）。验签、存读数、算 run 和 tier、出榜单和个人页都在服务端，
 应用从不上传成绩。
 
@@ -12,10 +12,10 @@ Python 服务，数据放 SQLite（WAL）。验签、存读数、算 run 和 tie
 
 | 文件 | 用途 |
 |---|---|
-| `run_server.py` | 服务本体，`127.0.0.1:8788`，由 Caddy 反代 `/api/run/*` |
+| `run_server.py` | 服务本体，`127.0.0.1:8788`，由 Caddy 在 quota.run 反代 `/api/*` |
 | `test_run_server.py` | `unittest`，进程内起服务、用 P-256 密钥像应用一样签名 |
 | `quotabar-run.service` | systemd 单元（专用用户 `quotabar-run`，状态目录 `/var/lib/quotabar-run`） |
-| `caddy-snippet.caddy` | 插进 `quota.bar { … }` 的反代与 `/@username` 改写，以及 `quota.run` 跳转站点块 |
+| `caddy-snippet.caddy` | `quota.run` 的完整站点块（页面、`/@username` 改写、`/api/*` 反代），以及 `quota.bar` 里旧地址的跳转 |
 
 ## 接口一览
 
@@ -105,13 +105,16 @@ cd server/run && python3 -m unittest                  # 或本目录
 
 `Scripts/deploy_run.sh`：本地先跑测试，rsync 到 `/opt/quotabar-run`（不含测试文件），在服务器上
 建 `quotabar-run` 系统用户和 `/var/lib/quotabar-run`，没有密钥时生成 `/etc/quotabar-run.secret`
-（不回显），装 systemd 单元并重启；往 `/etc/caddy/sites/quota.bar.caddy` 的站点块里插入
-`caddy-snippet.caddy` 的第一段（已有 `/api/run/` 就跳过）；`quota.run` 已解析时写入
-`/etc/caddy/sites/quota.run.caddy`；`caddy validate` 通过才 reload，失败则恢复原配置；
-最后 `curl https://quota.bar/api/run/v1/stats` 验证。
+（不回显），装 systemd 单元并重启；`caddy-snippet.caddy` 的第二段整份写成
+`/etc/caddy/sites/quota.run.caddy`，第一段放进 `/etc/caddy/sites/quota.bar.caddy` 站点块里的
+`# >>> quota-run`、`# <<< quota-run` 之间（重跑时整段替换，早先无标记的 `/api/run/` 反代一并删掉）；
+`caddy validate` 通过才 reload，失败则恢复原配置；最后 `curl https://quota.run/api/v1/stats` 验证。
+页面本身（`web-run/`）由 `Scripts/deploy_site.sh` 同步到 `/var/www/quota.run`。
+
+服务端同时认 `/api/v1` 和早先的 `/api/run/v1` 两个前缀，签名按实际收到的路径校验。
 
 主机要求：`python3`（≥ 3.11）和 `python3-cryptography`，SQLite ≥ 3.25（窗口函数、UPSERT）。
-`quota.run` 的跳转需要先把 `quota.run`、`www.quota.run` 的 DNS 指到这台机器，然后重跑脚本。
+`quota.run`、`www.quota.run` 的 DNS 需要指到这台机器（Cloudflare 代理）。
 
 ## 运维
 

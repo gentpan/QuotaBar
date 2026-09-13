@@ -13,11 +13,13 @@ and this file disagree, this file wins until it is changed on purpose.
   them from one ranked device.
 - **Server** (`server/run/`): a Python 3.13 service (standard library +
   `cryptography`, both on the host) with SQLite, behind Caddy at
-  `https://quota.bar/api/run/v1/`. It verifies signatures, stores readings and
+  `https://quota.run/api/v1/`. It verifies signatures, stores readings and
   computes runs, tiers and boards. **The server decides every result**; the app
   never uploads a finished result.
-- **Web** (`site/`, `web/`): `quota.bar/leaderboard` (`/zh/leaderboard`) and
-  public profiles `quota.bar/@username`, static pages reading the public API.
+- **Web** (`site/leaderboard.html`, `site/u.html` → `web-run/`): the leaderboard
+  at `quota.run` (`quota.run/zh/`) and public profiles `quota.run/@username`,
+  static pages reading the public API. quota.bar is the product site only; its
+  early `/leaderboard` and `/@username` addresses redirect here.
 
 ## Principles
 
@@ -79,7 +81,7 @@ Canonical string (UTF-8, lines joined by `\n`, no trailing newline):
 ```
 quota-run-v1
 <METHOD upper-case>
-<path, no query string, e.g. /api/run/v1/snapshots>
+<path, no query string, e.g. /api/v1/snapshots>
 <X-Quota-Timestamp>
 <X-Quota-Nonce>
 <lower-case hex SHA-256 of the raw body bytes; of the empty string when there is no body>
@@ -174,7 +176,8 @@ means the week containing now; `all` means every season (best run per user).
 
 ## API
 
-Base `https://quota.bar/api/run/v1`. JSON in and out, UTF-8. Errors:
+Base `https://quota.run/api/v1` (the server also answers the early prefix
+`/api/run/v1`; the signature always covers the path it received). JSON in and out, UTF-8. Errors:
 `{"error": "<code>", "message": "<English sentence>"}` with 400/401/403/404/409/413/429.
 Bodies above 1 MB → 413. Authenticated writes: at most one request every 10 s per
 device (burst 5) → 429.
@@ -207,12 +210,12 @@ filter). Omit it for everyone.
 
 ## Web
 
-- `quota.bar/leaderboard` and `quota.bar/zh/leaderboard`: board picker (provider
+- `quota.run` and `quota.run/zh/`: board picker (provider
   → plan → window), metric (fastest to 100% / highest peak), season (this week,
   last week, all time), region, verified-only switch; rows with rank, name, value
   (`2h 37m` / `98%`), tier badge, time. Empty state explains how to join from the
-  app. `quota.run` redirects here.
-- `quota.bar/@username` (Caddy rewrites to `/u.html`, `/zh/@username` to
+  app.
+- `quota.run/@username` (Caddy rewrites to `/u.html`, `/zh/@username` to
   `/zh/u.html`): name, bio, links, per-board bests with rank and top-percentile,
   recent runs, projects as cards. 404 state when the user does not exist.
 - A demo mode (`?demo=1`) renders fixture data so the pages can be previewed

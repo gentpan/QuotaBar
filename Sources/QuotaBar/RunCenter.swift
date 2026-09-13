@@ -445,8 +445,8 @@ final class RunCenter: ObservableObject {
                 forgetMembership()
                 leavePhase = .idle
                 joinPhase = .failed(L10n.t(
-                    "Left on this Mac. Its key was missing, so quota.bar could not be asked to delete your data; leave from another joined Mac, or write to hello@quota.bar.",
-                    "已在本机退出。由于找不到本机密钥，无法请求 quota.bar 删除你的数据；请在另一台已加入的 Mac 上退出，或发邮件到 hello@quota.bar。"))
+                    "Left on this Mac. Its key was missing, so quota.run could not be asked to delete your data; leave from another joined Mac, or write to hello@quota.bar.",
+                    "已在本机退出。由于找不到本机密钥，无法请求 quota.run 删除你的数据；请在另一台已加入的 Mac 上退出，或发邮件到 hello@quota.bar。"))
                 return
             }
             forgetMembership()

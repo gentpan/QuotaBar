@@ -1,7 +1,8 @@
 #!/bin/bash
-# Installs the Quota Run API on the quota.bar host and wires Caddy to it.
+# Installs the Quota Run API on the quota.bar host and wires Caddy: quota.run serves
+# the pages (synced by deploy_site.sh) and /api/*; quota.bar only redirects old addresses.
 # Idempotent: re-running updates the code and restarts the service; the database,
-# the HMAC secret and existing Caddy lines are left as they are.
+# and the HMAC secret are left as they are; the Caddy blocks are replaced.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 HOST="${SITE_HOST:-root@15.204.80.137}"
@@ -40,67 +41,59 @@ systemctl daemon-reload
 systemctl enable quotabar-run >/dev/null
 systemctl restart quotabar-run
 
-# Caddy：往 quota.bar 站点块里加 /api/run/* 反代和 /@username 改写；已经有了就不重复加
+# Caddy：quota.run 是完整站点（页面 + /api/*），整份覆盖；quota.bar 站点块里只留旧地址的跳转，
+# 放在「# >>> quota-run」「# <<< quota-run」之间，重跑时整段替换。早先没有标记的那段（/api/run/ 反代和改写）一并删掉。
 site=/etc/caddy/sites/quota.bar.caddy
 run_site=/etc/caddy/sites/quota.run.caddy
 snippet=/opt/quotabar-run/caddy-snippet.caddy
 if [ ! -f "$site" ]; then echo "找不到 $site"; exit 1; fi
-backup=$(mktemp)
+backup=$(mktemp); run_backup=$(mktemp)
 cp -p "$site" "$backup"
-added_run_site=0
-if ! grep -q "/api/run/" "$site"; then
-  python3 - "$site" "$snippet" <<'PYCADDY'
+had_run_site=0
+[ -f "$run_site" ] && { cp -p "$run_site" "$run_backup"; had_run_site=1; }
+install -d -m 755 -o www-data -g www-data /var/www/quota.run
+python3 - "$site" "$run_site" "$snippet" <<'PYCADDY'
 import re, sys
-path, snippet_path = sys.argv[1], sys.argv[2]
+site_path, run_path, snippet_path = sys.argv[1:4]
 snippet = open(snippet_path).read()
-begin, end = "# ---- BEGIN quota.bar ----\n", "# ---- END quota.bar ----"
-block = snippet[snippet.index(begin) + len(begin):snippet.index(end)]
-text = open(path).read()
+def part(name):
+    begin, end = f"# ---- BEGIN {name} ----\n", f"# ---- END {name} ----"
+    return snippet[snippet.index(begin) + len(begin):snippet.index(end)]
+
+text = open(site_path).read()
+# 早先的无标记版本：从「# Quota Run API」到最后一条 leaderboard 改写。
+text = re.sub(r"\t# Quota Run API.*?rewrite @quotaRunBoardZh /zh/leaderboard\.html\n", "", text, flags=re.S)
+text = re.sub(r"\t# >>> quota-run\n.*?\t# <<< quota-run\n", "", text, flags=re.S)
+block = "\t# >>> quota-run\n" + part("quota.bar") + "\t# <<< quota-run\n"
 match = re.search(r"(?m)^quota\.bar\s*\{", text)
-idx = match.start() if match else text.index('quota.bar {')
-depth = 0; end_at = None
-for i in range(idx, len(text)):
-    if text[i] == '{': depth += 1
-    elif text[i] == '}':
+depth = 0
+for i in range(match.start(), len(text)):
+    if text[i] == "{": depth += 1
+    elif text[i] == "}":
         depth -= 1
         if depth == 0:
-            end_at = i
+            text = text[:i] + block + text[i:]
             break
-text = text[:end_at] + block + text[end_at:]
-open(path, 'w').write(text)
-print('已插入 Quota Run 的 handle 与 rewrite 到', path)
+open(site_path, "w").write(text)
+open(run_path, "w").write(part("quota.run"))
+print("已更新", site_path, "与", run_path)
 PYCADDY
-fi
-# quota.run 的跳转站点：域名解析到位后才装，否则 Caddy 会不停地申请证书失败
-if [ ! -f "$run_site" ]; then
-  if getent hosts quota.run >/dev/null 2>&1; then
-    python3 - "$snippet" "$run_site" <<'PYRUN'
-import sys
-snippet = open(sys.argv[1]).read()
-begin, end = "# ---- BEGIN quota.run ----\n", "# ---- END quota.run ----"
-open(sys.argv[2], 'w').write(snippet[snippet.index(begin) + len(begin):snippet.index(end)])
-print('已写入', sys.argv[2])
-PYRUN
-    added_run_site=1
-    grep -q "sites/" /etc/caddy/Caddyfile || echo "注意：/etc/caddy/Caddyfile 似乎没有 import sites/*，quota.run 站点块不会生效"
-  else
-    echo "quota.run 还没有解析到任何地址，跳过它的站点块（解析好后重跑本脚本）"
-  fi
-fi
 if caddy validate --config /etc/caddy/Caddyfile >/dev/null 2>&1; then
   systemctl reload caddy
 else
   echo "caddy validate 失败，恢复原配置："
   caddy validate --config /etc/caddy/Caddyfile 2>&1 | tail -5 || true
   cp -p "$backup" "$site"
-  [ "$added_run_site" = 1 ] && rm -f "$run_site"
-  rm -f "$backup"
+  if [ "$had_run_site" = 1 ]; then cp -p "$run_backup" "$run_site"; else rm -f "$run_site"; fi
+  rm -f "$backup" "$run_backup"
   exit 1
 fi
-rm -f "$backup"
+rm -f "$backup" "$run_backup"
 sleep 1
 systemctl is-active quotabar-run
-curl -s -o /dev/null -w 'GET 本机 %{http_code}\n' http://127.0.0.1:8788/api/run/v1/stats
+curl -s -o /dev/null -w 'GET 本机 %{http_code}\n' http://127.0.0.1:8788/api/v1/stats
 REMOTE
 echo "== 公网验证 =="
-curl -s --max-time 20 https://quota.bar/api/run/v1/stats; echo
+curl -s --max-time 20 https://quota.run/api/v1/stats; echo
+curl -s -o /dev/null --max-time 20 -w 'quota.bar/leaderboard → %{http_code} %{redirect_url}\n' https://quota.bar/leaderboard
+curl -s -o /dev/null --max-time 20 -w 'quota.bar/api/run/v1/stats → %{http_code}\n' https://quota.bar/api/run/v1/stats

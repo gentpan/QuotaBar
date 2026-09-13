@@ -6,7 +6,7 @@ import XCTest
 /// a run, see it ranked and on the profile, pair a second Mac, leave.
 ///
 /// Skipped unless `QUOTABAR_RUN_E2E` names a server, e.g.
-/// `QUOTABAR_RUN_E2E=http://127.0.0.1:8799/api/run/v1 swift test --filter QuotaRunLiveTests`
+/// `QUOTABAR_RUN_E2E=http://127.0.0.1:8799/api/v1 swift test --filter QuotaRunLiveTests`
 /// with `server/run/run_server.py` running on a throwaway database.
 final class QuotaRunLiveTests: XCTestCase {
     func testJoinUploadRankProfilePairLeave() async throws {

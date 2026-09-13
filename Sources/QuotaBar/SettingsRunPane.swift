@@ -64,8 +64,8 @@ struct RunRecordsCard: View {
                 }
             }
             SettingFootnote(L10n.t(
-                "Every reading stays on this Mac for 60 days; bests are kept for good. \"Likely verified\" applies Quota Run's rules here — only quota.bar decides a result.",
-                "每次读数在本机保留 60 天，个人最佳永久保留。「预计可验证」是按 Quota Run 的规则在本机估算的，最终结果以 quota.bar 为准。"))
+                "Every reading stays on this Mac for 60 days; bests are kept for good. \"Likely verified\" applies Quota Run's rules here — only quota.run decides a result.",
+                "每次读数在本机保留 60 天，个人最佳永久保留。「预计可验证」是按 Quota Run 的规则在本机估算的，最终结果以 quota.run 为准。"))
         }
     }
 
@@ -374,7 +374,7 @@ enum RunShare {
         } else {
             figure = L10n.t("peak \(QuotaFormat.percent(best.highestPeak?.peakPercent ?? 0))", "最高 \(QuotaFormat.percent(best.highestPeak?.peakPercent ?? 0))")
         }
-        return "\(title) — \(figure) · QuotaBar · https://quota.bar"
+        return "\(title) — \(figure) · Quota Run · https://quota.run"
     }
 
     @discardableResult
@@ -425,10 +425,10 @@ struct RunJoinCard: View {
     var body: some View {
         SettingsCard(L10n.t("Join Quota Run", "加入 Quota Run")) {
             SettingFootnote(L10n.t(
-                "Quota Run is QuotaBar's opt-in leaderboard at quota.bar: how fast a subscription window gets used up, and a public profile with what you build. Nothing is uploaded until you join, and only from one ranked Mac.",
-                "Quota Run 是 QuotaBar 的自愿排行榜，在 quota.bar 上比谁用满订阅额度窗口更快，并有一个展示你作品的公开主页。加入之前什么都不会上传；加入之后也只从一台计分设备上传。"))
+                "Quota Run is QuotaBar's opt-in leaderboard at quota.run: how fast a subscription window gets used up, and a public profile with what you build. Nothing is uploaded until you join, and only from one ranked Mac.",
+                "Quota Run 是 QuotaBar 的自愿排行榜，在 quota.run 上比谁用满订阅额度窗口更快，并有一个展示你作品的公开主页。加入之前什么都不会上传；加入之后也只从一台计分设备上传。"))
 
-            SettingRow(L10n.t("Username", "用户名"), caption: "quota.bar/@\(username.isEmpty ? L10n.t("name", "用户名") : RunUsername.normalize(username))") {
+            SettingRow(L10n.t("Username", "用户名"), caption: "quota.run/@\(username.isEmpty ? L10n.t("name", "用户名") : RunUsername.normalize(username))") {
                 VStack(alignment: .leading, spacing: Design.space1) {
                     GlassTextField(placeholder: L10n.t("3–20 letters, digits, _ or -", "3–20 位小写字母、数字、_ 或 -"), text: $username)
                         .frame(maxWidth: 320)
@@ -1037,8 +1037,8 @@ private struct RunLeaveCard: View {
     var body: some View {
         SettingsCard(L10n.t("Leave", "退出")) {
             SettingFootnote(L10n.t(
-                "Deletes your profile, projects, runs, devices and every reading from quota.bar, and forgets this Mac's key. Your records on this Mac stay.",
-                "从 quota.bar 删除你的主页、项目、成绩、设备和所有读数，并清除这台 Mac 的密钥。本机上的个人记录会保留。"))
+                "Deletes your profile, projects, runs, devices and every reading from quota.run, and forgets this Mac's key. Your records on this Mac stay.",
+                "从 quota.run 删除你的主页、项目、成绩、设备和所有读数，并清除这台 Mac 的密钥。本机上的个人记录会保留。"))
             HStack(spacing: Design.space3) {
                 Button(run.leavePhase.isWorking ? L10n.t("Deleting…", "正在删除…") : L10n.t("Leave Quota Run and Delete My Data", "退出 Quota Run 并删除我的数据"), role: .destructive) {
                     confirming = true
@@ -1054,8 +1054,8 @@ private struct RunLeaveCard: View {
             Button(L10n.t("Cancel", "取消"), role: .cancel) {}
         } message: {
             Text(L10n.t(
-                "Everything quota.bar holds about you is deleted and cannot be restored. Joining again starts from nothing.",
-                "quota.bar 上关于你的所有数据都会被删除，无法恢复。再次加入需要从头开始。"))
+                "Everything quota.run holds about you is deleted and cannot be restored. Joining again starts from nothing.",
+                "quota.run 上关于你的所有数据都会被删除，无法恢复。再次加入需要从头开始。"))
         }
     }
 }

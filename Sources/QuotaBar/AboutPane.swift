@@ -140,8 +140,8 @@ struct AboutPane: View {
                    "GitHub，检查和下载更新，以及获取模型价目表；"),
             L10n.t("quota.bar, when you send feedback, and for updates when GitHub can't be reached.",
                    "quota.bar，在你提交反馈时，以及连不上 GitHub 时检查和下载更新。"),
-            L10n.t("quota.bar's Quota Run, only after you join Quota Run: the readings, token counts and profile its consent screen lists.",
-                   "quota.bar 的 Quota Run，仅在你加入 Quota Run 之后：上传加入时同意页面列出的读数、token 数量和个人资料。"),
+            L10n.t("Quota Run at quota.run, only after you join Quota Run: the readings, token counts and profile its consent screen lists.",
+                   "quota.run 上的 Quota Run，仅在你加入 Quota Run 之后：上传加入时同意页面列出的读数、token 数量和个人资料。"),
         ]
     }
 

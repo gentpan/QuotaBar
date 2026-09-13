@@ -326,15 +326,15 @@ final class QuotaRunClientTests: XCTestCase {
         XCTAssertEqual(RunCanonical.bodyHash(nil), "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855")
         XCTAssertEqual(RunCanonical.bodyHash(Data(#"{"a":1}"#.utf8)), "015abd7f5cc57a2dd94b7590f04ad8084273905ee33ec5cebeae62276a97f862")
         XCTAssertEqual(
-            RunCanonical.string(method: "post", path: "/api/run/v1/snapshots", timestamp: 1_789_420_000, nonce: "AAECAwQFBgcICQoLDA0ODw", body: Data(#"{"a":1}"#.utf8)),
-            "quota-run-v1\nPOST\n/api/run/v1/snapshots\n1789420000\nAAECAwQFBgcICQoLDA0ODw\n015abd7f5cc57a2dd94b7590f04ad8084273905ee33ec5cebeae62276a97f862")
+            RunCanonical.string(method: "post", path: "/api/v1/snapshots", timestamp: 1_789_420_000, nonce: "AAECAwQFBgcICQoLDA0ODw", body: Data(#"{"a":1}"#.utf8)),
+            "quota-run-v1\nPOST\n/api/v1/snapshots\n1789420000\nAAECAwQFBgcICQoLDA0ODw\n015abd7f5cc57a2dd94b7590f04ad8084273905ee33ec5cebeae62276a97f862")
     }
 
     func testSignedRequestHeadersAndSignature() throws {
         let body = Data(#"{"a":1}"#.utf8)
         let request = try client().signedRequest("POST", "/snapshots", body: body)
-        XCTAssertEqual(request.url.absoluteString, "https://quota.bar/api/run/v1/snapshots")
-        XCTAssertEqual(request.path, "/api/run/v1/snapshots")
+        XCTAssertEqual(request.url.absoluteString, "https://quota.run/api/v1/snapshots")
+        XCTAssertEqual(request.path, "/api/v1/snapshots")
         XCTAssertEqual(request.headers["X-Quota-Device"], "dev_1")
         XCTAssertEqual(request.headers["X-Quota-Timestamp"], "1789420000")
         XCTAssertEqual(request.headers["X-Quota-Nonce"], "AAECAwQFBgcICQoLDA0ODw")
@@ -353,9 +353,9 @@ final class QuotaRunClientTests: XCTestCase {
     }
 
     func testOverriddenBaseAndNoDeviceOnRegister() throws {
-        let request = try client(base: URL(string: "http://127.0.0.1:8787/api/run/v1/")!, deviceId: nil).signedRequest("GET", "/me")
-        XCTAssertEqual(request.url.absoluteString, "http://127.0.0.1:8787/api/run/v1/me")
-        XCTAssertEqual(request.path, "/api/run/v1/me")
+        let request = try client(base: URL(string: "http://127.0.0.1:8787/api/v1/")!, deviceId: nil).signedRequest("GET", "/me")
+        XCTAssertEqual(request.url.absoluteString, "http://127.0.0.1:8787/api/v1/me")
+        XCTAssertEqual(request.path, "/api/v1/me")
         XCTAssertNil(request.headers["X-Quota-Device"])
         XCTAssertNil(request.headers["Content-Type"])
         XCTAssertTrue(request.canonical.hasSuffix(RunCanonical.bodyHash(nil)))
@@ -407,7 +407,7 @@ final class QuotaRunClientTests: XCTestCase {
         XCTAssertEqual(registration.user.region, .china)
         let sent = try XCTUnwrap(recorder.requests.first)
         XCTAssertEqual(sent.method, "POST")
-        XCTAssertEqual(sent.url.path, "/api/run/v1/register")
+        XCTAssertEqual(sent.url.path, "/api/v1/register")
         XCTAssertNil(sent.headers["X-Quota-Device"])
         let object = try XCTUnwrap(JSONSerialization.jsonObject(with: try XCTUnwrap(sent.body)) as? [String: Any])
         XCTAssertEqual(object["username"] as? String, "peter")
@@ -416,7 +416,7 @@ final class QuotaRunClientTests: XCTestCase {
         XCTAssertNil(object["pairCode"])
         // The signature covers exactly the bytes sent.
         let canonical = [
-            "quota-run-v1", "POST", "/api/run/v1/register", sent.headers["X-Quota-Timestamp"]!, sent.headers["X-Quota-Nonce"]!,
+            "quota-run-v1", "POST", "/api/v1/register", sent.headers["X-Quota-Timestamp"]!, sent.headers["X-Quota-Nonce"]!,
             RunCanonical.bodyHash(sent.body),
         ].joined(separator: "\n")
         let publicKey = try P256.Signing.PublicKey(x963Representation: signer.publicKeyX963)
@@ -547,7 +547,7 @@ final class QuotaRunClientTests: XCTestCase {
     func testDeleteDeviceEscapesTheID() async throws {
         let recorder = Recorder(200, #"{"devices":[]}"#)
         _ = try await client(transport: recorder.transport).deleteDevice("d/1")
-        XCTAssertEqual(recorder.requests.first?.url.absoluteString, "https://quota.bar/api/run/v1/devices/d%2F1")
+        XCTAssertEqual(recorder.requests.first?.url.absoluteString, "https://quota.run/api/v1/devices/d%2F1")
         XCTAssertEqual(recorder.requests.first?.method, "DELETE")
         let gone = Recorder(204, "")
         try await client(transport: gone.transport).deleteAccount()
@@ -655,7 +655,7 @@ final class RunUploadTests: XCTestCase {
         file.upload.retryAt = Date(timeIntervalSince1970: 1_790_000_000)
         file.save(to: url)
         XCTAssertEqual(RunStateFile.load(from: url), file)
-        XCTAssertEqual(file.account?.profileURL.absoluteString, "https://quota.bar/@peter")
+        XCTAssertEqual(file.account?.profileURL.absoluteString, "https://quota.run/@peter")
         try Data(#"{"account":{"username":"x"},"upload":{"sentSeq":"many","failures":2}}"#.utf8).write(to: url)
         let damaged = RunStateFile.load(from: url)
         XCTAssertNil(damaged.account, "no device id, no membership")

@@ -15,11 +15,11 @@
 <meta property="og:site_name" content="QuotaBar">
 <meta property="og:locale" content="[[en_US||zh_CN]]">
 <meta property="og:locale:alternate" content="[[zh_CN||en_US]]">
-<meta property="og:image" content="https://quota.bar/assets/[[og.jpg||og-zh.jpg]]?v={{v}}">
+<meta property="og:image" content="https://quota.run/assets/[[og.jpg||og-zh.jpg]]?v={{v}}">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
 <meta name="twitter:card" content="summary_large_image">
-<meta name="twitter:image" content="https://quota.bar/assets/[[og.jpg||og-zh.jpg]]?v={{v}}">
+<meta name="twitter:image" content="https://quota.run/assets/[[og.jpg||og-zh.jpg]]?v={{v}}">
 <link rel="icon" type="image/png" sizes="256x256" href="{{root}}assets/icon.png?v={{v}}">
 <link rel="icon" sizes="48x48" href="/favicon.ico?v={{v}}">
 <link rel="apple-touch-icon" sizes="180x180" href="{{root}}assets/apple-touch-icon.png?v={{v}}">
@@ -32,10 +32,10 @@
 <a class="run-skip" href="#profile">[[Skip to the profile||跳到主页内容]]</a>
 <header class="logbar">
   <div class="shell logbar__inner">
-    <a class="logbar__brand wordmark" href="./"><img src="{{root}}assets/icon.png?v={{v}}" alt="" width="22" height="22">QuotaBar</a>
+    <a class="logbar__brand wordmark" href="{{url}}"><img src="{{root}}assets/icon.png?v={{v}}" alt="" width="22" height="22">QuotaBar</a>
     <nav class="logbar__links" aria-label="[[Site||站点]]">
-      <a href="./">[[Home||首页]]</a>
-      <a href="leaderboard.html">[[Leaderboard||排行榜]]</a>
+      <a href="{{url}}">[[Home||首页]]</a>
+      <a href="{{run_url}}">[[Leaderboard||排行榜]]</a>
       <a href="{{dmg}}" download>[[Download||下载]]</a>
       <a class="run-lang" href="{{other_url}}u.html" hreflang="[[zh-CN||en]]" lang="[[zh-CN||en]]" data-lang="[[zh||en]]">[[中文||EN]]</a>
     </nav>
@@ -43,7 +43,7 @@
 </header>
 
 <main class="shell run-profile" id="profile" aria-live="polite" aria-busy="true">
-  <!-- run.js 按 /@username（或 ?user=）读 /api/run/v1/users/<username>，把整页画在这里。
+  <!-- run.js 按 /@username（或 ?user=）读 /api/v1/users/<username>，把整页画在这里。
        没跑 JS 时留下这一段加载骨架和下面的说明。 -->
   <div class="run-loading run-loading--profile" role="status">
     <span class="sr-only">[[Loading the profile…||正在加载主页…]]</span>
@@ -58,8 +58,8 @@
 <footer class="footer">
   <div class="shell">
     <div class="footer__links">
-      <a href="./">[[Home||首页]]</a>
-      <a href="leaderboard.html">[[Leaderboard||排行榜]]</a>
+      <a href="{{url}}">[[Home||首页]]</a>
+      <a href="{{run_url}}">[[Leaderboard||排行榜]]</a>
       <a href="{{dmg}}" download>[[Download||下载]]</a>
       <a href="https://github.com/gentpan/QuotaBar">[[Source||源码]]</a>
     </div>

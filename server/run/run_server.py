@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Quota Run 排行榜服务：quota.bar/api/run/v1 的后端。
+"""Quota Run 排行榜服务：quota.run/api/v1 的后端。
 
 契约以 docs/quota-run.md 为准（签名、规范串、数据模型、run 与 tier 规则、每个接口的
 JSON）。这里只依赖标准库和 cryptography（主机上已装 43.x），数据放 SQLite（WAL）。
@@ -8,7 +8,7 @@ JSON）。这里只依赖标准库和 cryptography（主机上已装 43.x），�
 读数进来时只重算受影响的 run，榜单和个人页从 runs 表查询，公开 GET 在内存里缓存 30 秒。
 
 环境变量：
-  QUOTA_RUN_PORT         监听端口，默认 8788（只绑 127.0.0.1，由 Caddy 反代 /api/run/*）
+  QUOTA_RUN_PORT         监听端口，默认 8788（只绑 127.0.0.1，由 Caddy 在 quota.run 反代 /api/*）
   QUOTA_RUN_DB           数据库路径，默认 /var/lib/quotabar-run/run.db
   QUOTA_RUN_SECRET_FILE  账号摘要的 HMAC 密钥，默认 /etc/quotabar-run.secret；
                          不存在时生成 32 字节随机数的 hex（权限 0600）
@@ -36,7 +36,9 @@ from cryptography.exceptions import InvalidSignature
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric import ec
 
-API_PREFIX = "/api/run/v1"
+API_PREFIX = "/api/v1"
+# 早期版本挂在 quota.bar/api/run/v1；两个前缀都认，签名始终按实际收到的路径校验。
+API_PREFIXES = ("/api/v1", "/api/run/v1")
 DEFAULT_PORT = 8788
 DEFAULT_DB = "/var/lib/quotabar-run/run.db"
 DEFAULT_SECRET_FILE = "/etc/quotabar-run.secret"
@@ -603,9 +605,10 @@ class RunService:
             return Response(500, {"error": "internal", "message": "Something went wrong on the server."})
 
     def _route(self, request):
-        if not request.path.startswith(API_PREFIX + "/"):
+        prefix = next((p for p in API_PREFIXES if request.path.startswith(p + "/")), None)
+        if prefix is None:
             raise ApiError(404, "not_found", "No such endpoint.")
-        route = request.path[len(API_PREFIX):]
+        route = request.path[len(prefix):]
         method = request.method
         if method == "GET":
             if route in ("/stats", "/boards", "/leaderboard") or route.startswith("/users/"):

@@ -12,7 +12,7 @@ From CHANGELOG.md (Chinese), CHANGELOG.en.md (English) and `git log`:
   [[English||中文]] — and becomes web/index.html and web/zh/index.html, with the
   recent-updates block and the provider strip filled in; web/changelog.html and
   web/zh/changelog.html are the whole log as a page; site/leaderboard.html and
-  site/u.html (Quota Run's leaderboard and public profile, drawn by web/run.js
+  site/u.html (Quota Run's leaderboard and public profile on quota.run, drawn by web-run/run.js
   from the public API) become the same pair of pages under the same rules;
 - Assets/readme/activity.svg and activity.zh.svg, 26 weeks of commits;
 - the provider strip, provider count and download links, from ProviderID in
@@ -51,9 +51,9 @@ GITHUB_DOWNLOAD = "https://github.com/gentpan/QuotaBar/releases/download/v{versi
 # The two languages of the website. English lives at the root, Chinese under
 # /zh/, so every page-relative asset path in the Chinese copy climbs one level.
 LANGS = {
-    "en": {"lang": "en", "dir": "", "root": "", "url": "https://quota.bar/",
+    "en": {"lang": "en", "dir": "", "root": "", "url": "https://quota.bar/", "run_url": "https://quota.run/",
            "en_url": "./", "zh_url": "zh/", "other_url": "zh/"},
-    "zh": {"lang": "zh-CN", "dir": "zh/", "root": "../", "url": "https://quota.bar/zh/",
+    "zh": {"lang": "zh-CN", "dir": "zh/", "root": "../", "url": "https://quota.bar/zh/", "run_url": "https://quota.run/zh/",
            "en_url": "../", "zh_url": "./", "other_url": "../"},
 }
 
@@ -590,6 +590,31 @@ def site_providers(logos, count, lang, v):
     ])
 
 
+# What quota.run borrows from the product site: the stylesheet, the theme and
+# language script, the font, icons and logos. Copied, not linked, so each site
+# stands on its own; the copies are ignored by git (see .gitignore).
+RUN_SHARED = ["styles.css", "app.js", "favicon.ico", "assets/icon.png", "assets/apple-touch-icon.png",
+              "assets/og.jpg", "assets/og-zh.jpg", "assets/wallpaper-dark-1280.webp", "assets/wallpaper-light-1280.webp",
+              "assets/fonts", "assets/logos"]
+
+
+def copy_run_assets():
+    """Copies RUN_SHARED from web/ into web-run/; returns the paths that changed."""
+    changed = []
+    for name in RUN_SHARED:
+        source = ROOT / "web" / name
+        files = sorted(p for p in source.rglob("*") if p.is_file()) if source.is_dir() else [source]
+        for path in files:
+            target = ROOT / "web-run" / path.relative_to(ROOT / "web")
+            data = path.read_bytes()
+            if target.exists() and target.read_bytes() == data:
+                continue
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_bytes(data)
+            changed.append(str(target.relative_to(ROOT)))
+    return changed[:1] + ([f"…{len(changed) - 1} more"] if len(changed) > 1 else [])
+
+
 def run_providers(logos):
     """Provider names and logo tones for web/run.js, as JSON that is safe inside <script>."""
     table = {raw: {"en": en, "zh": zh, "tone": tone.strip().removeprefix("is-")} for raw, en, zh, tone in logos}
@@ -630,9 +655,11 @@ def main():
     analytics = re.search(r'<script defer src="https://tongji[^"]*"[^>]*></script>', template)
     logos = copy_logos()
     count = len(providers())
-    # Quota Run: the leaderboard and the public profile (u.html, which Caddy
-    # serves for /@username), built from their templates like the home page.
-    run_pages = {name: (ROOT / "site" / name).read_text(encoding="utf-8") for name in ("leaderboard.html", "u.html")}
+    # Quota Run lives on its own site, quota.run (web-run/): the leaderboard is
+    # its home page and u.html is the public profile Caddy serves for /@username.
+    run_pages = {out: (ROOT / "site" / name).read_text(encoding="utf-8")
+                 for name, out in (("leaderboard.html", "index.html"), ("u.html", "u.html"))}
+    changed += copy_run_assets()
     latest = latest_release(releases_zh)
     version = latest["version"] if latest else "0.0.0"
     for lang, intro, releases in (("en", intro_en, releases_en), ("zh", intro_zh, releases_zh)):
@@ -652,11 +679,12 @@ def main():
         if write_if_changed(out, site_page(intro, releases, lang, f"?v={stamp}", analytics.group(0) if analytics else None)):
             changed.append(str(out.relative_to(ROOT)))
         for name, source in run_pages.items():
-            page = render_template(source, lang, dict(values, run_providers=run_providers(logos)), f"site/{name}")
-            note = (f"<!-- Built from site/{name} by Scripts/sync_changelog.py: edit the template, not this file. -->"
-                    if lang == "en" else f"<!-- 由 Scripts/sync_changelog.py 从 site/{name} 生成：改模板，不要改这个文件。 -->")
+            template_name = "leaderboard.html" if name == "index.html" else name
+            page = render_template(source, lang, dict(values, run_providers=run_providers(logos)), f"site/{template_name}")
+            note = (f"<!-- Built from site/{template_name} by Scripts/sync_changelog.py: edit the template, not this file. -->"
+                    if lang == "en" else f"<!-- 由 Scripts/sync_changelog.py 从 site/{template_name} 生成：改模板，不要改这个文件。 -->")
             page = page.replace("<!doctype html>\n", f"<!doctype html>\n{note}\n", 1)
-            out = ROOT / "web" / info["dir"] / name
+            out = ROOT / "web-run" / info["dir"] / name
             if write_if_changed(out, page):
                 changed.append(str(out.relative_to(ROOT)))
     # The calendar runs through yesterday: a finished day does not change, so

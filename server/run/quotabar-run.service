@@ -1,5 +1,5 @@
 [Unit]
-Description=Quota Run leaderboard API (quota.bar/api/run)
+Description=Quota Run leaderboard API (quota.run/api)
 After=network.target
 
 [Service]

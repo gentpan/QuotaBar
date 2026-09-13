@@ -53,9 +53,9 @@ public struct RunAccountState: Codable, Equatable, Sendable {
         try c.encodeIfPresent(meFetchedAt.map { Int($0.timeIntervalSince1970) }, forKey: .meFetchedAt)
     }
 
-    /// `https://quota.bar/@username`.
+    /// `https://quota.run/@username`.
     public var profileURL: URL {
-        URL(string: "https://quota.bar/@\(username)") ?? URL(string: "https://quota.bar/leaderboard")!
+        URL(string: "https://quota.run/@\(username)") ?? URL(string: "https://quota.run/")!
     }
 }
 
