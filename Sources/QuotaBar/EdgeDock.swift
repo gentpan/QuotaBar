@@ -836,6 +836,9 @@ struct EdgeDockView: View {
                     .onContinuousHover { phase in ringHover(id, phase) }
                     .contextMenu {
                         Button(L10n.t("Refresh \(id.displayName)", "刷新 \(id.displayName)")) { store.refresh(id) }
+                        Divider()
+                        ProviderQuickMenus(store: store, id: id)
+                        Divider()
                         Button(L10n.t("Hide from the dock", "在停靠条中隐藏")) { store.setHidden(true, id, on: .dock) }
                         let hiddenHere = store.hiddenProviders(on: .dock)
                         if !hiddenHere.isEmpty {

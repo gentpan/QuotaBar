@@ -312,11 +312,7 @@ struct ProviderCardView: View {
         Button(L10n.t("Refresh \(id.displayName)", "刷新 \(id.displayName)")) { store.refresh(id) }
         Button(L10n.t("Copy as Image", "复制为图片")) { copyImage() }
         Divider()
-        if let snapshot = store.states[id]?.snapshot, !snapshot.windows.isEmpty {
-            windowsMenu(snapshot)
-            ringMenu(snapshot)
-        }
-        placesMenu
+        ProviderQuickMenus(store: store, id: id)
         Divider()
         if store.enabled.first != id {
             Button(L10n.t("Move Up", "上移")) { withAnimation(Motion.animation(Motion.spring)) { store.moveProvider(id, by: -1) } }
@@ -328,10 +324,81 @@ struct ProviderCardView: View {
         Button(L10n.t("Settings…", "设置…")) { SettingsWindow.open() }
     }
 
+    private func copyImage() {
+        let card = ShareableCard(store: store) {
+            ProviderCardView(store: store, id: id, forExport: true)
+        }
+        if CardImageExporter.copy(card, text: "\(id.displayName) · QuotaBar") {
+            store.flashNotice(L10n.t("Copied to clipboard", "已复制到剪贴板"))
+        }
+    }
+}
+
+/// The frame around anything copied as an image: black, padded, and a
+/// footer that signs it — the app icon on its green tile with the name on
+/// the left, the address on the right, each said once.
+struct ShareableCard<Content: View>: View {
+    @ObservedObject var store: UsageStore
+    @ViewBuilder let content: () -> Content
+
+    var body: some View {
+        VStack(spacing: 14) {
+            content()
+            HStack(spacing: 8) {
+                if let url = ProviderGlyph.markURL(named: "quotabar-icon"), let image = NSImage(contentsOfFile: url.path) {
+                    Image(nsImage: image)
+                        .resizable()
+                        .interpolation(.high)
+                        .frame(width: 20, height: 20)
+                        .clipShape(RoundedRectangle(cornerRadius: 4.5, style: .continuous))
+                }
+                Text("QuotaBar")
+                    .font(Design.wordmark(size: 13, weight: .semibold))
+                    .foregroundStyle(.white.opacity(0.85))
+                Spacer(minLength: 8)
+                Text("quota.bar")
+                    .font(.system(size: 11, weight: .medium, design: .monospaced))
+                    .foregroundStyle(.white.opacity(0.4))
+            }
+            .padding(.horizontal, 4)
+        }
+        .padding(16)
+        .frame(width: 380)
+        .background(Color.black)
+        .environment(\.colorScheme, .dark)
+    }
+}
+
+extension UsageStore {
+    /// Shows the transient pill for a moment.
+    func flashNotice(_ text: String) {
+        copiedNotice = text
+        Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .seconds(1.6))
+            if self?.copiedNotice == text { self?.copiedNotice = nil }
+        }
+    }
+}
+
+/// The three groups a provider's right-click menu carries wherever the
+/// provider is shown — its card in the panel, its ring in the dock: which
+/// limits its card shows, which window the ring follows, and where it appears.
+struct ProviderQuickMenus: View {
+    @ObservedObject var store: UsageStore
+    let id: ProviderID
+
+    var body: some View {
+        if let snapshot = store.states[id]?.snapshot, !snapshot.windows.isEmpty {
+            windowsMenu(snapshot)
+            ringMenu(snapshot)
+        }
+        placesMenu
+    }
+
     /// Which windows the card shows before it is expanded. The last one
     /// cannot be folded away: a card with nothing on it looks broken.
     private func windowsMenu(_ snapshot: UsageSnapshot) -> some View {
-        let upFront = Set(primary(snapshot).map(\.id))
+        let upFront = Set(store.upFrontWindows(for: id).map(\.id))
         return Menu(L10n.t("Limits on the Card", "卡片上显示的额度")) {
             ForEach(snapshot.windows) { window in
                 Toggle(window.title, isOn: Binding(
@@ -392,58 +459,4 @@ struct ProviderCardView: View {
         }
     }
 
-    private func copyImage() {
-        let card = ShareableCard(store: store) {
-            ProviderCardView(store: store, id: id, forExport: true)
-        }
-        if CardImageExporter.copy(card, text: "\(id.displayName) · QuotaBar") {
-            store.flashNotice(L10n.t("Copied to clipboard", "已复制到剪贴板"))
-        }
-    }
-}
-
-/// The frame around anything copied as an image: black, padded, and a
-/// footer that signs it — the app icon on its green tile with the name on
-/// the left, the address on the right, each said once.
-struct ShareableCard<Content: View>: View {
-    @ObservedObject var store: UsageStore
-    @ViewBuilder let content: () -> Content
-
-    var body: some View {
-        VStack(spacing: 14) {
-            content()
-            HStack(spacing: 8) {
-                if let url = ProviderGlyph.markURL(named: "quotabar-icon"), let image = NSImage(contentsOfFile: url.path) {
-                    Image(nsImage: image)
-                        .resizable()
-                        .interpolation(.high)
-                        .frame(width: 20, height: 20)
-                        .clipShape(RoundedRectangle(cornerRadius: 4.5, style: .continuous))
-                }
-                Text("QuotaBar")
-                    .font(Design.wordmark(size: 13, weight: .semibold))
-                    .foregroundStyle(.white.opacity(0.85))
-                Spacer(minLength: 8)
-                Text("quota.bar")
-                    .font(.system(size: 11, weight: .medium, design: .monospaced))
-                    .foregroundStyle(.white.opacity(0.4))
-            }
-            .padding(.horizontal, 4)
-        }
-        .padding(16)
-        .frame(width: 380)
-        .background(Color.black)
-        .environment(\.colorScheme, .dark)
-    }
-}
-
-extension UsageStore {
-    /// Shows the transient pill for a moment.
-    func flashNotice(_ text: String) {
-        copiedNotice = text
-        Task { @MainActor [weak self] in
-            try? await Task.sleep(for: .seconds(1.6))
-            if self?.copiedNotice == text { self?.copiedNotice = nil }
-        }
-    }
 }
