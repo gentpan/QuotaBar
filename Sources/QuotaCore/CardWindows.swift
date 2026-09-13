@@ -60,3 +60,32 @@ public extension UsageSnapshot {
         return chosen
     }
 }
+
+// MARK: - Window choices across a language switch
+
+public enum WindowRename {
+    /// Old window id → new, for the same limits read in another language.
+    ///
+    /// Window ids are the provider's own titles — "周窗口" in Chinese, "Weekly
+    /// window" in English — and the owner's picks (what the ring follows,
+    /// what a card shows) are kept by id. Switching the language rereads every
+    /// provider; this lines the two readings up so the picks follow. A window
+    /// pairs with the one of the same length and the same kind (plan-wide or
+    /// model-scoped) in the same place among its kind; anything ambiguous is
+    /// left out rather than guessed.
+    public static func pairs(from old: [UsageWindow], to new: [UsageWindow]) -> [String: String] {
+        func signature(_ window: UsageWindow) -> String {
+            "\(window.windowSeconds ?? -1)|\(window.scope == nil ? "plan" : "scoped")"
+        }
+        let oldGroups = Dictionary(grouping: old, by: signature)
+        let newGroups = Dictionary(grouping: new, by: signature)
+        var result: [String: String] = [:]
+        for (key, olds) in oldGroups {
+            guard let news = newGroups[key], news.count == olds.count else { continue }
+            for (from, to) in zip(olds, news) where from.id != to.id {
+                result[from.id] = to.id
+            }
+        }
+        return result
+    }
+}

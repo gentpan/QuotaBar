@@ -74,6 +74,9 @@ final class UsageStore: ObservableObject {
     private var updatePollTask: Task<Void, Never>?
     /// Staged bundle, verified and waiting for the user to restart.
     private var stagedUpdate: URL?
+    /// Each provider's windows as they were read before a language switch,
+    /// until the reading in the new language arrives.
+    private var renamingWindows: [ProviderID: [UsageWindow]] = [:]
     /// The release the last check found, kept for a retry or a manual
     /// download after a failure, whose stage no longer carries it.
     private(set) var lastRelease: UpdateRelease?
@@ -439,6 +442,9 @@ final class UsageStore: ObservableObject {
             let before = meterReading
             let resets = ResetDetector.events(provider: id, previous: states[id]?.snapshot, current: snapshot)
             states[id] = .loaded(snapshot)
+            if let old = renamingWindows.removeValue(forKey: id) {
+                carryWindowChoices(for: id, from: old, to: snapshot.windows)
+            }
             if !resets.isEmpty { noteResets(resets, before: before) }
             SnapshotCache.shared.store(snapshot, for: id)
             if let percent = snapshot.headlinePercent {
@@ -452,6 +458,19 @@ final class UsageStore: ObservableObject {
             } else {
                 states[id] = .failed(message)
             }
+        }
+    }
+
+    /// The window the ring follows and the windows a card shows, moved to the
+    /// names the same windows have in the new language.
+    private func carryWindowChoices(for id: ProviderID, from old: [UsageWindow], to new: [UsageWindow]) {
+        let renamed = WindowRename.pairs(from: old, to: new)
+        guard !renamed.isEmpty else { return }
+        if let picked = config.headlineWindow(for: id), let now = renamed[picked] {
+            setHeadlineWindow(now, for: id)
+        }
+        if let shown = experience.cardWindows[id.rawValue] {
+            updateExperience { $0.cardWindows[id.rawValue] = shown.map { renamed[$0] ?? $0 } }
         }
     }
 
@@ -902,6 +921,11 @@ final class UsageStore: ObservableObject {
         // error messages are worded when the reading is taken, and the last
         // reading is kept on disk. Take them again in the new language.
         if L10n.isChinese != wasChinese {
+            // The windows come back renamed; remember them as they were, so
+            // the owner's picks can follow them to their new names.
+            for id in enabled {
+                if let windows = states[id]?.snapshot?.windows { renamingWindows[id] = windows }
+            }
             refreshAll()
             Task { await refreshServiceStatus() }
         }

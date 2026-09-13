@@ -78,3 +78,27 @@ final class CardWindowsTests: XCTestCase {
         XCTAssertTrue(odd.cardWindows.isEmpty)
     }
 }
+
+final class WindowRenameTests: XCTestCase {
+    private func window(_ title: String, _ seconds: Int?, scope: String? = nil) -> UsageWindow {
+        UsageWindow(title: title, usedPercent: 10, windowSeconds: seconds, scope: scope)
+    }
+
+    func testClaudeInChinesePairsWithClaudeInEnglish() {
+        let zh = [window("5 小时窗口", 18_000), window("周窗口", 604_800), window("周窗口 · Fable", 604_800, scope: "Fable")]
+        let en = [window("5-hour window", 18_000), window("Weekly window", 604_800), window("Weekly window · Fable", 604_800, scope: "Fable")]
+        XCTAssertEqual(WindowRename.pairs(from: zh, to: en), [
+            "5 小时窗口": "5-hour window",
+            "周窗口": "Weekly window",
+            "周窗口 · Fable": "Weekly window · Fable",
+        ])
+    }
+
+    /// Two model-scoped weeks either side, in the same order: paired in order.
+    /// A window only one reading has is left alone.
+    func testPairsInOrderAndSkipsWhatDoesNotMatch() {
+        let zh = [window("月度套餐", nil), window("指定模型", nil, scope: "指定模型"), window("Grok Bot", 604_800, scope: "Grok Bot")]
+        let en = [window("Monthly plan", nil), window("Named models", nil, scope: "Named models")]
+        XCTAssertEqual(WindowRename.pairs(from: zh, to: en), ["月度套餐": "Monthly plan", "指定模型": "Named models"])
+    }
+}
