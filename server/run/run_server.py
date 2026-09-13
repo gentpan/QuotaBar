@@ -33,6 +33,7 @@ import hmac
 import json
 import math
 import os
+import queue
 import re
 import secrets
 import smtplib
@@ -108,13 +109,51 @@ HEATMAP_WEEKS = 53            # 热力图从 52 周前那个星期一画到今�
 GITHUB_API = "https://api.github.com"
 GITHUB_GRAPHQL_URL = "https://api.github.com/graphql"
 GITHUB_CONTRIBUTIONS_URL = "https://github.com/users/{login}/contributions"
-GITHUB_TTL = 6 * 3600         # 贡献日历和仓库数据六小时取一次
+GITHUB_TTL = 6 * 3600         # 贡献日历六小时取一次
+GITHUB_REPO_TTL = 24 * 3600   # 仓库的星标、提交统计变得慢，一天取一次
+GITHUB_RATE_PAUSE = 15 * 60   # GitHub 说超限了：所有 GitHub 请求一起停这么久
 GITHUB_RETRY = 15 * 60        # 取失败了十五分钟后再试，这期间照旧给上一份
 GITHUB_PENDING_RETRY = 120    # commit_activity 回 202（GitHub 还在算）时两分钟后再取
 GITHUB_WAIT = 8               # 第一次有人看、手里还没有数据时，请求最多等这么久
 GITHUB_UNUSED = 14 * 86400    # 两周没人看的缓存清掉
 GITHUB_WORKERS = 6
 MAX_GITHUB_REPOS = 12
+
+# —— 用量：每天、每个项目、每个工具的 token 与花费 ——
+USAGE_TOOLS = ("claude", "codex", "opencode")
+USAGE_MODES = ("cli", "desktop", "ide", "sdk", "cloud", "other")
+# 能用额度读数核实的工具 → 服务商：那天这个服务商的额度确实涨了，这个工具那天的用量才算已核实
+VERIFIABLE_TOOLS = {"claude": "claude", "codex": "codex"}
+MAX_USAGE_ROWS = 5000
+MAX_USAGE_DAYS = 62
+MAX_USAGE_PROJECTS = 200
+USAGE_HISTORY_DAYS = 400      # 只收这么多天以内的日期；看板的「全部」是近 365 天
+USAGE_ID_RE = re.compile(r"[A-Za-z0-9_-]{8,40}")
+REPO_KEY_RE = re.compile(r"[a-z0-9.-]+\.[a-z]{2,}(?:/[A-Za-z0-9._~-]{1,100}){2,4}")
+MODEL_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._:/@+-]{0,99}")
+DATE_RE = re.compile(r"\d{4}-\d{2}-\d{2}")
+PRICING_URL = "https://raw.githubusercontent.com/BerriAI/litellm/main/model_prices_and_context_window.json"
+PRICING_TTL = 86400
+PRICING_MAX_BYTES = 12_000_000
+# 价目表没有这个模型时按名字里的关键词估，和应用内置的备用表一致；每百万 token 的美元：输入、输出、缓存写入、缓存读取
+BUILTIN_RATES = (
+    ("fable", (10, 50, 12.5, 1.0)), ("mythos", (10, 50, 12.5, 1.0)), ("opus", (5, 25, 6.25, 0.5)),
+    ("sonnet-5", (2, 10, 2.5, 0.2)), ("sonnet", (3, 15, 3.75, 0.3)), ("haiku", (1, 5, 1.25, 0.1)),
+    ("gpt-5", (1.25, 10, 0, 0.125)), ("codex", (1.25, 10, 0, 0.125)), ("o3", (2, 8, 0, 0.5)), ("o4", (1.1, 4.4, 0, 0.275)),
+)
+DEFAULT_RATES = (3, 15, 3.75, 0.3)
+# 看板
+USAGE_METRICS = ("cost", "tokens", "streak", "active")
+USAGE_PERIODS = ("week", "last", "month", "all")
+MAX_LIVE_CLIENTS = 500
+LIVE_HEARTBEAT = 15
+# 徽章：id → 各档门槛（从低到高；lower 表示数越小越好，比如名次）
+BADGES = (
+    ("streak", (7, 30, 100), False), ("spend", (100, 1000, 10000), False), ("bigday", (100_000_000, 500_000_000, 1_000_000_000), False),
+    ("tools", (2, 3), False), ("ways", (3, 5), False), ("verified", (7, 30, 100), False), ("projects", (1, 3, 10), False),
+    ("opensource", (1,), False), ("nightowl", (25,), False), ("weekend", (30,), False), ("podium", (10, 3, 1), True),
+    ("speedrun", (1, 10, 50), False), ("github", (500, 2000, 5000), False),
+)
 GITHUB_QUERY = (
     "query($login: String!) { user(login: $login) { contributionsCollection {"
     " contributionCalendar { totalContributions weeks { contributionDays { date contributionCount } } }"
@@ -214,6 +253,10 @@ class ApiError(Exception):
 
 class OAuthFailure(Exception):
     """向 GitHub / Google 换令牌或取用户信息失败；消息里不带令牌和响应内容。"""
+
+
+class GithubRateLimited(OAuthFailure):
+    """GitHub 回 429，或者 403 并说到了限额。"""
 
 
 class Rejected(Exception):
@@ -329,14 +372,155 @@ def urllib_http(method, url, headers=None, body=None):
     测试注入假的同签名函数，不连外网。
     """
     request = urllib.request.Request(url, data=body, headers=headers or {}, method=method)
+    limit = PRICING_MAX_BYTES if url == PRICING_URL else MAX_BODY   # 价目表有近 2 MB
     try:
         with urllib.request.urlopen(request, timeout=HTTP_TIMEOUT) as response:
-            return response.status, response.read(MAX_BODY)
+            return response.status, response.read(limit)
     except urllib.error.HTTPError as error:
         try:
             return error.code, error.read(MAX_BODY)
         finally:
             error.close()
+
+
+class PriceBook:
+    """模型价目：LiteLLM 的公开价目表（一天取一次，存成 pricing.json），没有这个模型时按关键词估。
+
+    花费一律由服务端按这张表算，应用上传的只有 token 数；OpenCode 自己记了花费，照它的。
+    """
+
+    def __init__(self, path):
+        self.path = path
+        self.rates = {}
+        self.fetched_at = 0
+        self.lock = threading.Lock()
+        self.refreshing = False
+        try:
+            with open(path, encoding="utf-8") as handle:
+                saved = json.load(handle)
+            self.rates = {k: tuple(v) for k, v in saved.get("rates", {}).items()}
+            self.fetched_at = int(saved.get("fetchedAt", 0))
+        except (OSError, ValueError, TypeError, AttributeError):
+            pass
+
+    def install(self, rates, fetched_at):
+        with self.lock:
+            self.rates = rates
+            self.fetched_at = fetched_at
+
+    def lookup(self, model):
+        key = model.lower()
+        with self.lock:
+            rates = self.rates.get(key) or self.rates.get(re.sub(r"-\d{8}$", "", key))
+        if rates:
+            return rates
+        for marker, builtin in BUILTIN_RATES:
+            if marker in key:
+                return builtin
+        return DEFAULT_RATES
+
+    def cost_micro(self, model, input_tokens, output, cache_write, cache_read):
+        rate_in, rate_out, rate_write, rate_read = self.lookup(model)
+        dollars_millions = input_tokens * rate_in + output * rate_out + cache_write * rate_write + cache_read * rate_read
+        return int(round(dollars_millions))   # 每百万 token 的美元 × token 数 = 百万分之一美元
+
+    @staticmethod
+    def parse(raw):
+        root = json.loads(raw.decode("utf-8"))
+        rates = {}
+        for model, entry in root.items() if isinstance(root, dict) else ():
+            if not isinstance(entry, dict):
+                continue
+            values = [entry.get(k) for k in ("input_cost_per_token", "output_cost_per_token",
+                                             "cache_creation_input_token_cost", "cache_read_input_token_cost")]
+            if not all(v is None or (isinstance(v, (int, float)) and not isinstance(v, bool)) for v in values):
+                continue
+            if not (values[0] or values[1]):
+                continue
+            rates[model.lower()] = tuple(round((v or 0) * 1_000_000, 6) for v in values)
+        return rates
+
+    def refresh_if_stale(self, http, now):
+        """过期了就在后台线程里取一次；取失败下次再试，眼下照旧用手里的。"""
+        with self.lock:
+            if self.refreshing or now - self.fetched_at < PRICING_TTL:
+                return
+            self.refreshing = True
+
+        def run():
+            try:
+                status, raw = http("GET", PRICING_URL, {"User-Agent": USER_AGENT, "Accept": "application/json"}, None)
+                if status == 200:
+                    rates = self.parse(raw)
+                    if len(rates) > 50:
+                        self.install(rates, now)
+                        tmp = self.path + ".tmp"
+                        with open(tmp, "w", encoding="utf-8") as handle:
+                            json.dump({"fetchedAt": now, "rates": rates}, handle)
+                        os.replace(tmp, self.path)
+            except Exception as error:  # noqa: BLE001 — 价目表是锦上添花，失败只记一行
+                print(f"pricing: refresh failed: {type(error).__name__}", file=sys.stderr)
+            finally:
+                with self.lock:
+                    self.refreshing = False
+                    if now - self.fetched_at >= PRICING_TTL:
+                        self.fetched_at = now - PRICING_TTL + 3600   # 一小时后再试
+
+        threading.Thread(target=run, daemon=True).start()
+
+
+class LiveHub:
+    """GET /api/v1/live 的 Server-Sent Events：每个连接一个队列，服务里发生的事推给所有人。
+
+    只推公开的数据（用户名、当天的用量合计、公开 run 的读数、榜单前十），和公开接口能读到的一样。
+    """
+
+    def __init__(self):
+        self.clients = set()
+        self.lock = threading.Lock()
+
+    def publish(self, event, data):
+        message = f"event: {event}\ndata: {json.dumps(data, ensure_ascii=False, separators=(',', ':'))}\n\n".encode("utf-8")
+        with self.lock:
+            clients = list(self.clients)
+        for client in clients:
+            try:
+                client.put_nowait(message)
+            except queue.Full:
+                pass   # 读得太慢的连接丢事件，不拖累别人
+
+    def serve(self, handler, heartbeat=LIVE_HEARTBEAT):
+        inbox = queue.Queue(maxsize=200)
+        with self.lock:
+            if len(self.clients) >= MAX_LIVE_CLIENTS:
+                inbox = None
+            else:
+                self.clients.add(inbox)
+        if inbox is None:
+            handler._send(Response(503, {"error": "live_full", "message": "Too many live connections; try again later."}))
+            return
+        try:
+            handler.send_response(200)
+            handler.send_header("Content-Type", "text/event-stream; charset=utf-8")
+            handler.send_header("Cache-Control", "no-store")
+            handler.send_header("X-Accel-Buffering", "no")
+            handler.send_header("X-Content-Type-Options", "nosniff")
+            handler.end_headers()
+            handler.wfile.write(b"retry: 5000\nevent: hello\ndata: {}\n\n")
+            handler.wfile.flush()
+            while True:
+                try:
+                    message = inbox.get(timeout=heartbeat)
+                except queue.Empty:
+                    message = b": ping\n\n"
+                handler.wfile.write(message)
+                handler.wfile.flush()
+        except (OSError, ValueError):
+            pass
+        finally:
+            with self.lock:
+                self.clients.discard(inbox)
+            handler.close_connection = True
 
 
 class SmtpMailer:
@@ -1048,7 +1232,44 @@ def migrate_v5(service):
         db.execute("INSERT INTO schema_version(version) VALUES (5)")
 
 
-MIGRATIONS = [(1, SCHEMA_V1), (2, SCHEMA_V2), (3, migrate_v3), (4, migrate_v4), (5, migrate_v5)]
+def migrate_v6(service):
+    """用量：每天每个项目每个工具的 token（usage_rows）、公开的项目（usage_projects）、已核实的日子（usage_verified）。"""
+    db = service.db
+    with service.transaction():
+        columns = {row[1] for row in db.execute("PRAGMA table_info(users)")}
+        if "usage_timezone" not in columns:
+            db.execute("ALTER TABLE users ADD COLUMN usage_timezone TEXT")
+        # project_id 是公开项目的 id，不公开的用量是空串；日期是 Mac 上的本地日期
+        db.execute(
+            "CREATE TABLE IF NOT EXISTS usage_rows ("
+            " user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,"
+            " device_id TEXT NOT NULL, date TEXT NOT NULL, tool TEXT NOT NULL, mode TEXT NOT NULL, model TEXT NOT NULL,"
+            " project_id TEXT NOT NULL DEFAULT '', input INTEGER NOT NULL, output INTEGER NOT NULL,"
+            " cache_read INTEGER NOT NULL, cache_write INTEGER NOT NULL, sessions INTEGER NOT NULL,"
+            " active_minutes INTEGER NOT NULL, cost_micro INTEGER NOT NULL,"
+            " PRIMARY KEY (device_id, date, tool, mode, model, project_id)) WITHOUT ROWID")
+        db.execute("CREATE INDEX IF NOT EXISTS usage_rows_user_date ON usage_rows(user_id, date)")
+        db.execute("CREATE INDEX IF NOT EXISTS usage_rows_date ON usage_rows(date, user_id)")
+        db.execute("CREATE INDEX IF NOT EXISTS usage_rows_project ON usage_rows(user_id, project_id, date)")
+        db.execute(
+            "CREATE TABLE IF NOT EXISTS usage_projects ("
+            " user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,"
+            " public_id TEXT NOT NULL, name TEXT NOT NULL, slug TEXT NOT NULL, repo TEXT,"
+            " repo_verified INTEGER NOT NULL DEFAULT 0, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL,"
+            " PRIMARY KEY (user_id, public_id)) WITHOUT ROWID")
+        db.execute("CREATE UNIQUE INDEX IF NOT EXISTS usage_projects_slug ON usage_projects(user_id, slug)")
+        db.execute("CREATE INDEX IF NOT EXISTS usage_projects_repo ON usage_projects(repo) WHERE repo IS NOT NULL")
+        db.execute(
+            "CREATE TABLE IF NOT EXISTS usage_verified ("
+            " user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,"
+            " date TEXT NOT NULL, tool TEXT NOT NULL, PRIMARY KEY (user_id, date, tool)) WITHOUT ROWID")
+        users = [row[0] for row in db.execute("SELECT DISTINCT user_id FROM snapshots WHERE counted = 1")]
+        for user_id in users:
+            service.recompute_verified(user_id)
+        db.execute("INSERT INTO schema_version(version) VALUES (6)")
+
+
+MIGRATIONS = [(1, SCHEMA_V1), (2, SCHEMA_V2), (3, migrate_v3), (4, migrate_v4), (5, migrate_v5), (6, migrate_v6)]
 
 PUBLIC_TIERS = "('verified', 'standard')"   # flagged 和 unranked 不上榜、不进个人页和统计
 PROVIDER_ACCOUNT_ID_RE = re.compile(r"[0-9a-f]{16}")
@@ -1115,6 +1336,10 @@ class RunService:
         self._cache = {}
         self._last_purge = 0
         self._github_jobs = {}    # 正在后台取的 GitHub 缓存键 → 线程，同一个键同时只取一次
+        self._github_paused_until = 0
+        self.prices = PriceBook(os.path.join(directory or ".", "pricing.json"))
+        self.live = LiveHub()
+        self._live_board = None   # 上次推出去的榜单前十，没变就不再推
         self.migrate()
 
     def close(self):
@@ -1181,8 +1406,8 @@ class RunService:
         method = request.method
         self._purge(self.now())
         if method == "GET":
-            if (route in ("/stats", "/boards", "/leaderboard", "/insights") or route.startswith("/users/")
-                    or (route.startswith("/runs/") and route.count("/") == 2)):
+            if (route in ("/stats", "/boards", "/leaderboard", "/insights", "/usage/boards", "/usage/projects")
+                    or route.startswith("/users/") or (route.startswith("/runs/") and route.count("/") == 2)):
                 return self._public(request, route)
             if route == "/me":
                 return Response(200, self.me(self.actor(request)))
@@ -1201,6 +1426,8 @@ class RunService:
                 return self.register(request)
             if route == "/snapshots":
                 return Response(200, self.post_snapshots(request, self.authenticate_write(request)))
+            if route == "/usage":
+                return Response(200, self.post_usage(request, self.authenticate_write(request)))
             if route == "/devices/ranked":
                 return Response(200, self.set_ranked(request, self.actor(request, write=True)))
             if route == "/accounts/lookup":
@@ -1265,8 +1492,20 @@ class RunService:
                 response = Response(200, self.insights(request.query), public=True)
             elif route.startswith("/runs/"):
                 response = Response(200, self.run_detail(unquote(route[len("/runs/"):])), public=True)
+            elif route == "/usage/boards":
+                response = Response(200, self.usage_board(request.query), public=True)
+            elif route == "/usage/projects":
+                response = Response(200, self.project_board(request.query), public=True)
             else:
-                response = Response(200, self.profile(unquote(route[len("/users/"):])), public=True)
+                parts = route[len("/users/"):].split("/")
+                if len(parts) == 1:
+                    response = Response(200, self.profile(unquote(parts[0])), public=True)
+                elif len(parts) == 2 and parts[1] == "usage":
+                    response = Response(200, self.user_usage(unquote(parts[0])), public=True)
+                elif len(parts) == 3 and parts[1] == "projects":
+                    response = Response(200, self.project_detail(unquote(parts[0]), unquote(parts[2])), public=True)
+                else:
+                    raise ApiError(404, "not_found", "No such endpoint.")
         except ApiError as error:
             if error.status != 404:
                 raise
@@ -1687,7 +1926,7 @@ class RunService:
                 " WHERE user_id = ? AND provider = 'github')", (user_id,))
             # identities 删掉时 sessions 跟着级联删除；email_codes、oauth_states 里的 link_user_id 同样级联
             for table in ("snapshots", "activity", "runs", "projects", "account_owners", "account_bindings", "devices",
-                          "connect_requests", "identities"):
+                          "connect_requests", "usage_rows", "usage_projects", "usage_verified", "identities"):
                 self.db.execute(f"DELETE FROM {table} WHERE user_id = ?", (user_id,))
             self.db.execute("DELETE FROM users WHERE id = ?", (user_id,))
             # 他拥有的服务商账号交给下一个上传过它的人，那个人的 run 要重算
@@ -2109,6 +2348,7 @@ class RunService:
         run_keys = set()
         active_ranges = {}
         seen_accounts = {}
+        verify = []    # 能核实用量的读数：计分设备、Claude / Codex、带服务商账号
         with self.transaction():
             for item in activity:
                 entry = validate_activity(item, now)
@@ -2147,6 +2387,8 @@ class RunService:
                     seen_accounts.setdefault(account, snap["provider"])
                 if counted and snap["rankable"]:
                     run_keys.add((user_id, snap["provider"], snap["plan_norm"], snap["window_key"], snap["resets_bucket"]))
+                if counted and account and snap["provider"] in VERIFIABLE_TOOLS.values():
+                    verify.append((snap, account))
             if seen_accounts:
                 self.db.executemany(
                     "UPDATE account_bindings SET last_seen_at = MAX(last_seen_at, ?) WHERE account_hmac = ? AND user_id = ?",
@@ -2161,7 +2403,11 @@ class RunService:
                 run_keys.update(tuple(row) for row in rows)
             for key in run_keys:
                 self.recompute_run(key, now)
+            if verify:
+                self.mark_verified(user_id, verify)
             self.db.execute("UPDATE users SET last_upload_at = ? WHERE id = ?", (now, user_id))
+        if accepted:
+            self.publish_readings(user_id, run_keys)
         return {"accepted": accepted, "duplicates": duplicates, "rejected": rejected}
 
     # —— 服务商账号：绑定与归属 ——
@@ -2233,11 +2479,13 @@ class RunService:
         return changed
 
     def recheck_claims(self, user_id, now):
-        """登录身份新增、关联、验证或注册完成时调用：认领后立即重算受影响的 run。"""
+        """登录身份新增、关联、验证或注册完成时调用：认领后立即重算受影响的 run 和已核实的用量。"""
         run_keys = set()
         if self.check_claims(user_id, now, run_keys):
             for key in run_keys:
                 self.recompute_run(key, now)
+            for affected in {key[0] for key in run_keys} | {user_id}:
+                self.recompute_verified(affected)
 
     def assign_next_owner(self, account, provider, now, run_keys):
         """主人解绑或删号后，账号交给剩下绑定过它的人：邮箱对得上的优先（按 email），
@@ -2821,6 +3069,7 @@ class RunService:
             "stats": {"runs": totals[0], "verifiedRuns": totals[1], "providers": totals[2], "activeDays": active_days},
             "activity": self.activity_payload(user) if user["show_activity"] else None,
             "github": self.github_brief(user),
+            "badges": self.badges_payload(user),
         }
 
     # —— 个人主页：用量热力图 ——
@@ -2913,8 +3162,11 @@ class RunService:
             jobs = {}
             for key in keys:
                 row = rows.get(key)
-                due = row is None or (row["fetched_at"] + GITHUB_TTL <= now and row["retry_at"] <= now) \
+                ttl = GITHUB_TTL if key.startswith("user:") else GITHUB_REPO_TTL
+                due = row is None or (row["fetched_at"] + ttl <= now and row["retry_at"] <= now) \
                     or (row["payload"] is None and row["retry_at"] <= now)
+                if due and now < self._github_paused_until:
+                    continue   # 超限暂停中：先给手里有的
                 if due:
                     target = (identity[0], identity[1]) if key.startswith("user:") else repos[
                         [r.lower() for r in repos].index(key[len("repo:"):])]
@@ -2963,6 +3215,11 @@ class RunService:
                 payload, pending = self.fetch_github_repo(target)
                 if pending:
                     retry = GITHUB_PENDING_RETRY
+        except GithubRateLimited:
+            with self.lock:
+                self._github_paused_until = self.now() + GITHUB_RATE_PAUSE
+            retry = GITHUB_RATE_PAUSE
+            print("github: rate limited, pausing GitHub requests", file=sys.stderr)
         except Exception as error:  # noqa: BLE001 — 网络、JSON、页面改版都只记一行
             print(f"github: refreshing {key.partition(':')[0]} failed: {type(error).__name__}", file=sys.stderr)
         with self.lock:
@@ -3001,6 +3258,8 @@ class RunService:
         if body is not None:
             headers["Content-Type"] = "application/json"
         status, raw = self.http(method, url, headers, body)
+        if status == 429 or (status == 403 and b"rate limit" in (raw or b"").lower()):
+            raise GithubRateLimited(f"HTTP {status}")
         if status not in allow:
             raise OAuthFailure(f"HTTP {status}")
         return status, (json.loads(raw.decode("utf-8")) if raw else None)
@@ -3041,6 +3300,8 @@ class RunService:
         """没有令牌时读 github.com 公开的贡献日历页面（HTML），只拿到每天的贡献数。"""
         headers = {"Accept": "text/html", "User-Agent": USER_AGENT}
         status, raw = self.http("GET", GITHUB_CONTRIBUTIONS_URL.format(login=quote(login, safe="")), headers)
+        if status == 429:
+            raise GithubRateLimited("HTTP 429")
         if status != 200:
             raise OAuthFailure(f"HTTP {status}")
         days = parse_contribution_page(raw.decode("utf-8", "replace"))
@@ -3073,6 +3334,658 @@ class RunService:
         counts = ([0] * 52 + counts)[-52:]
         payload.update(weeks=counts, commits=sum(counts))
         return payload, False
+
+    # —— 用量：上传 ——
+
+    def post_usage(self, request, device):
+        """POST /usage：这台 Mac 某些日子按工具、编程方式、模型、项目分的 token。
+
+        按日整体替换：请求里列出的每个日期，先删掉这台设备那天的全部行再写入，所以同一天可以反复上传；
+        项目转为不公开时，应用把含它的日子重传一遍（projectsComplete 让服务端立刻把不在名单里的项目摘掉）。
+        花费由服务端按价目表算；OpenCode 自己记了花费，用它上报的。
+        """
+        body = parse_json_object(request.body)
+        now = self.now()
+        today = datetime.fromtimestamp(now, timezone.utc).date()
+        days = body.get("days")
+        rows = body.get("rows")
+        projects = body.get("projects") or []
+        if not isinstance(days, list) or not isinstance(rows, list) or not isinstance(projects, list):
+            raise ApiError(400, "invalid_usage", "days, rows and projects must be arrays.")
+        if len(days) > MAX_USAGE_DAYS or len(rows) > MAX_USAGE_ROWS or len(projects) > MAX_USAGE_PROJECTS:
+            raise ApiError(400, "too_much_usage",
+                           f"At most {MAX_USAGE_DAYS} days, {MAX_USAGE_ROWS} rows and {MAX_USAGE_PROJECTS} projects per request.")
+        oldest = today - timedelta(days=USAGE_HISTORY_DAYS)
+        valid_days = set()
+        for value in days:
+            day = parse_day(value)
+            if day is None or not oldest <= day <= today + timedelta(days=1):
+                raise ApiError(400, "invalid_usage", f"days must be YYYY-MM-DD within the last {USAGE_HISTORY_DAYS} days.")
+            valid_days.add(value)
+        zone = body.get("timezone")
+        if zone is not None:
+            zone = profile_timezone(zone)
+        public = {}
+        for index, item in enumerate(projects):
+            if not isinstance(item, dict) or not isinstance(item.get("id"), str) or not USAGE_ID_RE.fullmatch(item["id"]):
+                raise ApiError(400, "invalid_usage", f"projects[{index}].id must be 8–40 characters of A–Z, a–z, 0–9, _ and -.")
+            try:
+                name = clean_text(item.get("name"), 60)
+            except ValueError:
+                raise ApiError(400, "invalid_usage", f"projects[{index}].name is at most 60 characters.") from None
+            repo = item.get("repo")
+            if repo in (None, ""):
+                repo = None
+            elif not isinstance(repo, str) or not REPO_KEY_RE.fullmatch(repo):
+                raise ApiError(400, "invalid_usage", f"projects[{index}].repo must look like github.com/owner/repo.")
+            public[item["id"]] = (name or (repo.split("/")[-1] if repo else "project"), repo)
+        clean_rows = {}
+        for index, item in enumerate(rows):
+            entry = validate_usage_row(index, item, valid_days, public)
+            key = entry[:5]
+            if key in clean_rows:   # 同一格出现两次就加起来
+                kept = clean_rows[key]
+                entry = key + tuple(a + b for a, b in zip(kept[5:], entry[5:]))
+            clean_rows[key] = entry
+        user_id = device["user_id"]
+        github = self.github_identity(user_id)
+        login = (github[1] or "").lower() if github else ""
+        with self.transaction():
+            if zone:
+                self.db.execute("UPDATE users SET usage_timezone = ? WHERE id = ?", (zone, user_id))
+            slugs = {row["public_id"]: row["slug"] for row in self.db.execute(
+                "SELECT public_id, slug FROM usage_projects WHERE user_id = ?", (user_id,))}
+            taken = set(slugs.values())
+            for public_id, (name, repo) in public.items():
+                verified = int(bool(repo and login and repo.lower().startswith("github.com/")
+                                    and repo.split("/")[1].lower() == login))
+                if public_id in slugs:
+                    self.db.execute(
+                        "UPDATE usage_projects SET name = ?, repo = ?, repo_verified = ?, updated_at = ? WHERE user_id = ? AND public_id = ?",
+                        (name, repo, verified, now, user_id, public_id))
+                    continue
+                base = slugify(name)
+                slug = base
+                number = 2
+                while slug in taken:
+                    slug = f"{base[:36]}-{number}"
+                    number += 1
+                taken.add(slug)
+                self.db.execute(
+                    "INSERT INTO usage_projects(user_id, public_id, name, slug, repo, repo_verified, created_at, updated_at)"
+                    " VALUES (?, ?, ?, ?, ?, ?, ?, ?)", (user_id, public_id, name, slug, repo, verified, now, now))
+            self.db.executemany("DELETE FROM usage_rows WHERE device_id = ? AND date = ?",
+                                [(device["id"], day) for day in valid_days])
+            self.db.executemany(
+                "INSERT INTO usage_rows(user_id, device_id, date, tool, mode, model, project_id, input, output, cache_read,"
+                " cache_write, sessions, active_minutes, cost_micro) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                [(user_id, device["id"], date, tool, mode, model, project, input_tokens, output, cache_read, cache_write,
+                  sessions, minutes, client_cost if tool == "opencode" and client_cost else
+                  self.prices.cost_micro(model, input_tokens, output, cache_write, cache_read))
+                 for (date, tool, mode, model, project, input_tokens, output, cache_read, cache_write, sessions, minutes,
+                      client_cost) in clean_rows.values()])
+            if body.get("projectsComplete") is True:
+                # 不在名单里的项目：它的行并进同一格的「不公开」那一行，再删掉原行
+                marks = ",".join("?" * len(public))
+                scope = " WHERE device_id = ? AND project_id != ''" + (f" AND project_id NOT IN ({marks})" if public else "")
+                params = (device["id"], *public)
+                self.db.execute(
+                    "INSERT INTO usage_rows(user_id, device_id, date, tool, mode, model, project_id, input, output, cache_read,"
+                    " cache_write, sessions, active_minutes, cost_micro) SELECT user_id, device_id, date, tool, mode, model, '',"
+                    " input, output, cache_read, cache_write, sessions, active_minutes, cost_micro FROM usage_rows" + scope +
+                    " ON CONFLICT(device_id, date, tool, mode, model, project_id) DO UPDATE SET input = input + excluded.input,"
+                    " output = output + excluded.output, cache_read = cache_read + excluded.cache_read,"
+                    " cache_write = cache_write + excluded.cache_write, sessions = sessions + excluded.sessions,"
+                    " active_minutes = active_minutes + excluded.active_minutes, cost_micro = cost_micro + excluded.cost_micro",
+                    params)
+                self.db.execute("DELETE FROM usage_rows" + scope, params)
+            # 没有任何用量指向的项目不再公开
+            self.db.execute(
+                "DELETE FROM usage_projects WHERE user_id = ? AND NOT EXISTS (SELECT 1 FROM usage_rows r"
+                " WHERE r.user_id = usage_projects.user_id AND r.project_id = usage_projects.public_id)", (user_id,))
+            self.db.execute("UPDATE users SET last_upload_at = ? WHERE id = ?", (now, user_id))
+        # 用量榜要跟得上实时推送：只清用量相关的缓存，额度榜和统计照旧缓存 30 秒
+        for key in [k for k in self._cache if k.startswith(("/usage/", "/users/"))]:
+            self._cache.pop(key, None)
+        self.prices.refresh_if_stale(self.http, now)
+        self.publish_usage(user_id, max(valid_days) if valid_days else None)
+        projects_out = [{"id": row["public_id"], "slug": row["slug"], "repoVerified": bool(row["repo_verified"])}
+                        for row in self.db.execute(
+                            "SELECT public_id, slug, repo_verified FROM usage_projects WHERE user_id = ? ORDER BY name",
+                            (user_id,))]
+        return {"accepted": len(clean_rows), "days": len(valid_days), "projects": projects_out}
+
+    # —— 用量：核实 ——
+
+    def usage_zone(self, user):
+        if user["usage_timezone"]:
+            try:
+                return ZoneInfo(user["usage_timezone"])
+            except (ZoneInfoNotFoundError, ValueError):
+                pass
+        return effective_timezone(user)[1]
+
+    def mark_verified(self, user_id, items):
+        """一条读数比同一窗口里上一条读数高，说明额度那天真的在用：那天（Mac 的本地日期）这个工具的用量算已核实。
+        读数的服务商账号必须归这个人。"""
+        owned = {row[0] for row in self.db.execute(
+            f"SELECT account_hmac FROM account_owners WHERE user_id = ? AND account_hmac IN ({','.join('?' * len(items))})",
+            (user_id, *[account for _, account in items]))}
+        zone = self.usage_zone(self.user_row(user_id))
+        marks = set()
+        for snap, account in items:
+            if account not in owned:
+                continue
+            previous = self.db.execute(
+                "SELECT used_percent FROM snapshots WHERE user_id = ? AND provider = ? AND window_key = ? AND resets_bucket IS ?"
+                " AND counted = 1 AND observed_at < ? ORDER BY observed_at DESC LIMIT 1",
+                (user_id, snap["provider"], snap["window_key"], snap["resets_bucket"], snap["observed_at"])).fetchone()
+            if previous is not None and snap["used_percent"] > previous[0] + 0.05:
+                day = datetime.fromtimestamp(snap["observed_at"], zone).date().isoformat()
+                marks.add((user_id, day, snap["provider"]))
+        self.db.executemany("INSERT OR IGNORE INTO usage_verified(user_id, date, tool) VALUES (?, ?, ?)", marks)
+
+    def recompute_verified(self, user_id):
+        """从头按这个人全部计分读数重算已核实的日子（服务商账号的归属变了之后）。"""
+        user = self.user_row(user_id)
+        if user is None:
+            return
+        zone = self.usage_zone(user)
+        self.db.execute("DELETE FROM usage_verified WHERE user_id = ?", (user_id,))
+        rows = self.db.execute(
+            "SELECT s.provider, s.window_key, s.resets_bucket, s.used_percent, s.observed_at FROM snapshots s"
+            " JOIN account_owners o ON o.account_hmac = s.account_hmac AND o.user_id = s.user_id"
+            f" WHERE s.user_id = ? AND s.counted = 1 AND s.provider IN ({','.join('?' * len(VERIFIABLE_TOOLS))})"
+            " ORDER BY s.provider, s.window_key, s.resets_bucket, s.observed_at",
+            (user_id, *VERIFIABLE_TOOLS.values())).fetchall()
+        marks = set()
+        previous = None
+        for row in rows:
+            key = (row["provider"], row["window_key"], row["resets_bucket"])
+            if previous is not None and previous[0] == key and row["used_percent"] > previous[1] + 0.05:
+                marks.add((user_id, datetime.fromtimestamp(row["observed_at"], zone).date().isoformat(), row["provider"]))
+            previous = (key, row["used_percent"])
+        self.db.executemany("INSERT OR IGNORE INTO usage_verified(user_id, date, tool) VALUES (?, ?, ?)", marks)
+
+    # —— 用量：看板 ——
+
+    def usage_today(self):
+        return datetime.fromtimestamp(self.now(), timezone.utc).date()
+
+    def period_range(self, period):
+        """(起, 止, 上一段起止或 None)，都是 date。周是 ISO 周（UTC），全部是近 365 天。"""
+        today = self.usage_today()
+        monday = today - timedelta(days=today.weekday())
+        if period == "week":
+            return monday, monday + timedelta(days=6), (monday - timedelta(days=7), monday - timedelta(days=1))
+        if period == "last":
+            return monday - timedelta(days=7), monday - timedelta(days=1), (monday - timedelta(days=14), monday - timedelta(days=8))
+        if period == "month":
+            first = today.replace(day=1)
+            last = (first + timedelta(days=32)).replace(day=1) - timedelta(days=1)
+            previous_last = first - timedelta(days=1)
+            return first, last, (previous_last.replace(day=1), previous_last)
+        return today - timedelta(days=364), today + timedelta(days=1), None
+
+    def usage_filters(self, start, end, tool=None, region=None, verified=False, alias="r"):
+        joins = f" LEFT JOIN usage_verified v ON v.user_id = {alias}.user_id AND v.date = {alias}.date AND v.tool = {alias}.tool"
+        where = [f"{alias}.date BETWEEN ? AND ?"]
+        params = [start.isoformat(), end.isoformat()]
+        if tool:
+            where.append(f"{alias}.tool = ?")
+            params.append(tool)
+        if region:
+            joins += f" JOIN users fu ON fu.id = {alias}.user_id"
+            where.append("fu.region = ?")
+            params.append(region)
+        if verified:
+            where.append("v.user_id IS NOT NULL")
+        return joins, " WHERE " + " AND ".join(where), params
+
+    def usage_totals(self, start, end, tool=None, region=None, verified=False):
+        joins, where, params = self.usage_filters(start, end, tool, region, verified)
+        rows = self.db.execute(
+            "SELECT r.user_id, SUM(r.cost_micro) AS cost, SUM(r.input + r.output + r.cache_read + r.cache_write) AS tokens,"
+            " COUNT(DISTINCT r.date) AS days, SUM(r.sessions) AS sessions,"
+            " SUM(CASE WHEN v.user_id IS NOT NULL THEN r.cost_micro ELSE 0 END) AS verified_cost"
+            f" FROM usage_rows r{joins}{where} GROUP BY r.user_id HAVING tokens > 0", params).fetchall()
+        return {row["user_id"]: dict(row) for row in rows}
+
+    def active_dates(self, user_ids=None, tool=None, verified=False, since=None):
+        """user_id → 有 token 的日期集合（date）。"""
+        since = since or (self.usage_today() - timedelta(days=USAGE_HISTORY_DAYS))
+        joins, where, params = self.usage_filters(since, self.usage_today() + timedelta(days=1), tool, None, verified)
+        if user_ids is not None:
+            where += f" AND r.user_id IN ({','.join('?' * len(user_ids))})"
+            params += list(user_ids)
+        out = {}
+        for row in self.db.execute(
+                f"SELECT r.user_id, r.date FROM usage_rows r{joins}{where} GROUP BY r.user_id, r.date"
+                " HAVING SUM(r.input + r.output + r.cache_read + r.cache_write) > 0", params):
+            day = parse_day(row[1])
+            if day:
+                out.setdefault(row[0], set()).add(day)
+        return out
+
+    def rank_usage(self, metric, period, tool, region, verified):
+        """[(user_id, value, totals)]，按指标从高到低。"""
+        start, end, _ = self.period_range(period)
+        totals = self.usage_totals(start, end, tool, region, verified)
+        if metric == "streak":
+            dates = self.active_dates(list(totals) or None, tool, verified) if totals else {}
+            today = self.usage_today()
+            values = {user_id: streaks(dates.get(user_id, set()), today)[0] for user_id in totals}
+        elif metric == "tokens":
+            values = {user_id: row["tokens"] for user_id, row in totals.items()}
+        elif metric == "active":
+            values = {user_id: row["days"] for user_id, row in totals.items()}
+        else:
+            values = {user_id: row["cost"] for user_id, row in totals.items()}
+        ranked = sorted(((user_id, value, totals[user_id]) for user_id, value in values.items() if value > 0),
+                        key=lambda item: (-item[1], -item[2]["tokens"], item[0]))
+        return ranked
+
+    def usage_board(self, query):
+        metric = query.get("metric") or "cost"
+        period = query.get("period") or "week"
+        if metric not in USAGE_METRICS:
+            raise ApiError(400, "invalid_metric", "metric is cost, tokens, streak or active.")
+        if period not in USAGE_PERIODS:
+            raise ApiError(400, "invalid_period", "period is week, last, month or all.")
+        tool = query.get("tool") or None
+        if tool is not None and tool not in USAGE_TOOLS:
+            raise ApiError(400, "invalid_tool", "tool is claude, codex or opencode.")
+        region = parse_region(query.get("region"))
+        verified = query.get("verified", "1") != "0"
+        limit = max(1, min(200, safe_int(query.get("limit")) or 100))
+        start, end, previous = self.period_range(period)
+        ranked = self.rank_usage(metric, period, tool, region, verified)
+        previous_ranks = {}
+        if previous and metric in ("cost", "tokens", "active"):
+            prev_totals = self.usage_totals(previous[0], previous[1], tool, region, verified)
+            key = {"cost": "cost", "tokens": "tokens", "active": "days"}[metric]
+            order = sorted(prev_totals.items(), key=lambda item: (-item[1][key], -item[1]["tokens"], item[0]))
+            previous_ranks = {user_id: index for index, (user_id, _) in enumerate(order, start=1)}
+        shown = ranked[:limit]
+        ids = [user_id for user_id, _, _ in shown]
+        users = {row["id"]: row for row in self.db.execute(
+            f"SELECT id, username, display_name, region FROM users WHERE id IN ({','.join('?' * len(ids))})", ids)} if ids else {}
+        tools = {}
+        top_projects = {}
+        if ids:
+            joins, where, params = self.usage_filters(start, end, tool, region, verified)
+            id_filter = f" AND r.user_id IN ({','.join('?' * len(ids))})"
+            for row in self.db.execute(
+                    "SELECT r.user_id, r.tool, SUM(r.cost_micro), SUM(r.input + r.output + r.cache_read + r.cache_write)"
+                    f" FROM usage_rows r{joins}{where}{id_filter} GROUP BY r.user_id, r.tool", params + ids):
+                tools.setdefault(row[0], []).append({"tool": row[1], "costUSD": micro_usd(row[2]), "tokens": row[3]})
+            for row in self.db.execute(
+                    "SELECT r.user_id, p.name, p.slug, SUM(r.cost_micro) AS cost FROM usage_rows r"
+                    " JOIN usage_projects p ON p.user_id = r.user_id AND p.public_id = r.project_id"
+                    f"{joins}{where}{id_filter} GROUP BY r.user_id, r.project_id ORDER BY cost DESC", params + ids):
+                top_projects.setdefault(row[0], {"name": row[1], "slug": row[2]})
+        unit = {"cost": "usd", "tokens": "tokens", "streak": "days", "active": "days"}[metric]
+        entries = []
+        for rank, (user_id, value, total) in enumerate(shown, start=1):
+            user = users[user_id]
+            before = previous_ranks.get(user_id)
+            entries.append({
+                "rank": rank, "username": user["username"], "displayName": user["display_name"], "region": user["region"],
+                "value": micro_usd(value) if metric == "cost" else value, "unit": unit,
+                "costUSD": micro_usd(total["cost"]), "tokens": total["tokens"], "activeDays": total["days"],
+                "sessions": total["sessions"],
+                "verifiedShare": share(total["verified_cost"], total["cost"]),
+                "tools": sorted(tools.get(user_id, []), key=lambda item: -item["costUSD"]),
+                "topProject": top_projects.get(user_id),
+                "change": (before - rank) if before else None,
+                "new": bool(previous_ranks) and before is None,
+            })
+        # 汇总和每天的走势（全部时只画近 90 天）
+        if period == "all":
+            chart_start, chart_end = self.usage_today() - timedelta(days=89), self.usage_today()
+        else:
+            chart_start, chart_end = start, end
+        joins, where, params = self.usage_filters(chart_start, chart_end, tool, region, verified)
+        daily = {}
+        for row in self.db.execute(
+                "SELECT r.date, r.tool, SUM(r.cost_micro), SUM(r.input + r.output + r.cache_read + r.cache_write)"
+                f" FROM usage_rows r{joins}{where} GROUP BY r.date, r.tool", params):
+            day = daily.setdefault(row[0], {"date": row[0], "costUSD": 0, "tokens": 0, "byTool": {}})
+            day["costUSD"] = round(day["costUSD"] + micro_usd(row[2]), 4)
+            day["tokens"] += row[3]
+            day["byTool"][row[1]] = micro_usd(row[2])
+        series = []
+        cursor = chart_start
+        while cursor <= chart_end:
+            series.append(daily.get(cursor.isoformat(), {"date": cursor.isoformat(), "costUSD": 0, "tokens": 0, "byTool": {}}))
+            cursor += timedelta(days=1)
+        by_tool = {}
+        for day in daily.values():
+            for name, cost in day["byTool"].items():
+                by_tool[name] = round(by_tool.get(name, 0) + cost, 4)
+        totals = [row for _, _, row in ranked]
+        return {
+            "metric": metric, "period": period, "from": start.isoformat(), "to": end.isoformat(),
+            "tool": tool, "region": region, "verified": verified,
+            "entries": entries,
+            "summary": {
+                "runners": len(ranked),
+                "costUSD": micro_usd(sum(row["cost"] for row in totals)),
+                "tokens": sum(row["tokens"] for row in totals),
+                "sessions": sum(row["sessions"] for row in totals),
+                "byTool": [{"tool": name, "costUSD": cost} for name, cost in sorted(by_tool.items(), key=lambda item: -item[1])],
+                "daily": series,
+            },
+            "updatedAt": self.now(),
+        }
+
+    def project_board(self, query):
+        period = query.get("period") or "week"
+        if period not in USAGE_PERIODS:
+            raise ApiError(400, "invalid_period", "period is week, last, month or all.")
+        tool = query.get("tool") or None
+        if tool is not None and tool not in USAGE_TOOLS:
+            raise ApiError(400, "invalid_tool", "tool is claude, codex or opencode.")
+        limit = max(1, min(100, safe_int(query.get("limit")) or 50))
+        start, end, previous = self.period_range(period)
+
+        def totals(first, last):
+            params = [first.isoformat(), last.isoformat()] + ([tool] if tool else [])
+            return {(row["user_id"], row["project_id"]): dict(row) for row in self.db.execute(
+                "SELECT user_id, project_id, SUM(cost_micro) AS cost, SUM(input + output + cache_read + cache_write) AS tokens,"
+                " SUM(sessions) AS sessions, SUM(active_minutes) AS minutes, COUNT(DISTINCT date) AS days"
+                " FROM usage_rows WHERE date BETWEEN ? AND ? AND project_id != ''" + (" AND tool = ?" if tool else "")
+                + " GROUP BY user_id, project_id HAVING tokens > 0", params)}
+
+        current = totals(start, end)
+        before = totals(*previous) if previous else {}
+        ranked = sorted(current.items(), key=lambda item: (-item[1]["cost"], -item[1]["tokens"]))[:limit]
+        entries = []
+        spark_start = self.usage_today() - timedelta(days=13)
+        for rank, ((user_id, project_id), total) in enumerate(ranked, start=1):
+            project = self.db.execute(
+                "SELECT p.*, u.username, u.display_name FROM usage_projects p JOIN users u ON u.id = p.user_id"
+                " WHERE p.user_id = ? AND p.public_id = ?", (user_id, project_id)).fetchone()
+            if project is None:
+                continue
+            spark = dict(self.db.execute(
+                "SELECT date, SUM(cost_micro) FROM usage_rows WHERE user_id = ? AND project_id = ? AND date >= ? GROUP BY date",
+                (user_id, project_id, spark_start.isoformat())).fetchall())
+            tools = [{"tool": row[0], "costUSD": micro_usd(row[1])} for row in self.db.execute(
+                "SELECT tool, SUM(cost_micro) AS cost FROM usage_rows WHERE user_id = ? AND project_id = ? AND date BETWEEN ? AND ?"
+                " GROUP BY tool ORDER BY cost DESC", (user_id, project_id, start.isoformat(), end.isoformat()))]
+            previous_cost = before.get((user_id, project_id), {}).get("cost")
+            entries.append({
+                "rank": rank,
+                "project": project_brief(project),
+                "owner": {"username": project["username"], "displayName": project["display_name"]},
+                "costUSD": micro_usd(total["cost"]), "tokens": total["tokens"], "sessions": total["sessions"],
+                "activeMinutes": total["minutes"], "activeDays": total["days"], "tools": tools,
+                "growth": round(total["cost"] / previous_cost - 1, 4) if previous_cost else None,
+                "spark": [micro_usd(spark.get((spark_start + timedelta(days=i)).isoformat(), 0)) for i in range(14)],
+            })
+        return {
+            "period": period, "from": start.isoformat(), "to": end.isoformat(), "tool": tool, "entries": entries,
+            "summary": {"projects": len(current), "costUSD": micro_usd(sum(t["cost"] for t in current.values())),
+                        "tokens": sum(t["tokens"] for t in current.values())},
+            "updatedAt": self.now(),
+        }
+
+    # —— 用量：个人与项目 ——
+
+    def usage_breakdown(self, where, params):
+        """日序列、工具、编程方式、模型的汇总，where 以 ' WHERE ' 开头、针对 usage_rows r。"""
+        daily = {}
+        for row in self.db.execute(
+                "SELECT r.date, r.tool, SUM(r.cost_micro), SUM(r.input + r.output + r.cache_read + r.cache_write),"
+                " SUM(r.sessions), SUM(r.active_minutes), MAX(v.user_id IS NOT NULL)"
+                " FROM usage_rows r LEFT JOIN usage_verified v ON v.user_id = r.user_id AND v.date = r.date AND v.tool = r.tool"
+                f"{where} GROUP BY r.date, r.tool", params):
+            day = daily.setdefault(row[0], {"date": row[0], "costUSD": 0, "tokens": 0, "sessions": 0, "activeMinutes": 0,
+                                            "verifiedCostUSD": 0, "byTool": {}})
+            cost = micro_usd(row[2])
+            day["costUSD"] = round(day["costUSD"] + cost, 4)
+            day["tokens"] += row[3]
+            day["sessions"] += row[4]
+            day["activeMinutes"] += row[5]
+            day["byTool"][row[1]] = cost
+            if row[6]:
+                day["verifiedCostUSD"] = round(day["verifiedCostUSD"] + cost, 4)
+        tools = [{"tool": row[0], "costUSD": micro_usd(row[1]), "tokens": row[2]} for row in self.db.execute(
+            "SELECT r.tool, SUM(r.cost_micro) AS cost, SUM(r.input + r.output + r.cache_read + r.cache_write)"
+            f" FROM usage_rows r{where} GROUP BY r.tool ORDER BY cost DESC", params)]
+        modes = [{"tool": row[0], "mode": row[1], "costUSD": micro_usd(row[2]), "tokens": row[3]} for row in self.db.execute(
+            "SELECT r.tool, r.mode, SUM(r.cost_micro) AS cost, SUM(r.input + r.output + r.cache_read + r.cache_write)"
+            f" FROM usage_rows r{where} GROUP BY r.tool, r.mode ORDER BY cost DESC", params)]
+        models = [{"model": row[0], "tool": row[1], "costUSD": micro_usd(row[2]), "tokens": row[3]} for row in self.db.execute(
+            "SELECT r.model, r.tool, SUM(r.cost_micro) AS cost, SUM(r.input + r.output + r.cache_read + r.cache_write)"
+            f" FROM usage_rows r{where} GROUP BY r.model, r.tool ORDER BY cost DESC LIMIT 10", params)]
+        return [daily[key] for key in sorted(daily)], tools, modes, models
+
+    @staticmethod
+    def window_totals(days, first, last):
+        picked = [day for day in days if first.isoformat() <= day["date"] <= last.isoformat()]
+        return {"costUSD": round(sum(d["costUSD"] for d in picked), 4), "tokens": sum(d["tokens"] for d in picked),
+                "sessions": sum(d["sessions"] for d in picked), "activeMinutes": sum(d["activeMinutes"] for d in picked),
+                "activeDays": sum(1 for d in picked if d["tokens"] > 0),
+                "verifiedCostUSD": round(sum(d["verifiedCostUSD"] for d in picked), 4)}
+
+    def user_usage(self, raw_username):
+        username = normalize_username(raw_username)
+        user = self.db.execute("SELECT * FROM users WHERE username = ?", (username,)).fetchone() if username else None
+        if user is None:
+            raise ApiError(404, "user_not_found", "No such user.")
+        today = self.usage_today()
+        since = today - timedelta(days=370)
+        days, tools, modes, models = self.usage_breakdown(" WHERE r.user_id = ? AND r.date >= ?", [user["id"], since.isoformat()])
+        active = {parse_day(d["date"]) for d in days if d["tokens"] > 0}
+        current, longest = streaks(active, today)
+        week, _, _ = self.period_range("week")
+        ranks = {}
+        for period in ("week", "all"):
+            ranked = self.rank_usage("cost", period, None, None, True)
+            position = next((index for index, item in enumerate(ranked, start=1) if item[0] == user["id"]), None)
+            ranks[period] = {"rank": position, "runners": len(ranked)}
+        projects = []
+        project_ranks = {(e["owner"]["username"], e["project"]["slug"]): e["rank"]
+                         for e in self.project_board({"period": "week", "limit": "100"})["entries"]}
+        spark_start = today - timedelta(days=29)
+        for project in self.db.execute("SELECT * FROM usage_projects WHERE user_id = ?", (user["id"],)).fetchall():
+            rows = self.db.execute(
+                "SELECT date, SUM(cost_micro), SUM(input + output + cache_read + cache_write), SUM(sessions), SUM(active_minutes)"
+                " FROM usage_rows WHERE user_id = ? AND project_id = ? AND date >= ? GROUP BY date",
+                (user["id"], project["public_id"], since.isoformat())).fetchall()
+            if not rows:
+                continue
+            by_date = {row[0]: row for row in rows}
+            project_tools = [row[0] for row in self.db.execute(
+                "SELECT tool FROM usage_rows WHERE user_id = ? AND project_id = ? GROUP BY tool ORDER BY SUM(cost_micro) DESC",
+                (user["id"], project["public_id"]))]
+            projects.append(dict(project_brief(project), **{
+                "costUSD": micro_usd(sum(row[1] for row in rows)), "tokens": sum(row[2] for row in rows),
+                "sessions": sum(row[3] for row in rows), "activeMinutes": sum(row[4] for row in rows),
+                "weekCostUSD": micro_usd(sum(row[1] for row in rows if row[0] >= week.isoformat())),
+                "lastDate": max(by_date), "tools": project_tools,
+                "rank": project_ranks.get((user["username"], project["slug"])),
+                "spark": [micro_usd(by_date[(spark_start + timedelta(days=i)).isoformat()][1])
+                          if (spark_start + timedelta(days=i)).isoformat() in by_date else 0 for i in range(30)],
+            }))
+        projects.sort(key=lambda item: -item["costUSD"])
+        month_start, month_end, _ = self.period_range("month")
+        return {
+            "username": user["username"],
+            "timezone": user["usage_timezone"] or effective_timezone(user)[0],
+            "from": since.isoformat(), "to": today.isoformat(),
+            "days": days,
+            "totals": {"week": self.window_totals(days, week, week + timedelta(days=6)),
+                       "month": self.window_totals(days, month_start, month_end),
+                       "all": self.window_totals(days, today - timedelta(days=364), today + timedelta(days=1))},
+            "streaks": {"current": current, "longest": longest},
+            "ranks": ranks, "tools": tools, "modes": modes, "models": models, "projects": projects,
+            "updatedAt": self.now(),
+        }
+
+    def project_detail(self, raw_username, raw_slug):
+        username = normalize_username(raw_username)
+        project = self.db.execute(
+            "SELECT p.*, u.username, u.display_name, u.region FROM usage_projects p JOIN users u ON u.id = p.user_id"
+            " WHERE u.username = ? AND p.slug = ?", (username, (raw_slug or "").lower())).fetchone() if username else None
+        if project is None:
+            raise ApiError(404, "project_not_found", "No such project.")
+        today = self.usage_today()
+        since = today - timedelta(days=370)
+        days, tools, modes, models = self.usage_breakdown(
+            " WHERE r.user_id = ? AND r.project_id = ? AND r.date >= ?", [project["user_id"], project["public_id"], since.isoformat()])
+        active = {parse_day(d["date"]) for d in days if d["tokens"] > 0}
+        current, longest = streaks(active, today)
+        week, _, _ = self.period_range("week")
+        month_start, month_end, _ = self.period_range("month")
+        ranks = {}
+        for period in ("week", "all"):
+            board = self.project_board({"period": period, "limit": "100"})
+            ranks[period] = {"rank": next((e["rank"] for e in board["entries"]
+                                           if e["owner"]["username"] == project["username"] and e["project"]["slug"] == project["slug"]), None),
+                             "projects": board["summary"]["projects"]}
+        repo = None
+        others = []
+        if project["repo"]:
+            repo = {"key": project["repo"], "url": "https://" + project["repo"], "github": None}
+            if project["repo"].lower().startswith("github.com/"):
+                name = "/".join(project["repo"].split("/")[1:3])
+                cached = self.github_cached("repo:" + name.lower())
+                if cached is None:
+                    self.start_github_job("repo:" + name.lower(), name)
+                repo["github"] = cached
+            for row in self.db.execute(
+                    "SELECT p.slug, p.name, p.repo_verified, u.username, u.display_name,"
+                    " (SELECT SUM(cost_micro) FROM usage_rows r WHERE r.user_id = p.user_id AND r.project_id = p.public_id AND r.date >= ?) AS cost"
+                    " FROM usage_projects p JOIN users u ON u.id = p.user_id WHERE lower(p.repo) = lower(?) ORDER BY cost DESC",
+                    (since.isoformat(), project["repo"])):
+                others.append({"username": row["username"], "displayName": row["display_name"], "slug": row["slug"],
+                               "name": row["name"], "repoVerified": bool(row["repo_verified"]), "costUSD": micro_usd(row["cost"] or 0),
+                               "self": row["username"] == project["username"] and row["slug"] == project["slug"]})
+        return {
+            "project": project_brief(project),
+            "owner": {"username": project["username"], "displayName": project["display_name"], "region": project["region"]},
+            "from": since.isoformat(), "to": today.isoformat(),
+            "days": days,
+            "totals": {"week": self.window_totals(days, week, week + timedelta(days=6)),
+                       "month": self.window_totals(days, month_start, month_end),
+                       "all": self.window_totals(days, today - timedelta(days=364), today + timedelta(days=1))},
+            "firstDate": days[0]["date"] if days else None, "lastDate": days[-1]["date"] if days else None,
+            "streaks": {"current": current, "longest": longest},
+            "ranks": ranks, "tools": tools, "modes": modes, "models": models,
+            "repo": repo, "contributors": others,
+            "updatedAt": self.now(),
+        }
+
+    # —— 徽章 ——
+
+    def badges_payload(self, user):
+        user_id = user["id"]
+        today = self.usage_today()
+        values = {}
+        daily = self.db.execute(
+            "SELECT date, SUM(input + output + cache_read + cache_write) AS tokens, SUM(cost_micro) AS cost"
+            " FROM usage_rows WHERE user_id = ? GROUP BY date", (user_id,)).fetchall()
+        active = {parse_day(row["date"]) for row in daily if row["tokens"] > 0} - {None}
+        values["streak"] = streaks(active, today)[1]
+        values["spend"] = int(sum(row["cost"] for row in daily) / 1_000_000)
+        values["bigday"] = max((row["tokens"] for row in daily), default=0)
+        values["tools"] = self.db.execute(
+            "SELECT COUNT(DISTINCT tool) FROM usage_rows WHERE user_id = ? AND input + output + cache_read + cache_write > 0",
+            (user_id,)).fetchone()[0]
+        values["ways"] = self.db.execute(
+            "SELECT COUNT(*) FROM (SELECT 1 FROM usage_rows WHERE user_id = ? AND input + output + cache_read + cache_write > 0"
+            " GROUP BY tool, mode)", (user_id,)).fetchone()[0]
+        values["verified"] = self.db.execute(
+            "SELECT COUNT(DISTINCT v.date) FROM usage_verified v WHERE v.user_id = ? AND EXISTS (SELECT 1 FROM usage_rows r"
+            " WHERE r.user_id = v.user_id AND r.date = v.date AND r.tool = v.tool)", (user_id,)).fetchone()[0]
+        values["projects"] = self.db.execute("SELECT COUNT(*) FROM usage_projects WHERE user_id = ?", (user_id,)).fetchone()[0]
+        values["opensource"] = self.db.execute(
+            "SELECT COUNT(*) FROM usage_projects WHERE user_id = ? AND repo_verified = 1", (user_id,)).fetchone()[0]
+        # 深夜：近 90 天活动分钟里 0–5 点（这个人的时区）的 token 占比；周末：近 90 天花费里周六日的占比
+        zone = self.usage_zone(user)
+        since = self.now() - 90 * 86400
+        night = total = 0
+        offsets = {}
+        for hour, tokens in self.db.execute(
+                "SELECT minute / 3600, SUM(tokens) FROM activity WHERE user_id = ? AND counted = 1 AND minute >= ? GROUP BY minute / 3600",
+                (user_id, since)):
+            if hour not in offsets:
+                offsets[hour] = datetime.fromtimestamp(hour * 3600, zone).hour
+            total += tokens
+            if offsets[hour] < 5:
+                night += tokens
+        values["nightowl"] = int(night * 100 / total) if total else 0
+        recent = [row for row in daily if row["date"] >= (today - timedelta(days=90)).isoformat()]
+        weekend = sum(row["cost"] for row in recent if (parse_day(row["date"]) or today).weekday() >= 5)
+        spent = sum(row["cost"] for row in recent)
+        values["weekend"] = int(weekend * 100 / spent) if spent else 0
+        best = None
+        for period in ("week", "last"):
+            ranked = self.rank_usage("cost", period, None, None, True)
+            position = next((index for index, item in enumerate(ranked, start=1) if item[0] == user_id), None)
+            if position is not None and (best is None or position < best):
+                best = position
+        values["podium"] = best
+        values["speedrun"] = self.db.execute(
+            f"SELECT COUNT(*) FROM runs WHERE user_id = ? AND tier IN {PUBLIC_TIERS} AND seconds_to_100 IS NOT NULL",
+            (user_id,)).fetchone()[0]
+        identity = self.github_identity(user_id)
+        calendar = ((self.github_cached("user:" + identity[0]) or {}).get("calendar") or {}) if identity else {}
+        values["github"] = calendar.get("total") or 0
+        out = []
+        for badge_id, thresholds, lower in BADGES:
+            value = values.get(badge_id)
+            if lower:
+                tier = 0 if value is None else sum(1 for limit in thresholds if value <= limit)
+            else:
+                tier = sum(1 for limit in thresholds if (value or 0) >= limit)
+            out.append({"id": badge_id, "value": value, "tier": tier, "tiers": len(thresholds),
+                        "thresholds": list(thresholds), "next": thresholds[tier] if tier < len(thresholds) else None,
+                        "lowerIsBetter": lower})
+        return out
+
+    # —— 实时推送 ——
+
+    def publish_usage(self, user_id, day):
+        if day is None:
+            return
+        user = self.user_row(user_id)
+        row = self.db.execute(
+            "SELECT SUM(cost_micro), SUM(input + output + cache_read + cache_write) FROM usage_rows WHERE user_id = ? AND date = ?",
+            (user_id, day)).fetchone()
+        tools = {tool: micro_usd(cost) for tool, cost in self.db.execute(
+            "SELECT tool, SUM(cost_micro) FROM usage_rows WHERE user_id = ? AND date = ? GROUP BY tool", (user_id, day))}
+        self.live.publish("usage", {"username": user["username"], "displayName": user["display_name"], "date": day,
+                                    "costUSD": micro_usd(row[0] or 0), "tokens": row[1] or 0, "byTool": tools, "at": self.now()})
+        board = self.usage_board({"metric": "cost", "period": "week", "verified": "1", "limit": "10"})
+        top = [{"rank": e["rank"], "username": e["username"], "displayName": e["displayName"], "value": e["value"]}
+               for e in board["entries"]]
+        signature = json.dumps(top)
+        if signature != self._live_board:
+            self._live_board = signature
+            self.live.publish("board", {"board": "cost:week:verified", "entries": top, "summary": {
+                "runners": board["summary"]["runners"], "costUSD": board["summary"]["costUSD"]}, "at": self.now()})
+
+    def publish_readings(self, user_id, run_keys):
+        if not run_keys:
+            return
+        user = self.user_row(user_id)
+        for key in run_keys:
+            run = self.db.execute(f"SELECT * FROM runs WHERE {RUN_KEY_WHERE} AND tier IN {PUBLIC_TIERS}", key).fetchone()
+            if run is None:
+                continue
+            latest = self.db.execute(
+                "SELECT used_percent, observed_at FROM snapshots WHERE user_id = ? AND provider = ? AND plan_norm = ?"
+                " AND window_key = ? AND resets_bucket = ? AND counted = 1 ORDER BY observed_at DESC LIMIT 1", key).fetchone()
+            self.live.publish("reading", {
+                "username": user["username"], "displayName": user["display_name"], "provider": run["provider"],
+                "plan": run["plan_norm"], "planLabel": run["plan_label"], "windowKey": run["window_key"],
+                "windowSeconds": run["window_seconds"], "usedPercent": latest[0] if latest else run["peak_percent"],
+                "observedAt": latest[1] if latest else run["last_observed_at"], "runId": run["public_id"],
+                "tier": run["tier"], "secondsTo100": run["seconds_to_100"], "at": self.now()})
 
 
 # —— 响应形状 ——
@@ -3254,6 +4167,97 @@ def profile_timezone(value):
     raise ApiError(400, "invalid_timezone", "timezone must be an IANA time zone name such as Asia/Shanghai.")
 
 
+def parse_day(value):
+    """「2026-09-13」→ date；格式不对返回 None。"""
+    if not isinstance(value, str) or not DATE_RE.fullmatch(value):
+        return None
+    try:
+        return datetime.strptime(value, "%Y-%m-%d").date()
+    except ValueError:
+        return None
+
+
+def safe_int(value):
+    """查询串里的整数；不是整数返回 None。"""
+    if isinstance(value, str) and re.fullmatch(r"\d{1,6}", value):
+        return int(value)
+    return None
+
+
+def micro_usd(value):
+    return round((value or 0) / 1_000_000, 4)
+
+
+def slugify(name):
+    """项目地址里的一段：小写字母、数字和连字符，最多 40 个字符；整理不出来就叫 project。"""
+    text = re.sub(r"[^a-z0-9]+", "-", (name or "").lower()).strip("-")[:40].strip("-")
+    return text or "project"
+
+
+def streaks(dates, today):
+    """(当前连续天数, 最长连续天数)。今天还没有用量时，当前连续从昨天往回数。"""
+    if not dates:
+        return 0, 0
+    ordered = sorted(d for d in dates if d is not None)
+    longest = run = 0
+    previous = None
+    for day in ordered:
+        run = run + 1 if previous is not None and (day - previous).days == 1 else 1
+        longest = max(longest, run)
+        previous = day
+    current = 0
+    cursor = today if today in dates else today - timedelta(days=1)
+    while cursor in dates:
+        current += 1
+        cursor -= timedelta(days=1)
+    return current, longest
+
+
+def project_brief(row):
+    return {"id": row["public_id"], "name": row["name"], "slug": row["slug"], "repo": row["repo"],
+            "repoVerified": bool(row["repo_verified"])}
+
+
+def validate_usage_row(index, item, days, public):
+    """一行用量 → (date, tool, mode, model, project, input, output, cacheRead, cacheWrite, sessions, activeMinutes, 上报花费的百万分之一美元)。"""
+    def fail(message):
+        raise ApiError(400, "invalid_usage", f"rows[{index}]: {message}", index=index)
+
+    if not isinstance(item, dict):
+        fail("must be an object.")
+    date = item.get("date")
+    if date not in days:
+        fail("date must be one of days.")
+    tool = item.get("tool")
+    if tool not in USAGE_TOOLS:
+        fail("tool is claude, codex or opencode.")
+    mode = item.get("mode") or "other"
+    if mode not in USAGE_MODES:
+        fail("mode is cli, desktop, ide, sdk, cloud or other.")
+    model = item.get("model")
+    if not isinstance(model, str) or not MODEL_RE.fullmatch(model):
+        fail("model is a model id.")
+    project = item.get("project") or ""
+    if project and project not in public:
+        fail("project must be the id of one of projects.")
+    numbers = []
+    for field, ceiling in (("input", 10 ** 13), ("output", 10 ** 13), ("cacheRead", 10 ** 14), ("cacheWrite", 10 ** 13),
+                           ("sessions", 100_000), ("activeMinutes", 1_440 * 7)):
+        value = item.get(field, 0)
+        number = as_int(value)
+        if number is None or not 0 <= number <= ceiling:
+            fail(f"{field} is a whole number from 0 to {ceiling}.")
+        numbers.append(number)
+    cost = item.get("costUSD")
+    cost_micro = 0
+    if cost is not None:
+        number = as_number(cost)
+        if number is None or not 0 <= number <= 1_000_000:
+            fail("costUSD is a number from 0 to 1000000.")
+        cost_micro = int(round(number * 1_000_000))
+    return (date, tool, mode, model, project, *numbers, cost_micro)
+
+
 CALENDAR_CELL_RE = re.compile(r"<td\b[^>]*\bContributionCalendar-day\b[^>]*>")
 CALENDAR_DATE_RE = re.compile(r'\bdata-date="(\d{4}-\d{2}-\d{2})"')
 CALENDAR_ID_RE = re.compile(r'\bid="([^"]+)"')
@@ -3388,6 +4392,9 @@ class Handler(BaseHTTPRequestHandler):
 
     def _dispatch(self):
         path, _, query = self.path.partition("?")
+        if self.command == "GET" and path in (API_PREFIX + "/live", API_PREFIX + "/live/"):
+            # 长连接：不走 handle 的锁，由 LiveHub 一直写到对端断开
+            return self.server.service.live.serve(self)
         try:
             body = self._read_body()
         except BodyTooLarge:

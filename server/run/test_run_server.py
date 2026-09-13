@@ -2373,6 +2373,31 @@ class ProfilePageTests(ServerTestCase):
         self.assertEqual(self.query("SELECT key FROM github_cache ORDER BY key"),
                          [("repo:gentpan/quotabar",), ("repo:nobody/missing",)])
 
+    def test_github_rate_limit_pauses_every_github_request(self):
+        browser = self.account("limited")
+        _, params = self.oauth_start(browser, "github", link="1")
+        self.oauth_callback(browser, "github", params["state"])
+        browser.call("PUT", "/projects", {"projects": [{"name": "R", "url": "https://r.dev", "github": "gentpan/QuotaBar"}]})
+        routes = self.providers.routes
+        routes[f"{run_server.GITHUB_API}/user/101"] = lambda method, headers, body: (
+            403, b'{"message":"API rate limit exceeded for 1.2.3.4."}')
+        routes[f"{run_server.GITHUB_API}/repos/gentpan/QuotaBar"] = lambda method, headers, body: (429, b"{}")
+        self.get("/users/limited/github")
+        self.wait_github()
+        self.assertEqual(self.service._github_paused_until, NOW + run_server.GITHUB_RATE_PAUSE)
+        calls = len(self.providers.calls)
+        # 新加的仓库从没取过，但超限暂停中也先不去取
+        browser.call("PUT", "/projects", {"projects": [{"name": "R", "url": "https://r.dev", "github": "gentpan/QuotaBar"},
+                                                       {"name": "S", "url": "https://s.dev", "github": "gentpan/Other"}]})
+        self.clock.advance(60)
+        self.assertEqual(self.get("/users/limited/github")[0], 200)
+        self.wait_github()
+        self.assertEqual(len(self.providers.calls), calls)
+        self.clock.advance(run_server.GITHUB_RATE_PAUSE)
+        self.get("/users/limited/github")
+        self.wait_github()
+        self.assertGreater(len(self.providers.calls), calls)
+
     def test_github_first_view_waits_then_says_pending(self):
         browser = self.account("slowpoke")
         _, params = self.oauth_start(browser, "github", link="1")
@@ -2490,7 +2515,224 @@ class AbuseTests(ServerTestCase):
         self.assertEqual(self.get("/stats")[1]["runs"], 1)
 
 
+TODAY = "2026-09-16"
+OPUS = (5, 25, 6.25, 0.5)
+
+
+def usage_row(date=TODAY, tool="claude", mode="desktop", model="claude-opus-5", project=None, output=0, **fields):
+    row = {"date": date, "tool": tool, "mode": mode, "model": model, "input": 0, "output": output, "cacheRead": 0,
+           "cacheWrite": 0, "sessions": 1, "activeMinutes": 10}
+    if project:
+        row["project"] = project
+    row.update(fields)
+    return row
+
+
+class UsageTests(ServerTestCase):
+    def setUp(self):
+        super().setUp()
+        self.service.prices.install({"claude-opus-5": OPUS}, NOW)
+
+    def send(self, mac, rows, days=(TODAY,), projects=(), **extra):
+        status, data, _ = mac.call("POST", "/usage", {"days": list(days), "rows": rows, "projects": list(projects), **extra})
+        return status, data
+
+    def test_upload_is_priced_by_the_server_and_replaces_whole_days(self):
+        mac = self.joined("burner")
+        project = {"id": "p_quotabar01", "name": "QuotaBar", "repo": "github.com/gentpan/QuotaBar"}
+        status, data = self.send(mac, [
+            usage_row(output=1_000_000, project="p_quotabar01", costUSD=999),   # 服务端按价目算，不看上报的花费
+            usage_row(output=1_000_000, project="p_quotabar01"),                 # 同一格出现两次就加起来
+            usage_row(tool="opencode", mode="cli", model="opencode", costUSD=3.5, input=10),
+            usage_row(tool="codex", model="gpt-5-codex", input=1_000_000, date="2026-09-15"),
+        ], days=(TODAY, "2026-09-15"), projects=[project], timezone="Asia/Shanghai")
+        self.assertEqual(status, 200, data)
+        self.assertEqual(data, {"accepted": 3, "days": 2, "projects": [{"id": "p_quotabar01", "slug": "quotabar", "repoVerified": False}]})
+        self.assertEqual(self.query("SELECT tool, cost_micro, sessions FROM usage_rows ORDER BY tool"),
+                         [("claude", 50_000_000, 2), ("codex", 1_250_000, 1), ("opencode", 3_500_000, 1)])
+        self.assertEqual(self.query("SELECT usage_timezone FROM users"), [("Asia/Shanghai",)])
+
+        # 同一天再传一次：那天这台设备的行整个换掉，没提到的日子不动
+        status, data = self.send(mac, [usage_row(output=2_000_000)], projects=[project])
+        self.assertEqual(status, 200, data)
+        self.assertEqual(self.query("SELECT date, tool, project_id, cost_micro FROM usage_rows ORDER BY date"),
+                         [("2026-09-15", "codex", "", 1_250_000), (TODAY, "claude", "", 50_000_000)])
+        # 没有用量指向的项目不再公开
+        self.assertEqual(data["projects"], [])
+
+        for rows, days, projects, fragment in [
+            ([usage_row(date="2026-09-14")], (TODAY,), (), "date must be one of days"),
+            ([usage_row(tool="cursor")], (TODAY,), (), "tool is"),
+            ([usage_row(mode="phone")], (TODAY,), (), "mode is"),
+            ([usage_row(model="bad model!")], (TODAY,), (), "model is"),
+            ([usage_row(project="p_notlisted1")], (TODAY,), (), "project must be"),
+            ([usage_row(output=-1)], (TODAY,), (), "output is"),
+            ([], ("2024-01-01",), (), "days must be"),
+            ([], ("2026-09-18",), (), "days must be"),
+            ([], (TODAY,), ({"id": "short", "name": "x"},), "id must be"),
+            ([], (TODAY,), ({"id": "p_quotabar01", "name": "x", "repo": "not a repo"},), "repo must"),
+        ]:
+            status, data = self.send(mac, rows, days=days, projects=projects)
+            self.assertEqual((status, data["error"]), (400, "invalid_usage"), fragment)
+            self.assertIn(fragment, data["message"])
+        status, data = self.send(mac, [], timezone="Mars/Base")
+        self.assertEqual((status, data["error"]), (400, "invalid_timezone"))
+        self.assertEqual(self.http("POST", "/usage", b"{}", {"Content-Type": "application/json"})[0], 401)
+
+    def test_quota_readings_verify_the_days_and_only_verified_usage_ranks_first(self):
+        mac = self.joined("verifier")
+        mac.run(NOW - 4 * 3600)    # Claude 的额度在今天涨了
+        self.assertEqual(self.query("SELECT date, tool FROM usage_verified"), [(TODAY, "claude")])
+        rival = self.joined("rival")
+        self.send(rival, [usage_row(output=4_000_000)])
+        self.send(mac, [usage_row(output=1_000_000), usage_row(tool="codex", model="gpt-5-codex", output=1_000_000),
+                        usage_row(tool="opencode", model="opencode", costUSD=2)])
+
+        board = self.get("/usage/boards")[1]   # 默认：本周、按花费、只算已核实
+        self.assertEqual((board["metric"], board["period"], board["verified"], board["from"], board["to"]),
+                         ("cost", "week", True, "2026-09-14", "2026-09-20"))
+        self.assertEqual([(e["username"], e["value"]) for e in board["entries"]], [("verifier", 25.0)])
+        everyone = self.get("/usage/boards", verified="0")[1]
+        self.assertEqual([(e["username"], e["rank"], e["value"]) for e in everyone["entries"]],
+                         [("rival", 1, 100.0), ("verifier", 2, 37.0)])
+        verifier = everyone["entries"][1]
+        self.assertEqual(verifier["verifiedShare"], round(25 / 37, 4))
+        self.assertEqual([t["tool"] for t in verifier["tools"]], ["claude", "codex", "opencode"])
+        self.assertEqual(everyone["summary"]["runners"], 2)
+        self.assertEqual(len(everyone["summary"]["daily"]), 7)
+        self.assertEqual(everyone["summary"]["daily"][2]["costUSD"], 137.0)
+        tokens = self.get("/usage/boards", verified="0", metric="tokens", tool="codex")[1]
+        self.assertEqual([(e["username"], e["value"]) for e in tokens["entries"]], [("verifier", 1_000_000)])
+        for query, code in (({"metric": "fame"}, "invalid_metric"), ({"period": "decade"}, "invalid_period"),
+                            ({"tool": "cursor"}, "invalid_tool"), ({"region": "mars"}, "invalid_region")):
+            self.assertEqual(self.get("/usage/boards", **query)[1]["error"], code)
+
+        # 服务商账号归了别人：那些日子不再算已核实
+        self.link_email_to_other_account = None
+        self.query_ok = self.service.recompute_verified
+        self.service.db.execute("DELETE FROM account_owners")
+        self.service.recompute_verified(self.query("SELECT id FROM users WHERE username = 'verifier'")[0][0])
+        self.assertEqual(self.query("SELECT COUNT(*) FROM usage_verified"), [(0,)])
+
+    def test_streaks_ranks_last_week_and_changes(self):
+        early, late = self.joined("early"), self.joined("late")
+        last_week = ["2026-09-08", "2026-09-09", "2026-09-10"]
+        self.send(early, [usage_row(date=d, output=100_000) for d in last_week], days=last_week)
+        self.send(late, [usage_row(date=d, output=1_000_000) for d in last_week], days=last_week)
+        this_week = ["2026-09-14", "2026-09-15", TODAY]
+        self.send(early, [usage_row(date=d, output=2_000_000) for d in this_week], days=this_week)
+        self.send(late, [usage_row(output=1_000_000)])
+        board = self.get("/usage/boards", verified="0")[1]
+        self.assertEqual([(e["username"], e["change"], e["new"]) for e in board["entries"]], [("early", 1, False), ("late", -1, False)])
+        last = self.get("/usage/boards", verified="0", period="last")[1]
+        self.assertEqual([e["username"] for e in last["entries"]], ["late", "early"])
+        streak = self.get("/usage/boards", verified="0", metric="streak", period="all")[1]
+        self.assertEqual([(e["username"], e["value"], e["unit"]) for e in streak["entries"]], [("early", 3, "days"), ("late", 1, "days")])
+        active = self.get("/usage/boards", verified="0", metric="active", period="month")[1]
+        self.assertEqual([(e["username"], e["value"]) for e in active["entries"]], [("early", 6), ("late", 4)])
+
+    def test_projects_board_detail_contributors_and_taking_a_project_private(self):
+        owner = self.connect(self.account("octo"))
+        _, params = self.oauth_start(owner.browser, "github", link="1")
+        self.oauth_callback(owner.browser, "github", params["state"])     # GitHub 登录名 Octo-Cat
+        helper = self.joined("helper")
+        repo = {"id": "p_repo000001", "name": "Octo App", "repo": "github.com/Octo-Cat/app"}
+        _, data = self.send(owner, [usage_row(output=2_000_000, project="p_repo000001"), usage_row(output=100_000)], projects=[repo])
+        self.assertEqual(data["projects"], [{"id": "p_repo000001", "slug": "octo-app", "repoVerified": True}])
+        self.send(helper, [usage_row(output=1_000_000, project="p_help000001")],
+                  projects=[{"id": "p_help000001", "name": "Octo App", "repo": "github.com/octo-cat/app"}])
+        self.send(owner, [usage_row(date="2026-09-08", output=1_000_000, project="p_repo000001")], days=["2026-09-08"], projects=[repo])
+
+        board = self.get("/usage/projects")[1]
+        self.assertEqual([(e["owner"]["username"], e["project"]["slug"], e["costUSD"], e["project"]["repoVerified"])
+                          for e in board["entries"]], [("octo", "octo-app", 50.0, True), ("helper", "octo-app", 25.0, False)])
+        self.assertEqual((board["entries"][0]["growth"], len(board["entries"][0]["spark"]), board["entries"][0]["spark"][-1]),
+                         (1.0, 14, 50.0))
+        self.assertEqual(board["summary"], {"projects": 2, "costUSD": 75.0, "tokens": 3_000_000})
+
+        status, detail = self.get("/users/octo/projects/Octo-App")
+        self.assertEqual(status, 200, detail)
+        self.assertEqual((detail["project"]["name"], detail["owner"]["username"], detail["totals"]["week"]["costUSD"],
+                          detail["totals"]["all"]["costUSD"], detail["firstDate"], detail["lastDate"]),
+                         ("Octo App", "octo", 50.0, 75.0, "2026-09-08", TODAY))
+        self.assertEqual(detail["ranks"]["week"], {"rank": 1, "projects": 2})
+        self.assertEqual([(c["username"], c["self"]) for c in detail["contributors"]], [("octo", True), ("helper", False)])
+        self.assertEqual(detail["repo"]["url"], "https://github.com/Octo-Cat/app")
+        self.assertEqual(self.get("/users/octo/projects/nothing")[1]["error"], "project_not_found")
+
+        usage = self.get("/users/octo/usage")[1]
+        self.assertEqual((usage["totals"]["all"]["costUSD"], usage["streaks"], [p["slug"] for p in usage["projects"]]),
+                         (77.5, {"current": 1, "longest": 1}, ["octo-app"]))
+        self.assertEqual((usage["projects"][0]["weekCostUSD"], len(usage["projects"][0]["spark"]), usage["projects"][0]["rank"]),
+                         (50.0, 30, 1))
+        self.assertEqual(usage["ranks"]["week"], {"rank": None, "runners": 0})   # 没有核实过的用量
+
+        # 不公开了：应用带 projectsComplete 把名单清空，项目立刻从榜上和主页消失，用量还在
+        _, data = self.send(owner, [], days=[], projects=[], projectsComplete=True)
+        self.assertEqual(data["projects"], [])
+        self.assertEqual(self.get("/users/octo/projects/octo-app")[0], 404)
+        self.assertEqual([e["owner"]["username"] for e in self.get("/usage/projects")[1]["entries"]], ["helper"])
+        self.assertEqual(self.get("/users/octo/usage")[1]["totals"]["all"]["costUSD"], 77.5)
+
+        self.assertEqual(owner.call("DELETE", "/account")[0], 204)
+        self.assertEqual(self.query("SELECT COUNT(*) FROM usage_rows WHERE user_id NOT IN (SELECT id FROM users)"), [(0,)])
+
+    def test_badges(self):
+        mac = self.joined("badger")
+        days = [f"2026-09-{day:02d}" for day in range(3, 17)]    # 连续 14 天
+        rows = [usage_row(date=d, output=1_000_000) for d in days]
+        rows += [usage_row(date=TODAY, tool="codex", mode="cli", model="gpt-5-codex", input=200_000_000),
+                 usage_row(date=TODAY, tool="opencode", mode="cli", model="opencode", costUSD=1, input=10)]
+        self.send(mac, rows, days=days, projects=[{"id": "p_badge00001", "name": "Badge"}])
+        badges = {b["id"]: b for b in self.get("/users/badger")[1]["badges"]}
+        self.assertEqual([b[0] for b in run_server.BADGES], list(badges))
+        self.assertEqual((badges["streak"]["value"], badges["streak"]["tier"], badges["streak"]["next"]), (14, 1, 30))
+        self.assertEqual((badges["spend"]["value"], badges["spend"]["tier"]), (601, 1))    # 14 × $25 + $250 + $1
+        self.assertEqual((badges["bigday"]["value"], badges["bigday"]["tier"]), (201_000_010, 1))
+        self.assertEqual((badges["tools"]["tier"], badges["tools"]["tiers"], badges["ways"]["value"]), (2, 2, 3))
+        self.assertEqual((badges["projects"]["tier"], badges["podium"]["value"], badges["podium"]["tier"]), (0, None, 0))
+
+    def test_live_events(self):
+        mac = self.joined("streamer")
+        connection = http.client.HTTPConnection("127.0.0.1", self.port, timeout=10)
+        connection.request("GET", run_server.API_PREFIX + "/live")
+        response = connection.getresponse()
+        self.assertEqual((response.status, response.getheader("Content-Type")), (200, "text/event-stream; charset=utf-8"))
+
+        def next_event():
+            name, data = None, None
+            while True:
+                line = response.fp.readline().decode("utf-8").rstrip("\n")
+                if line.startswith("event: "):
+                    name = line[len("event: "):]
+                elif line.startswith("data: "):
+                    data = json.loads(line[len("data: "):])
+                elif line == "" and name:
+                    return name, data
+
+        self.assertEqual(next_event()[0], "hello")
+        self.send(mac, [usage_row(output=1_000_000)])
+        name, data = next_event()
+        self.assertEqual((name, data["username"], data["costUSD"], data["byTool"]), ("usage", "streamer", 25.0, {"claude": 25.0}))
+        self.assertEqual(next_event()[0], "board")
+        mac.run(NOW - 4 * 3600)
+        name, data = next_event()
+        while name != "reading":
+            name, data = next_event()
+        self.assertEqual((data["username"], data["provider"], data["usedPercent"], data["tier"]), ("streamer", "claude", 100.0, "verified"))
+        connection.close()
+
+
 class ComputationTests(unittest.TestCase):
+    def test_streaks(self):
+        day = datetime.date(2026, 9, 16)
+        dates = {day - datetime.timedelta(days=n) for n in (1, 2, 3, 7, 8)}
+        self.assertEqual(run_server.streaks(dates, day), (3, 3))            # 今天还没有，从昨天数
+        self.assertEqual(run_server.streaks(dates | {day}, day), (4, 4))
+        self.assertEqual(run_server.streaks(set(), day), (0, 0))
+        self.assertEqual(run_server.slugify("  Octo App! 2 "), "octo-app-2")
+        self.assertEqual(run_server.slugify("项目"), "project")
+
     def test_thresholds_and_completion(self):
         readings = [(0, 10), (600, 50), (1200, 89.9), (1800, 90), (2400, 99.4), (3000, 99.5), (3600, 100)]
         summary = run_server.summarize_run(readings, window_start=-600)
@@ -2531,7 +2773,7 @@ class ComputationTests(unittest.TestCase):
                 run_server.RunService(path, b"k" * 32).close()
             connection = sqlite3.connect(path)
             try:
-                self.assertEqual(connection.execute("SELECT version FROM schema_version").fetchall(), [(1,), (2,), (3,), (4,), (5,)])
+                self.assertEqual(connection.execute("SELECT version FROM schema_version").fetchall(), [(1,), (2,), (3,), (4,), (5,), (6,)])
             finally:
                 connection.close()
 
@@ -2613,7 +2855,7 @@ class ComputationTests(unittest.TestCase):
 
             connection = sqlite3.connect(path)
             try:
-                self.assertEqual(connection.execute("SELECT version FROM schema_version").fetchall(), [(1,), (2,), (3,), (4,), (5,)])
+                self.assertEqual(connection.execute("SELECT version FROM schema_version").fetchall(), [(1,), (2,), (3,), (4,), (5,), (6,)])
                 self.assertEqual(sorted(connection.execute(
                     "SELECT account_hmac, provider, user_id, via FROM account_owners").fetchall()),
                     sorted([(shared, "cursor", 1, "first"), (late_own, "cursor", 2, "email")]))
@@ -2656,7 +2898,7 @@ class ComputationTests(unittest.TestCase):
             run_server.RunService(path, b"k" * 32).close()
             connection = sqlite3.connect(path)
             try:
-                self.assertEqual(connection.execute("SELECT version FROM schema_version").fetchall(), [(1,), (2,), (3,), (4,), (5,)])
+                self.assertEqual(connection.execute("SELECT version FROM schema_version").fetchall(), [(1,), (2,), (3,), (4,), (5,), (6,)])
                 ids = [row[0] for row in connection.execute("SELECT public_id FROM runs ORDER BY id")]
                 self.assertEqual(len(set(ids)), 3)
                 self.assertTrue(all(re.fullmatch(r"[A-Za-z0-9_-]{12}", run_id) for run_id in ids))
