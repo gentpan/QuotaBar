@@ -1385,7 +1385,7 @@ class RunTests(ServerTestCase):
             "windowSeconds": FIVE_HOURS, "windowTitle": "5-hour window", "runners": 1, "season": "2026-W38"})
         self.assertEqual(board["entries"], [{
             "rank": 1, "username": "sprinter", "displayName": "Sprinter", "value": 7200, "unit": "seconds",
-            "tier": "verified", "achievedAt": start + 7200, "peakPercent": 100.0}])
+            "tier": "verified", "accountVerified": True, "achievedAt": start + 7200, "peakPercent": 100.0}])
         self.assertEqual(len(self.board(tier="verified")["entries"]), 1)
 
         status, boards = self.get("/boards", region="global")
@@ -1395,9 +1395,13 @@ class RunTests(ServerTestCase):
         stats = self.get("/stats")[1]
         self.assertEqual((stats["users"], stats["runs"], stats["verifiedRuns"], stats["providers"]), (1, 1, 1, 1))
 
-        recent = self.get("/users/sprinter")[1]["recent"][0]
+        profile = self.get("/users/sprinter")[1]
+        recent = profile["recent"][0]
         self.assertEqual((recent["secondsTo50"], recent["secondsTo90"], recent["secondsTo100"]), (3600, 6600, 7200))
         self.assertEqual((recent["windowStart"], recent["completedAt"]), (start, start + 7200))
+        # 账号摘要正好是注册邮箱算出来的：按 email 认领，run 带 accountVerified
+        self.assertTrue(recent["accountVerified"])
+        self.assertEqual([b["accountVerified"] for b in profile["bests"]], [True, True])
 
     def test_gap_over_twenty_minutes_is_standard(self):
         mac = self.joined("gappy")
@@ -1407,10 +1411,24 @@ class RunTests(ServerTestCase):
         self.assertEqual(self.board()["entries"][0]["tier"], "standard")
         self.assertEqual(self.board(tier="verified")["entries"], [])
 
-    def test_missing_account_digest_is_standard(self):
+    def test_missing_account_digest_is_unranked(self):
         mac = self.joined("nodigest")
         mac.run(NOW - 4 * 3600, digest=None)
-        self.assertEqual(self.run_tiers(), ["standard"])
+        self.assertEqual(self.query("SELECT tier, flag_reason, account_verified FROM runs"), [("unranked", "no_account", 0)])
+        self.assert_hidden_everywhere("nodigest")
+        self.assertEqual(mac.call("GET", "/me")[1]["providerAccounts"], [])
+        # 一条 run 里只要有一条读数没有摘要就不计名次
+        mixed = self.joined("mixed")
+        start = NOW - 3 * 3600
+        mixed.upload(series(start, FAST[:6], digest=mixed.digest) + series(start, FAST[6:], digest=None),
+                     [{"minute": start + 300, "source": "claude", "tokens": 5}])
+        self.assertEqual(self.query("SELECT tier, flag_reason FROM runs ORDER BY id"),
+                         [("unranked", "no_account"), ("unranked", "no_account")])
+        self.assertEqual(self.board()["entries"], [])
+        # 回落也有、摘要也缺：算 flagged，原因都记上
+        dropper = self.joined("dropnone")
+        dropper.run(NOW - 2 * 3600, [(0, 0), (10, 30), (20, 20), (30, 40)], digest=None)
+        self.assertEqual(self.query("SELECT tier, flag_reason FROM runs ORDER BY id")[-1], ("flagged", "drop,no_account"))
 
     def test_starting_above_half_is_standard(self):
         mac = self.joined("latestart")
@@ -1446,31 +1464,37 @@ class RunTests(ServerTestCase):
         mac.run(NOW - 4 * 3600, [(0, 0), (2, 30), (4, 65), (10, 80), (20, 100)])
         self.assert_flagged_everywhere("jumper", "jump")
 
-    def test_shared_provider_account_is_disputed(self):
+    def test_shared_provider_account_is_owned_by_one_user(self):
         first = self.joined("owner")
         second = self.joined("borrower")
-        second.digest = first.digest
+        second.digest = first.digest   # owner@example.com 的账号：owner 按 email 拥有
         start = NOW - 4 * 3600
         first.run(start)
         self.assertEqual(self.run_tiers(), ["verified"])
         second.run(start + 600)
-        self.assertEqual(self.run_tiers(), ["flagged", "flagged"])
-        self.assertEqual(self.board()["entries"], [])
-        self.assertEqual(self.get("/users/owner")[1]["recent"], [])
-        # 争议的另一方离开后，剩下那位的 run 恢复
+        self.assertEqual(self.query("SELECT tier, flag_reason FROM runs ORDER BY id"),
+                         [("verified", None), ("flagged", "account_elsewhere")])
+        self.assertEqual([(e["username"], e["accountVerified"]) for e in self.board()["entries"]], [("owner", True)])
+        self.assertEqual(len(self.get("/users/owner")[1]["recent"]), 1)
+        self.assertEqual(self.get("/users/borrower")[1]["recent"], [])
+        # 借用的一方离开，主人不受影响
         self.assertEqual(second.call("DELETE", "/account")[0], 204)
         self.assertEqual(self.run_tiers(), ["verified"])
         self.assertEqual([e["username"] for e in self.board()["entries"]], ["owner"])
 
-    def assert_flagged_everywhere(self, username, reason):
-        rows = self.query("SELECT tier, flag_reason FROM runs")
-        self.assertEqual(rows, [("flagged", reason)])
+    def assert_hidden_everywhere(self, username):
         self.assertEqual(self.board()["entries"], [])
         self.assertEqual(self.board(metric="peak")["entries"], [])
         self.assertEqual(self.get("/boards")[1]["boards"], [])
         profile = self.get(f"/users/{username}")[1]
         self.assertEqual((profile["bests"], profile["recent"], profile["stats"]["runs"]), ([], [], 0))
-        self.assertEqual(self.get("/stats")[1]["runs"], 0)
+        stats = self.get("/stats")[1]
+        self.assertEqual((stats["runs"], stats["providers"]), (0, 0))
+
+    def assert_flagged_everywhere(self, username, reason):
+        rows = self.query("SELECT tier, flag_reason FROM runs")
+        self.assertEqual(rows, [("flagged", reason)])
+        self.assert_hidden_everywhere(username)
 
     def test_peak_board_orders_by_peak_then_earlier_finish(self):
         start = NOW - 4 * 3600
@@ -1519,6 +1543,258 @@ class RunTests(ServerTestCase):
         self.assertEqual(names(region="global"), ["globe"])
         self.assertEqual(self.get("/boards", region="china")[1]["boards"][0]["runners"], 1)
         self.assertEqual(self.get("/leaderboard", provider="claude", window="18000:", region="mars")[0], 400)
+
+
+class ProviderAccountTests(ServerTestCase):
+    """服务商账号：先绑定的人拥有，登录邮箱对得上的认领，解绑，应用查询状态。"""
+    START = NOW - 4 * 3600
+
+    def owner_rows(self):
+        return self.query("SELECT u.username, o.via FROM account_owners o JOIN users u ON u.id = o.user_id"
+                          " ORDER BY o.account_hmac")
+
+    def owner_of(self, digest):
+        return self.query("SELECT u.username, o.via FROM account_owners o JOIN users u ON u.id = o.user_id"
+                          " WHERE o.account_hmac = ?", (self.service.account_hmac(digest),))
+
+    def tiers_by_user(self):
+        return dict(self.query("SELECT u.username, r.tier FROM runs r JOIN users u ON u.id = r.user_id"))
+
+    def account_id(self, digest):
+        return self.service.account_hmac(digest)[:16]
+
+    def link_email(self, browser, email):
+        status, data, _ = browser.call("POST", "/auth/email/start", {"email": email, "lang": "en", "link": True})
+        self.assertEqual(status, 202, data)
+        status, data, _ = browser.call("POST", "/auth/email/verify", {"email": email, "code": self.mailer.code()})
+        self.assertEqual((status, data), (200, {"linked": True}))
+
+    def link_oauth(self, browser, provider):
+        _, params = self.oauth_start(browser, provider, link="1", next="/account")
+        self.assertEqual(self.oauth_callback(browser, provider, params["state"]), (f"{ORIGIN}/account", {}))
+
+    def test_first_binder_owns_and_others_are_flagged(self):
+        shared = account_digest("claude", "team@example.com")
+        alice = self.joined("alice")
+        bob = self.joined("bob")
+        alice.run(self.START, digest=shared)
+        self.assertEqual(self.owner_rows(), [("alice", "first")])
+        self.assertEqual(self.query("SELECT tier, account_verified FROM runs"), [("verified", 0)])
+        _, me, _ = alice.call("GET", "/me")
+        self.assertEqual(me["providerAccounts"], [{
+            "id": self.account_id(shared), "provider": "claude", "firstSeenAt": NOW, "lastSeenAt": NOW,
+            "status": "owned", "verifiedByEmail": False, "runs": 1}])
+
+        self.clock.advance(600)
+        bob.run(self.START + 600, digest=shared)
+        self.assertEqual(self.owner_rows(), [("alice", "first")])
+        self.assertEqual(self.tiers_by_user(), {"alice": "verified", "bob": "flagged"})
+        self.assertEqual(self.query("SELECT flag_reason FROM runs WHERE tier = 'flagged'"), [("account_elsewhere",)])
+        self.assertEqual([(e["username"], e["tier"], e["accountVerified"]) for e in self.board()["entries"]],
+                         [("alice", "verified", False)])
+        self.assertEqual(self.get("/users/bob")[1]["bests"], [])
+        _, bob_me, _ = bob.browser.call("GET", "/me")
+        self.assertEqual(bob_me["providerAccounts"], [{
+            "id": self.account_id(shared), "provider": "claude", "firstSeenAt": NOW + 600, "lastSeenAt": NOW + 600,
+            "status": "elsewhere", "verifiedByEmail": False, "runs": 0}])
+
+        # 主人再上传：lastSeenAt 前移，归属不变
+        self.clock.advance(600)
+        alice.upload(series(self.START, [(130, 100)], digest=shared))
+        self.assertEqual(alice.call("GET", "/me")[1]["providerAccounts"][0]["lastSeenAt"], NOW + 1200)
+        self.assertEqual(self.owner_rows(), [("alice", "first")])
+
+        # 主人删号：账号交给下一个上传过它的人，他的 run 重算
+        self.assertEqual(alice.call("DELETE", "/account")[0], 204)
+        self.assertEqual(self.owner_rows(), [("bob", "first")])
+        self.assertEqual(self.tiers_by_user(), {"bob": "verified"})
+        self.assertEqual([e["username"] for e in self.board()["entries"]], ["bob"])
+
+    def test_non_ranked_device_does_not_bind(self):
+        first = self.joined("rankedmac")
+        second = self.paired(first)
+        second.run(self.START, digest=account_digest("claude", "elsewhere@example.com"))
+        self.assertEqual(self.query("SELECT COUNT(*) FROM account_bindings")[0][0], 0)
+        self.assertEqual(self.owner_rows(), [])
+        self.assertEqual(first.call("GET", "/me")[1]["providerAccounts"], [])
+
+    def test_email_claim_moves_ownership_and_is_never_taken_over(self):
+        shared = account_digest("claude", "Team@Example.com ")
+        alice = self.joined("alice")
+        bob = self.joined("bob")
+        carol = self.joined("carol")
+        alice.run(self.START, digest=shared)
+        bob.run(self.START, digest=shared)
+        self.assertEqual(self.tiers_by_user(), {"alice": "verified", "bob": "flagged"})
+
+        # bob 关联了 team@example.com：邮箱认领胜过先绑定，alice 的 run 变 flagged
+        self.clock.advance(60)
+        self.link_email(bob.browser, "team@example.com")
+        self.assertEqual(self.owner_rows(), [("bob", "email")])
+        self.assertEqual(self.tiers_by_user(), {"alice": "flagged", "bob": "verified"})
+        self.assertEqual(self.query("SELECT u.username, r.flag_reason, r.account_verified FROM runs r"
+                                    " JOIN users u ON u.id = r.user_id ORDER BY u.username"),
+                         [("alice", "account_elsewhere", 0), ("bob", None, 1)])
+        self.assertEqual([(e["username"], e["accountVerified"]) for e in self.board()["entries"]], [("bob", True)])
+        self.assertEqual(self.get("/users/alice")[1]["recent"], [])
+        account = bob.call("GET", "/me")[1]["providerAccounts"][0]
+        self.assertEqual((account["status"], account["verifiedByEmail"], account["runs"]), ("owned", True, 1))
+        account = alice.call("GET", "/me")[1]["providerAccounts"][0]
+        self.assertEqual((account["status"], account["verifiedByEmail"], account["runs"]), ("elsewhere", False, 0))
+
+        # 先绑定的一方再上传也抢不回来
+        self.clock.advance(60)
+        alice.upload(series(self.START, [(130, 100)], digest=shared))
+        self.assertEqual(self.owner_rows(), [("bob", "email")])
+
+        # 另一个账号也有这个已验证邮箱（GitHub 主邮箱），上传后同样抢不走 email 认领
+        self.providers.github_emails = [{"email": "team@example.com", "primary": True, "verified": True}]
+        self.link_oauth(carol.browser, "github")
+        carol.run(self.START, digest=shared)
+        self.assertEqual(self.owner_rows(), [("bob", "email")])
+        self.assertEqual(self.tiers_by_user(), {"alice": "flagged", "bob": "verified", "carol": "flagged"})
+
+    def test_claim_is_rechecked_when_a_verified_identity_is_linked(self):
+        octo = account_digest("claude", "octo@example.com")
+        rival = self.joined("rival")
+        linker = self.joined("linker")
+        rival.run(self.START, digest=octo)
+        linker.run(self.START, digest=octo)
+        self.assertEqual(self.tiers_by_user(), {"rival": "verified", "linker": "flagged"})
+        # GitHub 的主邮箱 Octo@Example.com（已验证）在上传之后才关联上
+        self.link_oauth(linker.browser, "github")
+        self.assertEqual(self.owner_rows(), [("linker", "email")])
+        self.assertEqual(self.tiers_by_user(), {"rival": "flagged", "linker": "verified"})
+        self.assertTrue(self.board()["entries"][0]["accountVerified"])
+
+    def test_unverified_google_email_does_not_claim(self):
+        gee = account_digest("claude", "gee@example.com")
+        holder = self.joined("holder")
+        claimer = self.joined("claimer")
+        holder.run(self.START, digest=gee)
+        claimer.run(self.START, digest=gee)
+        self.providers.google_user = dict(self.providers.google_user, email_verified=False)
+        self.link_oauth(claimer.browser, "google")
+        self.assertEqual(self.owner_rows(), [("holder", "first")])
+        self.assertEqual(self.tiers_by_user(), {"holder": "verified", "claimer": "flagged"})
+        # 之后用这个 Google 登录时邮箱已验证：身份更新后重新认领
+        self.providers.google_user = dict(self.providers.google_user, email_verified=True)
+        browser = Browser(self)
+        _, params = self.oauth_start(browser, "google")
+        self.oauth_callback(browser, "google", params["state"])
+        self.assertEqual(browser.call("GET", "/me")[1]["user"]["username"], "claimer")
+        self.assertEqual(self.owner_rows(), [("claimer", "email")])
+        self.assertEqual(self.tiers_by_user(), {"holder": "flagged", "claimer": "verified"})
+
+    def test_upload_claims_an_account_first_owned_elsewhere(self):
+        digest = account_digest("claude", "newcomer@example.com")
+        early = self.joined("early")
+        early.run(self.START, digest=digest)
+        newcomer = self.joined("newcomer")
+        self.assertEqual(self.owner_rows(), [("early", "first")])   # 还没上传过，注册本身不认领
+        newcomer.run(self.START)
+        self.assertEqual(self.owner_rows(), [("newcomer", "email")])
+        self.assertEqual(self.tiers_by_user(), {"early": "flagged", "newcomer": "verified"})
+
+    def test_lookup(self):
+        known = account_digest("claude", "looker@example.com")
+        other = account_digest("codex", "someone-else@example.com")
+        looker = self.joined("looker")
+        stranger = self.joined("stranger")
+        stranger.run(self.START, provider="codex", plan="Pro", digest=other)
+        looker.run(self.START)
+        status, data, headers = looker.call("POST", "/accounts/lookup", {"digests": [known, other, known]})
+        self.assertEqual(status, 200, data)
+        self.assertEqual(headers["cache-control"], "no-store")
+        account = {"id": self.account_id(known), "provider": "claude", "firstSeenAt": NOW, "lastSeenAt": NOW,
+                   "status": "owned", "verifiedByEmail": True, "runs": 1}
+        # 别人上传过、自己没上传过的也是 null，不透露归属
+        self.assertEqual(data, {"accounts": [{"digest": known, "account": account},
+                                             {"digest": other, "account": None},
+                                             {"digest": known, "account": account}]})
+        self.assertEqual(looker.call("POST", "/accounts/lookup", {"digests": []})[1], {"accounts": []})
+        for body in ({}, {"digests": known}, {"digests": [known.upper()]}, {"digests": [known[:63]]},
+                     {"digests": [7]}, {"digests": [known] * 21}, {"digests": [known + "0"]}):
+            status, data, _ = looker.call("POST", "/accounts/lookup", body)
+            self.assertEqual((status, data["error"]), (400, "invalid_digests"), body)
+        self.assertEqual(looker.call("POST", "/accounts/lookup", {"digests": [known] * 20})[0], 200)
+        # 网页会话不能查（网页没有摘要）
+        status, data, _ = looker.browser.call("POST", "/accounts/lookup", {"digests": [known]})
+        self.assertEqual((status, data["error"]), (401, "missing_device"))
+
+    def test_unbind_passes_ownership_on(self):
+        mine = account_digest("claude", "alice@example.com")
+        extra = account_digest("cursor", "alice-extra@example.com")
+        alice = self.joined("alice")
+        carol = self.joined("carol")
+        bob = self.joined("bob")
+        alice.run(self.START)                                   # alice 按 email 拥有
+        alice.run(NOW - 10 * 3600, provider="cursor", plan="Pro", with_activity=False, digest=extra)  # 按 first
+        self.clock.advance(60)
+        carol.run(self.START, digest=mine)                      # carol 先于 bob 上传
+        self.clock.advance(60)
+        # bob 的 GitHub 主邮箱也是 alice@example.com（已验证）
+        self.providers.github_emails = [{"email": "alice@example.com", "primary": True, "verified": True}]
+        self.link_oauth(bob.browser, "github")
+        bob.run(self.START, digest=mine)
+        self.assertEqual(self.owner_of(mine), [("alice", "email")])
+        self.assertEqual(self.query("SELECT COUNT(*) FROM runs WHERE tier = 'flagged'")[0][0], 2)
+        alice_id = self.query("SELECT id FROM users WHERE username = 'alice'")[0][0]
+        bob_id = bob.call("GET", "/me")[1]["providerAccounts"][0]["id"]
+
+        # 格式不对、不是自己绑定的 id 都是 404
+        for bad in (bob_id[:15], "zzzzzzzzzzzzzzzz", self.account_id(extra)):
+            status, data, _ = bob.call("DELETE", f"/accounts/{bad}")
+            self.assertEqual((status, data["error"]), (404, "account_not_found"), bad)
+
+        status, data, _ = alice.call("DELETE", f"/accounts/{self.account_id(mine)}")
+        self.assertEqual(status, 200, data)
+        self.assertEqual([(a["id"], a["provider"], a["status"], a["runs"]) for a in data["providerAccounts"]],
+                         [(self.account_id(extra), "cursor", "owned", 1)])
+        account = self.service.account_hmac(mine)
+        self.assertEqual(self.query("SELECT COUNT(*) FROM snapshots WHERE user_id = ? AND account_hmac = ?",
+                                    (alice_id, account))[0][0], 0)
+        self.assertEqual(self.query("SELECT COUNT(*) FROM account_bindings WHERE user_id = ? AND account_hmac = ?",
+                                    (alice_id, account))[0][0], 0)
+        self.assertEqual(self.query("SELECT provider FROM runs WHERE user_id = ?", (alice_id,)), [("cursor",)])
+        # 邮箱对得上的 bob 优先于更早上传的 carol
+        self.assertEqual(self.owner_of(mine), [("bob", "email")])
+        self.assertEqual(self.tiers_by_user(), {"alice": "verified", "bob": "verified", "carol": "flagged"})
+        self.assertEqual({e["username"]: e["accountVerified"] for e in self.board()["entries"]}, {"bob": True})
+        status, data, _ = alice.call("DELETE", f"/accounts/{self.account_id(mine)}")
+        self.assertEqual((status, data["error"]), (404, "account_not_found"))
+
+        # 网页会话也能解绑（要站点 Origin）；bob 走了以后轮到 carol（按 first）
+        status, data, _ = bob.browser.call("DELETE", f"/accounts/{bob_id}", origin="https://evil.example")
+        self.assertEqual((status, data["error"]), (403, "bad_origin"))
+        status, data, _ = bob.browser.call("DELETE", f"/accounts/{bob_id}")
+        self.assertEqual((status, data), (200, {"providerAccounts": []}))
+        self.assertEqual(self.owner_of(mine), [("carol", "first")])
+        self.assertEqual({e["username"] for e in self.board()["entries"]}, {"carol"})
+
+        # 最后一个人解绑，账号不再有主人
+        self.assertEqual(carol.call("DELETE", f"/accounts/{self.account_id(mine)}")[0], 200)
+        self.assertEqual(self.owner_of(mine), [])
+        self.assertEqual(self.owner_of(extra), [("alice", "first")])
+
+    def test_unbind_uses_the_write_rate_limit(self):
+        mac = self.joined("hurried")
+        mac.run(self.START)
+        self.service.limits["write"] = (1, 10.0)
+        self.assertEqual(mac.call("DELETE", "/accounts/0000000000000000")[1]["error"], "account_not_found")
+        status, data, _ = mac.call("DELETE", f"/accounts/{self.account_id(mac.digest)}")
+        self.assertEqual((status, data["error"]), (429, "rate_limited"))
+
+    def test_public_cache_is_cleared_when_ownership_moves(self):
+        shared = account_digest("claude", "cache@example.com")
+        first = self.joined("firstcache")
+        claimer = self.joined("claimer")
+        first.run(self.START, digest=shared)
+        claimer.run(self.START, digest=shared)
+        self.service.cache_ttl = 30
+        self.assertEqual([e["username"] for e in self.board()["entries"]], ["firstcache"])
+        self.link_email(claimer.browser, "cache@example.com")
+        self.assertEqual([e["username"] for e in self.board()["entries"]], ["claimer"])
 
 
 class ProfileTests(ServerTestCase):
@@ -1610,8 +1886,8 @@ class AccountTests(ServerTestCase):
         self.assertEqual((status, data), (204, None))
         self.assertEqual(headers["cache-control"], "no-store")
 
-        for table in ("devices", "snapshots", "activity", "runs", "projects", "account_bindings", "identities",
-                      "connect_requests"):
+        for table in ("devices", "snapshots", "activity", "runs", "projects", "account_bindings", "account_owners",
+                      "identities", "connect_requests"):
             count = self.query(f"SELECT COUNT(*) FROM {table} WHERE user_id = ?", (user_id,))[0][0]
             self.assertEqual(count, 0, table)
         self.assertEqual(self.query("SELECT COUNT(*) FROM users WHERE id = ?", (user_id,))[0][0], 0)
@@ -1727,7 +2003,7 @@ class ComputationTests(unittest.TestCase):
                 run_server.RunService(path, b"k" * 32).close()
             connection = sqlite3.connect(path)
             try:
-                self.assertEqual(connection.execute("SELECT version FROM schema_version").fetchall(), [(1,), (2,)])
+                self.assertEqual(connection.execute("SELECT version FROM schema_version").fetchall(), [(1,), (2,), (3,)])
             finally:
                 connection.close()
 
@@ -1748,6 +2024,84 @@ class ComputationTests(unittest.TestCase):
                 self.assertEqual(connection.execute("SELECT username FROM users").fetchall(), [("old",)])
             finally:
                 connection.close()
+
+    def test_a_version_two_database_gets_provider_account_owners(self):
+        """升级前：共用账号的双方都是 flagged(disputed)、没有摘要的 run 照样上榜。升级后按新规则重算。"""
+        secret = b"k" * 32
+
+        def hmac_of(provider, email):
+            return run_server.hmac.new(secret, account_digest(provider, email).encode(), hashlib.sha256).hexdigest()
+
+        shared, late_own, spare = (hmac_of("cursor", "team@example.com"), hmac_of("cursor", "late@example.com"),
+                                   hmac_of("cursor", "spare@example.com"))
+        start = NOW - 4 * 3600
+        resets = start + FIVE_HOURS
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "run.db")
+            connection = sqlite3.connect(path, isolation_level=None)
+            connection.execute("CREATE TABLE schema_version (version INTEGER NOT NULL)")
+            connection.executescript(run_server.SCHEMA_V1)
+            connection.executescript(run_server.SCHEMA_V2)
+            for user_id, name in ((1, "old"), (2, "late"), (3, "nodigest")):
+                connection.execute("INSERT INTO users(id, username, display_name, region, joined_at)"
+                                   " VALUES (?, ?, ?, 'global', 1)", (user_id, name, name))
+            connection.execute("INSERT INTO identities(id, user_id, provider, subject, email, email_verified,"
+                               " linked_at, last_used_at) VALUES ('i2', 2, 'email', 'late@example.com',"
+                               " 'late@example.com', 1, 1, 1)")
+            bindings = [(shared, 1, NOW - 3000), (shared, 2, NOW - 2000), (late_own, 2, NOW - 2000),
+                        (spare, 3, NOW - 1000)]
+            connection.executemany("INSERT INTO account_bindings(account_hmac, user_id, first_seen_at) VALUES (?, ?, ?)",
+                                   bindings)
+
+            def insert_run(user_id, plan, account, counted=1, device="d"):
+                for minute, used in FAST:
+                    connection.execute(
+                        "INSERT INTO snapshots(user_id, device_id, counted, provider, plan, plan_norm, account_hmac,"
+                        " window_key, window_title, window_seconds, used_percent, resets_at, resets_bucket, rankable,"
+                        " observed_at, source, received_at) VALUES (?, ?, ?, 'cursor', ?, ?, ?, '18000:', '5-hour window',"
+                        " ?, ?, ?, ?, 1, ?, 'api', ?)",
+                        (user_id, f"{device}{user_id}{plan}", counted, plan, plan.lower(), account, FIVE_HOURS, used, resets,
+                         resets, start + minute * 60, NOW - 1000 + minute))
+
+            insert_run(1, "Pro", shared)
+            insert_run(2, "Pro", shared)
+            insert_run(2, "Business", late_own)
+            insert_run(3, "Pro", None)
+            insert_run(3, "Business", spare, counted=0, device="other")
+            connection.execute(
+                "INSERT INTO runs(user_id, provider, plan_norm, window_key, window_seconds, resets_bucket, resets_at,"
+                " window_start, season, peak_percent, peak_at, first_observed_at, last_observed_at, readings, tier,"
+                " flag_reason, updated_at) VALUES (1, 'cursor', 'pro', '18000:', ?, ?, ?, ?, '2026-W38', 100, ?, ?, ?,"
+                " 13, 'flagged', 'disputed', 1)", (FIVE_HOURS, resets, resets, start, start, start, start + 7200))
+            connection.close()
+
+            service = run_server.RunService(path, secret, clock=lambda: NOW + 60)
+            try:
+                self.assertEqual(service.stats()["runs"], 2)
+                entries = service.leaderboard({"provider": "cursor", "plan": "pro", "window": "18000:"})["entries"]
+                self.assertEqual([(e["username"], e["accountVerified"]) for e in entries], [("old", False)])
+            finally:
+                service.close()
+
+            connection = sqlite3.connect(path)
+            try:
+                self.assertEqual(connection.execute("SELECT version FROM schema_version").fetchall(), [(1,), (2,), (3,)])
+                self.assertEqual(sorted(connection.execute(
+                    "SELECT account_hmac, provider, user_id, via FROM account_owners").fetchall()),
+                    sorted([(shared, "cursor", 1, "first"), (late_own, "cursor", 2, "email")]))
+                # 只有非计分读数的绑定去掉；provider 和 last_seen_at 从读数补上
+                self.assertEqual(sorted(connection.execute(
+                    "SELECT account_hmac, user_id, provider, last_seen_at FROM account_bindings").fetchall()),
+                    sorted([(shared, 1, "cursor", NOW - 880), (shared, 2, "cursor", NOW - 880),
+                            (late_own, 2, "cursor", NOW - 880)]))
+                self.assertEqual(connection.execute(
+                    "SELECT user_id, plan_norm, tier, flag_reason, account_verified FROM runs ORDER BY user_id, plan_norm"
+                ).fetchall(), [(1, "pro", "verified", None, 0), (2, "business", "verified", None, 1),
+                               (2, "pro", "flagged", "account_elsewhere", 0), (3, "pro", "unranked", "no_account", 0)])
+            finally:
+                connection.close()
+            # 再打开一次不会重复升级
+            run_server.RunService(path, secret).close()
 
     def test_secret_file_is_generated_private(self):
         with tempfile.TemporaryDirectory() as tmp:

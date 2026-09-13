@@ -38,11 +38,12 @@ Python 服务，数据放 SQLite（WAL）。验签、存读数、算 run 和 tie
 - `POST /connect/start`、`POST /connect/poll`（没有设备号，按请求体里的 `publicKey` 验签；start 可带
   `lang: "zh"`，`verifyURL` 就指向 `/zh/connect`）
 - `POST /snapshots`、`DELETE /devices/current`（这台 Mac 离开账号）
+- `POST /accounts/lookup`（应用查自己算出的账号摘要的状态；网页会话回 `401 missing_device`）
 - `POST /register`：只在 `QUOTA_RUN_DEVICE_SIGNUP=1` 时存在（本机测试），否则 404；配对码（`/pair`）已删除
 
 设备签名或网页会话（有 `X-Quota-Device` / `X-Quota-Signature` 头就按签名验，否则看 cookie）：
-`GET /me`（多了 `identities`，设备多了 `appVersion`）、`PUT /profile`、`PUT /projects`、
-`POST /devices/ranked`、`DELETE /devices/<id>`、`DELETE /account`。
+`GET /me`（多了 `identities`、`providerAccounts`，设备多了 `appVersion`）、`PUT /profile`、`PUT /projects`、
+`POST /devices/ranked`、`DELETE /devices/<id>`、`DELETE /accounts/<id>`（解绑服务商账号）、`DELETE /account`。
 
 网页会话：`GET /auth/providers`、`GET /session`、`POST /auth/logout`、`GET /auth/github|google/start`、
 `GET /auth/github|google/callback`、`POST /auth/email/start`、`POST /auth/email/verify`、
@@ -59,8 +60,30 @@ Python 服务，数据放 SQLite（WAL）。验签、存读数、算 run 和 tie
   用时只会算长不会算短。
 - **窗口外的读数**：可计分窗口里 `observedAt` 不在 `[resetsAt − windowSeconds − 300, resetsAt + 300]`
   之内的，按 `outside_window` 拒收（多半是过期的 resetsAt）。
-- **规则 1**：一条 run 里所有读数都要带同一个账号摘要才算「有摘要」；摘要只要在别的用户名下出现
-  过，双方所有用它的 run 都变 flagged。一方删号后，另一方自动重算恢复。
+- **服务商账号（规则 1）**：库里只有 `HMAC(密钥, accountDigest)`。
+  - **绑定**（`account_bindings`）只由计分设备的读数建立；非计分设备的读数照收，但不建绑定、不产生归属，
+    `accounts/lookup` 对它回 `null`。每次上传更新绑定的 `last_seen_at`。
+  - **归属**（`account_owners`，每个账号一个主人）：第一个绑定的人拥有（`first`）；绑定时这个人已验证的登录邮箱
+    对得上就直接记 `email`。邮箱认领：对每个已验证邮箱 `e` 算 `HMAC(密钥, sha256hex("quota-run-account-v1\n" + provider + "\n" + e))`
+    （`e` 去空白、转小写），和绑定比对。`email` 胜过 `first`，账号转过来时双方这个账号的 run 都重算；
+    已经是 `email` 的不会被抢走（两个账号有同一个已验证邮箱时，先认领的留着）。
+    只有 `email_verified` 的身份算数：邮箱验证码身份、Google 的 `email_verified`、GitHub 已验证的主邮箱。
+  - **认领只针对自己绑定过的账号**：光有邮箱、没上传过这个账号，不会把它从别人那里拿走；上传后立即认领。
+    认领在每批读数（针对这批里出现的账号）、身份登录/关联/验证/自动关联、注册完成时重新检查。
+    删除登录身份不撤销已有的认领。
+  - **tier**：有读数的账号归了别人 → `flagged`（`account_elsewhere`）；有读数没带摘要 → `unranked`
+    （`no_account`；同时回落或跳变时是 `flagged`，`flag_reason` 两者都记，如 `drop,no_account`）；
+    verified 要求每条读数的账号都归自己。`runs.account_verified` = 每条读数的账号都归自己且是 `email`，
+    只是徽章，不影响 tier。公开接口里 `accountVerified` 出现在榜单条目、个人页 bests 和 recent。
+  - **解绑** `DELETE /accounts/<id>`（`id` 是 HMAC 的前 16 位 hex）：删掉这个人这个账号的读数和绑定，
+    受影响的 run 按剩下的读数重算（只由这个账号组成的 run 随之删除）；他是主人的话，账号交给剩下绑定过它的人——
+    邮箱对得上的优先（`email`），否则最早上传的（`first`），那个人的 run 重算。不是自己的绑定回
+    `404 account_not_found`。走写请求限流。删号时同样把拥有的账号交出去。
+  - `providerAccount.runs` 是这个人用到这个账号的读数、tier 为 verified/standard 的 run 数。
+  - `POST /accounts/lookup`：`digests` 必须是数组、最多 20 个、每个 64 位小写 hex，否则 `400 invalid_digests`；
+    按输入顺序返回，自己没绑定过的（包括别人拥有的）是 `null`。按设备走 `lookup` 令牌桶，不占写请求额度。
+  - 升级（schema 3）：去掉只有非计分读数的旧绑定，从读数补 `provider`、`last_seen_at`，每个账号最早绑定的人按
+    `first` 拥有，再逐个用户检查邮箱认领，最后按新规则重算全部 run（旧的 `disputed` 消失）。整个升级在一个事务里。
 - **规则 3**：检查任意两条相距不到 300 秒的读数（不只是相邻两条），恰好 300 秒不算。
 - **规则 5**：活动分钟按分钟取整，与第一条读数所在分钟重叠的那一分钟也算，截止到 100% 那条读数
   （没到 100% 就是最后一条）。只看计分设备上传的、来源与服务商同名（`codex`/`claude`）的分钟。
@@ -68,12 +91,12 @@ Python 服务，数据放 SQLite（WAL）。验签、存读数、算 run 和 tie
 - **榜单**：每人只取最好的一条；速度榜并列时 `completedAt` 早的在前，峰值榜并列时
   `completedAt`（没到 100% 用最后一次观察）早的在前。`limit` 默认 100，超过 200 按 200 算。
   `achievedAt`：速度榜是 `completedAt`，峰值榜是首次观察到峰值的时间。
-  `board.runners` 是该赛季、该地区在这个榜上有非 flagged run 的人数（不分指标和 tier）。
-- **stats**：`providers` 是数量（整数）；`runs`/`verifiedRuns` 不含 flagged；`users` 是全部已加入用户。
+  `board.runners` 是该赛季、该地区在这个榜上有 verified/standard run 的人数（不分指标和 tier）。
+- **stats**：`providers` 是数量（整数）；`runs`/`verifiedRuns` 不含 flagged 和 unranked；`users` 是全部已加入用户。
 - **个人页 bests**：名次按全部赛季、全部地区、全部 tier 算；`runners` 是该指标榜上的人数，
   `percentile` = ⌈名次 ÷ 人数 × 100⌉（整数，「前 X%」）；`season` 是那条最好成绩所在的赛季；
   另附 `unit` 和 `achievedAt`。`recent` 里每条 run 是
-  `{provider, plan, planLabel, windowKey, windowSeconds, windowTitle, season, windowStart, resetsAt, peakPercent, secondsTo50, secondsTo90, secondsTo100, completedAt, lastObservedAt, tier}`。
+  `{provider, plan, planLabel, windowKey, windowSeconds, windowTitle, season, windowStart, resetsAt, peakPercent, secondsTo50, secondsTo90, secondsTo100, completedAt, lastObservedAt, tier, accountVerified}`。
   `activeDays` 是有计分读数或有 token 的 UTC 日数。
 - **链接**：`links.website` 必须是 https；`links.github`、`links.x` 可以填账号名（可带 @）或
   对应站点的 https 地址，统一存成 https 地址返回。项目的 `github` 可以填 `owner/repo`，同样存成地址。
@@ -124,7 +147,8 @@ Python 服务，数据放 SQLite（WAL）。验签、存读数、算 run 和 tie
   按 IP 的限额实际是按边缘节点算的。
 - **限流一览**：`register`（注册、connect/start，按 IP）、`poll`（connect/poll，按 IP）、`auth`（OAuth 起跳、
   验证码校验、注册用户名、dev 登录，按 IP，容量 20、每 6 秒补 1 个）、`lookup`（用户名查重、connect 码查询，
-  按 IP，容量 60、每秒补 1 个）、`write`（签名写按设备，会话写按账号）。
+  按 IP，容量 60、每秒补 1 个；`accounts/lookup` 按设备用同样的参数）、`write`（签名写按设备，会话写按账号，
+  包括 `DELETE /accounts/<id>`）。
 
 ## 配置
 
@@ -169,8 +193,8 @@ systemd 单元或命令行历史。
 
 `QUOTA_RUN_SECRET_FILE` 是账号摘要和邮箱验证码的 HMAC 密钥（库里只存 `HMAC-SHA256(密钥, accountDigest)`）。
 文件不存在时服务会自己生成（32 字节随机数的 hex，权限 0600），但线上 `/etc` 对服务只读，
-所以由部署脚本在服务器上生成。**不要更换或丢失这个密钥**：换了之后所有已有的账号绑定都对不上，
-争议检测会失效。备份数据库时一并备份它。
+所以由部署脚本在服务器上生成。**不要更换或丢失这个密钥**：换了之后所有已有的账号绑定和归属都对不上，
+邮箱认领也会失效。备份数据库时一并备份它。
 
 ## 测试
 
@@ -226,5 +250,7 @@ python3 server/run/run_server.py
 - 过期的会话、验证码、OAuth state、connect 请求在请求处理时顺带清理（最多每分钟一次）。
 - 让某个人所有网页会话下线：
   `sqlite3 /var/lib/quotabar-run/run.db "DELETE FROM sessions WHERE identity_id IN (SELECT i.id FROM identities i JOIN users u ON u.id = i.user_id WHERE u.username = '…')"`
-- 查看被标记的 run：
-  `sqlite3 /var/lib/quotabar-run/run.db "SELECT u.username, r.provider, r.season, r.flag_reason FROM runs r JOIN users u ON u.id = r.user_id WHERE r.tier = 'flagged'"`
+- 查看被标记或不计名次的 run：
+  `sqlite3 /var/lib/quotabar-run/run.db "SELECT u.username, r.provider, r.season, r.tier, r.flag_reason FROM runs r JOIN users u ON u.id = r.user_id WHERE r.tier IN ('flagged', 'unranked')"`
+- 查看服务商账号的归属（只有 HMAC，看不出是谁的邮箱）：
+  `sqlite3 /var/lib/quotabar-run/run.db "SELECT substr(o.account_hmac, 1, 16), o.provider, u.username, o.via FROM account_owners o JOIN users u ON u.id = o.user_id"`

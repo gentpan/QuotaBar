@@ -660,6 +660,12 @@ def validate_activity(item, now):
     return minute, source, tokens
 
 
+def account_digest(provider, account):
+    """应用端的账号摘要（契约 Signing → Account digest）。服务端只拿登录邮箱算它，用来比对邮箱认领。"""
+    text = f"quota-run-account-v1\n{provider}\n{account.strip().lower()}"
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()
+
+
 def load_secret(path):
     """读 HMAC 密钥；文件不存在就生成一个。密钥内容从不打印。"""
     try:
@@ -883,7 +889,63 @@ INSERT INTO schema_version(version) VALUES (2);
 COMMIT;
 """
 
-MIGRATIONS = [(1, SCHEMA_V1), (2, SCHEMA_V2)]
+def migrate_v3(service):
+    """服务商账号的归属：account_owners 表、绑定的服务商和最近上传时间、run 的 account_verified。
+
+    要按新规则重算已有的 run（Python 里算），所以不是一段 SQL 脚本：整个升级放在一个事务里，
+    中途失败就整体回滚，下次启动重来。
+    """
+    db = service.db
+    now = service.now()
+    with service.transaction():
+        db.execute(
+            "CREATE TABLE IF NOT EXISTS account_owners ("
+            " account_hmac TEXT PRIMARY KEY,"
+            " provider TEXT NOT NULL,"
+            " user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,"
+            " via TEXT NOT NULL CHECK (via IN ('first', 'email')),"
+            " claimed_at INTEGER NOT NULL"
+            ") WITHOUT ROWID")
+        db.execute("CREATE INDEX IF NOT EXISTS account_owners_user ON account_owners(user_id)")
+        db.execute("ALTER TABLE account_bindings ADD COLUMN provider TEXT NOT NULL DEFAULT ''")
+        db.execute("ALTER TABLE account_bindings ADD COLUMN last_seen_at INTEGER NOT NULL DEFAULT 0")
+        db.execute("ALTER TABLE runs ADD COLUMN account_verified INTEGER NOT NULL DEFAULT 0")
+        # 绑定只来自计分读数；之前非计分设备的读数也建过绑定，这里去掉（读数本身保留）
+        db.execute(
+            "DELETE FROM account_bindings WHERE NOT EXISTS (SELECT 1 FROM snapshots s"
+            " WHERE s.account_hmac = account_bindings.account_hmac AND s.user_id = account_bindings.user_id"
+            " AND s.counted = 1)")
+        db.execute(
+            "UPDATE account_bindings SET"
+            " provider = COALESCE((SELECT s.provider FROM snapshots s WHERE s.account_hmac = account_bindings.account_hmac"
+            "   AND s.user_id = account_bindings.user_id ORDER BY s.id LIMIT 1), ''),"
+            " last_seen_at = MAX(first_seen_at, COALESCE((SELECT MAX(s.received_at) FROM snapshots s"
+            "   WHERE s.account_hmac = account_bindings.account_hmac AND s.user_id = account_bindings.user_id), 0))")
+        # 每个账号最早绑定的人先按 first 拥有；同一秒绑定的按用户号小的
+        db.execute(
+            "INSERT OR IGNORE INTO account_owners(account_hmac, provider, user_id, via, claimed_at)"
+            " SELECT b.account_hmac, b.provider, b.user_id, 'first', b.first_seen_at FROM account_bindings b"
+            " WHERE NOT EXISTS (SELECT 1 FROM account_bindings e WHERE e.account_hmac = b.account_hmac"
+            "   AND (e.first_seen_at < b.first_seen_at OR (e.first_seen_at = b.first_seen_at AND e.user_id < b.user_id)))")
+        run_keys = set()
+        users = [row[0] for row in db.execute(
+            "SELECT user_id FROM account_bindings GROUP BY user_id ORDER BY MIN(first_seen_at), user_id")]
+        for user_id in users:
+            service.check_claims(user_id, now, run_keys)
+        # 已有的 run 和计分读数能组成的 run 都按新规则重算（没有读数的 run 会被删掉）
+        run_keys.update(tuple(row) for row in db.execute(f"SELECT {RUN_KEY_COLUMNS} FROM runs"))
+        run_keys.update(tuple(row) for row in db.execute(
+            f"SELECT DISTINCT {RUN_KEY_COLUMNS} FROM snapshots WHERE counted = 1 AND rankable = 1"))
+        for key in run_keys:
+            service.recompute_run(key, now)
+        db.execute("INSERT INTO schema_version(version) VALUES (3)")
+
+
+MIGRATIONS = [(1, SCHEMA_V1), (2, SCHEMA_V2), (3, migrate_v3)]
+
+PUBLIC_TIERS = "('verified', 'standard')"   # flagged 和 unranked 不上榜、不进个人页和统计
+PROVIDER_ACCOUNT_ID_RE = re.compile(r"[0-9a-f]{16}")
+MAX_LOOKUP_DIGESTS = 20
 
 RUN_KEY_COLUMNS = "user_id, provider, plan_norm, window_key, resets_bucket"
 RUN_KEY_WHERE = "user_id = ? AND provider = ? AND plan_norm = ? AND window_key = ? AND resets_bucket = ?"
@@ -941,7 +1003,10 @@ class RunService:
             current = self.db.execute("SELECT COALESCE(MAX(version), 0) FROM schema_version").fetchone()[0]
             for version, script in MIGRATIONS:
                 if version > current:
-                    self.db.executescript(script)
+                    if callable(script):
+                        script(self)
+                    else:
+                        self.db.executescript(script)
 
     @contextmanager
     def transaction(self):
@@ -1006,6 +1071,8 @@ class RunService:
                 return Response(200, self.post_snapshots(request, self.authenticate_write(request)))
             if route == "/devices/ranked":
                 return Response(200, self.set_ranked(request, self.actor(request, write=True)))
+            if route == "/accounts/lookup":
+                return Response(200, self.lookup_accounts(request))
             if route == "/connect/start":
                 return self.connect_start(request)
             if route == "/connect/poll":
@@ -1043,6 +1110,9 @@ class RunService:
                 return Response(200, self.delete_device(device_id, self.actor(request, write=True)))
             if route.startswith("/identities/"):
                 return Response(200, self.delete_identity(request, route[len("/identities/"):]))
+            if route.startswith("/accounts/"):
+                account_id = route[len("/accounts/"):]
+                return Response(200, self.delete_provider_account(account_id, self.actor(request, write=True)))
         raise ApiError(404, "not_found", "No such endpoint.")
 
     def _public(self, request, route):
@@ -1471,19 +1541,19 @@ class RunService:
         user_id = actor.user_id
         with self.transaction():
             device_ids = [r[0] for r in self.db.execute("SELECT id FROM devices WHERE user_id = ?", (user_id,))]
-            hmacs = [r[0] for r in self.db.execute(
-                "SELECT account_hmac FROM account_bindings WHERE user_id = ?", (user_id,))]
+            owned = [tuple(r) for r in self.db.execute(
+                "SELECT account_hmac, provider FROM account_owners WHERE user_id = ?", (user_id,))]
             self.db.executemany("DELETE FROM nonces WHERE scope = ?", [(d,) for d in device_ids])
             # identities 删掉时 sessions 跟着级联删除；email_codes、oauth_states 里的 link_user_id 同样级联
-            for table in ("snapshots", "activity", "runs", "projects", "account_bindings", "devices",
+            for table in ("snapshots", "activity", "runs", "projects", "account_owners", "account_bindings", "devices",
                           "connect_requests", "identities"):
                 self.db.execute(f"DELETE FROM {table} WHERE user_id = ?", (user_id,))
             self.db.execute("DELETE FROM users WHERE id = ?", (user_id,))
-            # 这个人走了，和他共用服务商账号的其他人不再有争议，他们的 run 要重算
+            # 他拥有的服务商账号交给下一个上传过它的人，那个人的 run 要重算
             keys = set()
-            for account in hmacs:
-                keys.update(self.run_keys_for_account(account))
             now = self.now()
+            for account, provider in owned:
+                self.assign_next_owner(account, provider, now, keys)
             for key in keys:
                 self.recompute_run(key, now)
         for device_id in device_ids:
@@ -1536,6 +1606,9 @@ class RunService:
                 self.db.execute("UPDATE identities SET user_id = ?, linked_at = ? WHERE id = ?",
                                 (owner, now, identity["id"]))
                 identity["user_id"] = owner
+        if identity["user_id"] is not None:
+            # 登录时提供方可能刚把邮箱标成已验证，或者身份刚自动挂上账号：重新看邮箱认领
+            self.recheck_claims(identity["user_id"], now)
         self.start_session(request, identity["id"], now)
         return identity
 
@@ -1548,6 +1621,7 @@ class RunService:
         if identity["user_id"] is None:
             self.db.execute("UPDATE identities SET user_id = ?, linked_at = ? WHERE id = ?",
                             (user_id, now, identity["id"]))
+        self.recheck_claims(user_id, now)
 
     def suggest_username(self, *sources):
         base = next((b for b in map(username_base, sources) if b), "") or "runner"
@@ -1616,6 +1690,7 @@ class RunService:
                 (username, display_name, region, now)).lastrowid
             self.db.execute("UPDATE identities SET user_id = ?, linked_at = ? WHERE id = ?",
                             (user_id, now, session["id"]))
+            self.recheck_claims(user_id, now)
         self._cache.clear()
         return Response(201, {"user": private_user(self.user_row(user_id))})
 
@@ -1892,6 +1967,7 @@ class RunService:
         rejected = []
         run_keys = set()
         active_ranges = {}
+        seen_accounts = {}
         with self.transaction():
             for item in activity:
                 entry = validate_activity(item, now)
@@ -1925,9 +2001,16 @@ class RunService:
                     continue
                 accepted += 1
                 if account:
-                    self.bind_account(account, user_id, now, run_keys)
+                    if counted and account not in seen_accounts:
+                        self.bind_account(account, snap["provider"], user_id, now)
+                    seen_accounts.setdefault(account, snap["provider"])
                 if counted and snap["rankable"]:
                     run_keys.add((user_id, snap["provider"], snap["plan_norm"], snap["window_key"], snap["resets_bucket"]))
+            if seen_accounts:
+                self.db.executemany(
+                    "UPDATE account_bindings SET last_seen_at = MAX(last_seen_at, ?) WHERE account_hmac = ? AND user_id = ?",
+                    [(now, account, user_id) for account in seen_accounts])
+                self.check_claims(user_id, now, run_keys, accounts=set(seen_accounts))
             # 新到的活动分钟只可能把 standard 升成 verified；verified 和 flagged 不受影响
             for source, (low, high) in active_ranges.items():
                 rows = self.db.execute(
@@ -1940,22 +2023,174 @@ class RunService:
             self.db.execute("UPDATE users SET last_upload_at = ? WHERE id = ?", (now, user_id))
         return {"accepted": accepted, "duplicates": duplicates, "rejected": rejected}
 
-    def bind_account(self, account, user_id, now, run_keys):
+    # —— 服务商账号：绑定与归属 ——
+
+    def bind_account(self, account, provider, user_id, now):
+        """计分读数第一次带上这个账号时建绑定；账号还没有主人就归这个人（邮箱对得上记 email，否则 first）。
+
+        已经有主人时什么都不改：这个人的 run 重算时自然是 account_elsewhere，主人的 run 不受影响。
+        """
         cursor = self.db.execute(
-            "INSERT OR IGNORE INTO account_bindings(account_hmac, user_id, first_seen_at) VALUES (?, ?, ?)",
-            (account, user_id, now))
+            "INSERT OR IGNORE INTO account_bindings(account_hmac, user_id, first_seen_at, provider, last_seen_at)"
+            " VALUES (?, ?, ?, ?, ?)", (account, user_id, now, provider, now))
         if cursor.rowcount != 1:
             return
-        owners = self.db.execute("SELECT COUNT(*) FROM account_bindings WHERE account_hmac = ?", (account,)).fetchone()[0]
-        if owners > 1:
-            # 新出现争议：所有用这个账号的人（包括之前的用户）的 run 都要重算成 flagged
-            run_keys.update(self.run_keys_for_account(account))
+        via = "email" if self.email_matches(user_id, account, provider) else "first"
+        self.db.execute(
+            "INSERT OR IGNORE INTO account_owners(account_hmac, provider, user_id, via, claimed_at) VALUES (?, ?, ?, ?, ?)",
+            (account, provider, user_id, via, now))
 
-    def run_keys_for_account(self, account):
+    def verified_emails(self, user_id):
+        # 只有已验证的登录邮箱算数（邮箱验证码身份天然已验证，Google 看 email_verified，GitHub 只取已验证的主邮箱）
         rows = self.db.execute(
-            f"SELECT DISTINCT {RUN_KEY_COLUMNS} FROM snapshots WHERE account_hmac = ? AND counted = 1 AND rankable = 1",
-            (account,))
-        return {tuple(row) for row in rows}
+            "SELECT DISTINCT email FROM identities WHERE user_id = ? AND email_verified = 1 AND email IS NOT NULL",
+            (user_id,))
+        return {row[0].strip().lower() for row in rows if row[0] and row[0].strip()}
+
+    def email_hmacs(self, emails, provider):
+        return {self.account_hmac(account_digest(provider, email)) for email in emails}
+
+    def email_matches(self, user_id, account, provider):
+        return account in self.email_hmacs(self.verified_emails(user_id), provider)
+
+    def check_claims(self, user_id, now, run_keys, accounts=None):
+        """用这个人已验证的登录邮箱比对他绑定的账号，对得上就按 email 认领。
+
+        email 胜过 first：账号从别人那里转过来，双方这个账号的 run 都进 run_keys 等着重算；
+        已经是 email 认领的账号不会被抢走。accounts 给了就只看这几个。返回有没有改动。
+        """
+        emails = self.verified_emails(user_id)
+        if not emails:
+            return False
+        expected = {}
+        changed = False
+        rows = self.db.execute(
+            "SELECT b.account_hmac, b.provider, o.user_id AS owner, o.via FROM account_bindings b"
+            " LEFT JOIN account_owners o ON o.account_hmac = b.account_hmac WHERE b.user_id = ?"
+            " ORDER BY b.first_seen_at, b.account_hmac", (user_id,)).fetchall()
+        for row in rows:
+            account, provider = row["account_hmac"], row["provider"]
+            if accounts is not None and account not in accounts:
+                continue
+            if provider not in expected:
+                expected[provider] = self.email_hmacs(emails, provider)
+            if account not in expected[provider] or row["via"] == "email":
+                continue
+            if row["owner"] is None:
+                self.db.execute(
+                    "INSERT INTO account_owners(account_hmac, provider, user_id, via, claimed_at)"
+                    " VALUES (?, ?, ?, 'email', ?)", (account, provider, user_id, now))
+            else:
+                self.db.execute("UPDATE account_owners SET user_id = ?, via = 'email', claimed_at = ? WHERE account_hmac = ?",
+                                (user_id, now, account))
+                if row["owner"] != user_id:
+                    run_keys.update(self.run_keys_for_account(account, row["owner"]))
+            run_keys.update(self.run_keys_for_account(account, user_id))
+            changed = True
+        if changed:
+            self._cache.clear()
+        return changed
+
+    def recheck_claims(self, user_id, now):
+        """登录身份新增、关联、验证或注册完成时调用：认领后立即重算受影响的 run。"""
+        run_keys = set()
+        if self.check_claims(user_id, now, run_keys):
+            for key in run_keys:
+                self.recompute_run(key, now)
+
+    def assign_next_owner(self, account, provider, now, run_keys):
+        """主人解绑或删号后，账号交给剩下绑定过它的人：邮箱对得上的优先（按 email），
+        否则按最早上传的（first）。没人绑定就不再有主人。"""
+        binders = [row[0] for row in self.db.execute(
+            "SELECT user_id FROM account_bindings WHERE account_hmac = ? ORDER BY first_seen_at, user_id", (account,))]
+        if not binders:
+            return
+        claimant = next((user for user in binders if self.email_matches(user, account, provider)), None)
+        owner = claimant if claimant is not None else binders[0]
+        self.db.execute(
+            "INSERT OR REPLACE INTO account_owners(account_hmac, provider, user_id, via, claimed_at) VALUES (?, ?, ?, ?, ?)",
+            (account, provider, owner, "email" if claimant is not None else "first", now))
+        run_keys.update(self.run_keys_for_account(account, owner))
+        self._cache.clear()
+
+    def run_keys_for_account(self, account, user_id=None):
+        sql = f"SELECT DISTINCT {RUN_KEY_COLUMNS} FROM snapshots WHERE account_hmac = ? AND counted = 1 AND rankable = 1"
+        params = (account,)
+        if user_id is not None:
+            sql += " AND user_id = ?"
+            params = (account, user_id)
+        return {tuple(row) for row in self.db.execute(sql, params)}
+
+    def provider_accounts_payload(self, user_id, accounts=None):
+        """这个人绑定的服务商账号，{account_hmac: providerAccount}，按最早上传排序。"""
+        runs = dict(self.db.execute(
+            "SELECT s.account_hmac, COUNT(DISTINCT r.id) FROM runs r JOIN snapshots s"
+            " ON s.user_id = r.user_id AND s.provider = r.provider AND s.plan_norm = r.plan_norm"
+            " AND s.window_key = r.window_key AND s.resets_bucket = r.resets_bucket"
+            f" WHERE r.user_id = ? AND r.tier IN {PUBLIC_TIERS} AND s.counted = 1 AND s.rankable = 1"
+            " AND s.account_hmac IS NOT NULL GROUP BY s.account_hmac", (user_id,)).fetchall())
+        rows = self.db.execute(
+            "SELECT b.account_hmac, b.provider, b.first_seen_at, b.last_seen_at, o.user_id AS owner, o.via"
+            " FROM account_bindings b LEFT JOIN account_owners o ON o.account_hmac = b.account_hmac"
+            " WHERE b.user_id = ? ORDER BY b.first_seen_at, b.account_hmac", (user_id,))
+        result = {}
+        for row in rows:
+            if accounts is not None and row["account_hmac"] not in accounts:
+                continue
+            owned = row["owner"] == user_id
+            result[row["account_hmac"]] = {
+                "id": row["account_hmac"][:16], "provider": row["provider"],
+                "firstSeenAt": row["first_seen_at"], "lastSeenAt": row["last_seen_at"],
+                "status": "owned" if owned else "elsewhere",
+                "verifiedByEmail": owned and row["via"] == "email",
+                "runs": runs.get(row["account_hmac"], 0),
+            }
+        return result
+
+    def lookup_accounts(self, request):
+        # 只收设备签名：摘要只有应用算得出来，网页没有
+        device = self.authenticate(request)
+        self.take_token("lookup:device:" + device["id"], "lookup")
+        body = parse_json_object(request.body)
+        digests = body.get("digests")
+        if (not isinstance(digests, list) or len(digests) > MAX_LOOKUP_DIGESTS
+                or not all(isinstance(d, str) and DIGEST_RE.fullmatch(d) for d in digests)):
+            raise ApiError(400, "invalid_digests",
+                           f"digests is a list of at most {MAX_LOOKUP_DIGESTS} lower-case hex SHA-256 digests.")
+        hmacs = [self.account_hmac(digest) for digest in digests]
+        accounts = self.provider_accounts_payload(device["user_id"], set(hmacs))
+        return {"accounts": [{"digest": digest, "account": accounts.get(account)}
+                             for digest, account in zip(digests, hmacs)]}
+
+    def delete_provider_account(self, account_id, actor):
+        """解绑：删掉这个人这个账号的读数和 run 以及绑定；他是主人的话，账号交给下一个上传过它的人。"""
+        if not PROVIDER_ACCOUNT_ID_RE.fullmatch(account_id):
+            raise ApiError(404, "account_not_found", "No such provider account on this account.")
+        user_id = actor.user_id
+        now = self.now()
+        with self.transaction():
+            rows = self.db.execute(
+                "SELECT b.account_hmac, b.provider, o.user_id AS owner FROM account_bindings b"
+                " LEFT JOIN account_owners o ON o.account_hmac = b.account_hmac"
+                " WHERE b.user_id = ? AND substr(b.account_hmac, 1, 16) = ?", (user_id, account_id)).fetchall()
+            if not rows:
+                raise ApiError(404, "account_not_found", "No such provider account on this account.")
+            run_keys = set()
+            for row in rows:
+                account = row["account_hmac"]
+                # 一条 run 里混着别的账号的读数时，只删这个账号的读数，run 按剩下的重算
+                run_keys.update(tuple(r) for r in self.db.execute(
+                    f"SELECT DISTINCT {RUN_KEY_COLUMNS} FROM snapshots WHERE user_id = ? AND account_hmac = ?"
+                    " AND resets_bucket IS NOT NULL", (user_id, account)))
+                self.db.execute("DELETE FROM snapshots WHERE user_id = ? AND account_hmac = ?", (user_id, account))
+                self.db.execute("DELETE FROM account_bindings WHERE user_id = ? AND account_hmac = ?", (user_id, account))
+                if row["owner"] == user_id:
+                    self.db.execute("DELETE FROM account_owners WHERE account_hmac = ?", (account,))
+                    self.assign_next_owner(account, row["provider"], now, run_keys)
+            for key in run_keys:
+                self.recompute_run(key, now)
+        self._cache.clear()
+        return {"providerAccounts": list(self.provider_accounts_payload(user_id).values())}
 
     def recompute_run(self, key, now):
         user_id, provider, plan_norm, window_key, _ = key
@@ -1973,14 +2208,17 @@ class RunService:
         summary = summarize_run([(row["observed_at"], row["used_percent"]) for row in rows], window_start)
 
         accounts = {row["account_hmac"] for row in rows}
-        bound = len(accounts) == 1 and None not in accounts
+        no_account = None in accounts
         known = [account for account in accounts if account]
-        disputed = False
+        owners = {}
         if known:
             marks = ",".join("?" * len(known))
-            disputed = self.db.execute(
-                f"SELECT 1 FROM account_bindings WHERE account_hmac IN ({marks}) AND user_id != ? LIMIT 1",
-                (*known, user_id)).fetchone() is not None
+            owners = {row[0]: (row[1], row[2]) for row in self.db.execute(
+                f"SELECT account_hmac, user_id, via FROM account_owners WHERE account_hmac IN ({marks})", known)}
+        # 规则 1：每条读数的账号都归这个人；有一个归了别人就是 account_elsewhere
+        elsewhere = any(account in owners and owners[account][0] != user_id for account in known)
+        owned = not no_account and all(owners.get(account, (None,))[0] == user_id for account in known)
+        account_verified = owned and all(owners[account][1] == "email" for account in known)
         active = True
         if provider in ACTIVITY_REQUIRED:
             # 活动按分钟取整：与第一条读数所在分钟有重叠的那一分钟也算
@@ -1994,21 +2232,26 @@ class RunService:
             reasons.append("drop")
         if not summary["plausible"]:
             reasons.append("jump")
-        if disputed:
-            reasons.append("disputed")
+        if elsewhere:
+            reasons.append("account_elsewhere")
         if reasons:
             tier = "flagged"
-        elif bound and summary["covered"] and active:
+        elif no_account:
+            tier = "unranked"
+        elif owned and summary["covered"] and active:
             tier = "verified"
         else:
             tier = "standard"
+        if no_account:
+            reasons.append("no_account")
         plan_label = next((row["plan"] for row in reversed(rows) if row["plan"]), None)
         window_title = next((row["window_title"] for row in reversed(rows) if row["window_title"]), None)
         self.db.execute(
             "INSERT INTO runs(user_id, provider, plan_norm, plan_label, window_key, window_seconds, window_title,"
             " resets_bucket, resets_at, window_start, season, peak_percent, peak_at, seconds_to_50, seconds_to_90,"
-            " seconds_to_100, completed_at, first_observed_at, last_observed_at, readings, tier, flag_reason, updated_at)"
-            " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+            " seconds_to_100, completed_at, first_observed_at, last_observed_at, readings, tier, flag_reason,"
+            " account_verified, updated_at)"
+            " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
             " ON CONFLICT(user_id, provider, plan_norm, window_key, resets_bucket) DO UPDATE SET"
             " plan_label = excluded.plan_label, window_seconds = excluded.window_seconds,"
             " window_title = excluded.window_title, resets_at = excluded.resets_at,"
@@ -2018,12 +2261,12 @@ class RunService:
             " seconds_to_100 = excluded.seconds_to_100, completed_at = excluded.completed_at,"
             " first_observed_at = excluded.first_observed_at, last_observed_at = excluded.last_observed_at,"
             " readings = excluded.readings, tier = excluded.tier, flag_reason = excluded.flag_reason,"
-            " updated_at = excluded.updated_at",
+            " account_verified = excluded.account_verified, updated_at = excluded.updated_at",
             (user_id, provider, plan_norm, plan_label, window_key, window_seconds, window_title, key[4], resets_at,
              window_start, season_of(window_start), summary["peak_percent"], summary["peak_at"],
              summary["seconds_to_50"], summary["seconds_to_90"], summary["seconds_to_100"], summary["completed_at"],
              summary["first_observed_at"], summary["last_observed_at"], len(rows), tier,
-             ",".join(reasons) or None, now))
+             ",".join(reasons) or None, int(account_verified), now))
 
     # —— 个人资料与项目 ——
 
@@ -2114,13 +2357,14 @@ class RunService:
             "lastUploadAt": user["last_upload_at"],
             "projects": self.projects_payload(user["id"]),
             "identities": self.identities_payload(user["id"]),
+            "providerAccounts": list(self.provider_accounts_payload(user["id"]).values()),
         }
 
     def stats(self):
         users = self.db.execute("SELECT COUNT(*) FROM users").fetchone()[0]
         row = self.db.execute(
             "SELECT COUNT(*), COALESCE(SUM(tier = 'verified'), 0), COUNT(DISTINCT provider)"
-            " FROM runs WHERE tier != 'flagged'").fetchone()
+            f" FROM runs WHERE tier IN {PUBLIC_TIERS}").fetchone()
         return {"users": users, "runs": row[0], "verifiedRuns": row[1], "providers": row[2], "updatedAt": self.now()}
 
     def parse_season(self, value):
@@ -2140,7 +2384,7 @@ class RunService:
     def boards(self, query):
         season = self.parse_season(query.get("season"))
         region = parse_region(query.get("region"))
-        where, params = ["r.tier != 'flagged'"], []
+        where, params = [f"r.tier IN {PUBLIC_TIERS}"], []
         if season != "all":
             where.append("r.season = ?")
             params.append(season)
@@ -2161,7 +2405,7 @@ class RunService:
         } for row in rows]}
 
     def board_meta(self, provider, plan_norm, window_key, season, region):
-        where = ["r.provider = ?", "r.plan_norm = ?", "r.window_key = ?", "r.tier != 'flagged'"]
+        where = ["r.provider = ?", "r.plan_norm = ?", "r.window_key = ?", f"r.tier IN {PUBLIC_TIERS}"]
         params = [provider, plan_norm, window_key]
         if season != "all":
             where.append("r.season = ?")
@@ -2174,7 +2418,7 @@ class RunService:
             params).fetchone()[0]
         label = self.db.execute(
             "SELECT plan_label, window_seconds, window_title FROM runs WHERE provider = ? AND plan_norm = ?"
-            " AND window_key = ? AND tier != 'flagged' ORDER BY last_observed_at DESC LIMIT 1",
+            f" AND window_key = ? AND tier IN {PUBLIC_TIERS} ORDER BY last_observed_at DESC LIMIT 1",
             (provider, plan_norm, window_key)).fetchone()
         return {
             "provider": provider, "plan": plan_norm,
@@ -2193,7 +2437,7 @@ class RunService:
         else:
             inner = "r.peak_percent DESC, COALESCE(r.completed_at, r.last_observed_at) ASC, r.id ASC"
             outer = "peak_percent DESC, COALESCE(completed_at, last_observed_at) ASC, id ASC"
-        where = ["r.provider = ?", "r.plan_norm = ?", "r.window_key = ?", "r.tier != 'flagged'"]
+        where = ["r.provider = ?", "r.plan_norm = ?", "r.window_key = ?", f"r.tier IN {PUBLIC_TIERS}"]
         params = [provider, plan_norm, window_key]
         if metric == "speed":
             where.append("r.seconds_to_100 IS NOT NULL")
@@ -2250,7 +2494,7 @@ class RunService:
         user_id = user["id"]
         bests = []
         boards = self.db.execute(
-            "SELECT DISTINCT provider, plan_norm, window_key FROM runs WHERE user_id = ? AND tier != 'flagged'"
+            f"SELECT DISTINCT provider, plan_norm, window_key FROM runs WHERE user_id = ? AND tier IN {PUBLIC_TIERS}"
             " ORDER BY provider, plan_norm, window_key", (user_id,)).fetchall()
         for board in boards:
             for metric in ("speed", "peak"):
@@ -2268,16 +2512,16 @@ class RunService:
                         "unit": "seconds" if metric == "speed" else "percent",
                         "rank": rank, "runners": runners,
                         "percentile": max(1, math.ceil(rank * 100 / runners)),
-                        "tier": row["tier"], "season": row["season"],
+                        "tier": row["tier"], "accountVerified": bool(row["account_verified"]), "season": row["season"],
                         "achievedAt": row["completed_at"] if metric == "speed" else row["peak_at"],
                     })
                     break
         recent = self.db.execute(
-            "SELECT * FROM runs WHERE user_id = ? AND tier != 'flagged' ORDER BY last_observed_at DESC, id DESC LIMIT 20",
+            f"SELECT * FROM runs WHERE user_id = ? AND tier IN {PUBLIC_TIERS} ORDER BY last_observed_at DESC, id DESC LIMIT 20",
             (user_id,)).fetchall()
         totals = self.db.execute(
             "SELECT COUNT(*), COALESCE(SUM(tier = 'verified'), 0), COUNT(DISTINCT provider)"
-            " FROM runs WHERE user_id = ? AND tier != 'flagged'", (user_id,)).fetchone()
+            f" FROM runs WHERE user_id = ? AND tier IN {PUBLIC_TIERS}", (user_id,)).fetchone()
         active_days = self.db.execute(
             "SELECT COUNT(*) FROM (SELECT minute / 86400 AS day FROM activity WHERE user_id = ? AND counted = 1"
             " AND tokens > 0 UNION SELECT observed_at / 86400 FROM snapshots WHERE user_id = ? AND counted = 1)",
@@ -2320,6 +2564,7 @@ def run_payload(row):
         "peakPercent": row["peak_percent"], "secondsTo50": row["seconds_to_50"], "secondsTo90": row["seconds_to_90"],
         "secondsTo100": row["seconds_to_100"], "completedAt": row["completed_at"],
         "lastObservedAt": row["last_observed_at"], "tier": row["tier"],
+        "accountVerified": bool(row["account_verified"]),
     }
 
 
@@ -2330,6 +2575,7 @@ def entry_payload(rank, row, metric):
         "value": row["seconds_to_100"] if speed else row["peak_percent"],
         "unit": "seconds" if speed else "percent",
         "tier": row["tier"],
+        "accountVerified": bool(row["account_verified"]),
         "achievedAt": row["completed_at"] if speed else row["peak_at"],
         "peakPercent": row["peak_percent"],
     }
