@@ -22,14 +22,16 @@ ROOT="${SITE_ROOT:-/var/www/quota.bar}"
 python3 Scripts/sync_changelog.py ${CHANGELOG_FILE:+--changelog "$CHANGELOG_FILE"}
 
 # 图片也算进去：只换了截图或分享图时，指纹不变的话 CDN 会继续给旧图。
-STAMP="$( { cat web/styles.css web/replica.css web/app.js web/replica.js \
+STAMP="$( { cat web/styles.css web/replica.css web/app.js web/replica.js web/run.css web/run.js \
            | /usr/bin/sed -E 's/\?v=[A-Za-z0-9]+//g'
            find web/assets -type f \( -name '*.png' -o -name '*.jpg' -o -name '*.webp' \) | sort | xargs cat; } \
          | shasum -a 256 | cut -c1-8)"
 echo "内容指纹 v=$STAMP"
 
 # Rewrite every ?v=… in the HTML, and the font URL the stylesheet carries.
-/usr/bin/sed -i '' -E "s/\?v=[A-Za-z0-9]+/?v=$STAMP/g" web/index.html web/changelog.html web/zh/index.html web/zh/changelog.html
+# Quota Run 的排行榜和个人主页（u.html）同样带指纹；run.js 从自己的 ?v= 取 logo 的指纹，不用单独改。
+/usr/bin/sed -i '' -E "s/\?v=[A-Za-z0-9]+/?v=$STAMP/g" web/index.html web/changelog.html web/zh/index.html web/zh/changelog.html \
+  web/leaderboard.html web/zh/leaderboard.html web/u.html web/zh/u.html
 /usr/bin/sed -i '' -E "s/(InstrumentSans-Variable\.ttf)\?v=[A-Za-z0-9]+/\1?v=$STAMP/" web/styles.css
 /usr/bin/sed -i '' -E "s/(wallpaper-[a-z0-9-]+\.webp)\?v=[A-Za-z0-9]+/\1?v=$STAMP/g" web/styles.css
 # replica.js 里的 LOGOV 也要跟上，否则 JS 渲染出的那些 logo 拿的是旧指纹。
@@ -45,7 +47,7 @@ echo "已同步"
 # copy is the failure this script exists to prevent, so it is checked, not
 # assumed.
 fail=0
-for f in styles.css replica.css app.js replica.js; do
+for f in styles.css replica.css app.js replica.js run.css run.js; do
   want=$(stat -f%z "web/$f")
   got=$(curl -s -o /dev/null -w '%{size_download}' --max-time 20 "https://quota.bar/$f?v=$STAMP")
   if [ "$want" = "$got" ]; then
@@ -55,7 +57,7 @@ for f in styles.css replica.css app.js replica.js; do
     fail=1
   fi
 done
-for page in "" zh/; do
+for page in "" zh/ leaderboard.html zh/leaderboard.html u.html zh/u.html; do
   html=$(curl -s --max-time 20 "https://quota.bar/$page" | grep -c "?v=$STAMP" || true)
   [ "$html" -gt 0 ] && printf "  ✅ %-14s 引用 %s 处新指纹\n" "/${page}" "$html" \
                     || { printf "  ❌ %-14s 仍在引用旧指纹\n" "/${page}"; fail=1; }

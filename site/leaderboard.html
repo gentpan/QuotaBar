@@ -1,0 +1,217 @@
+<!doctype html>
+<html lang="{{lang}}">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>[[Quota Run — who hits 100% first · QuotaBar||Quota Run 排行榜 — 谁先把额度用满 · QuotaBar]]</title>
+<meta name="description" content="[[Quota Run is QuotaBar's opt-in leaderboard: how fast builders burn through Codex, Claude and Cursor quota windows, worked out by the server from signed readings.||Quota Run 是 QuotaBar 的自愿排行榜：看大家多快把 Codex、Claude、Cursor 的额度窗口用满。成绩由服务器根据签名读数计算。]]">
+<meta name="theme-color" content="#101112">
+[[<!-- 英文在根目录。浏览器语言是中文、或者之前选过中文的，去 /zh/ 下的同一页（带上查询串，分享出来的榜单不丢）。 -->
+<script>try{var l=localStorage.getItem("qb-lang"),n=navigator.languages&&navigator.languages[0]?navigator.languages[0]:navigator.language;if(l==="zh"?true:!l&&/^zh\b/i.test(String(n)))location.replace("zh/"+location.pathname.split("/").pop()+location.search+location.hash)}catch(e){}</script>
+||]]<link rel="canonical" href="{{url}}leaderboard">
+<link rel="alternate" hreflang="en" href="https://quota.bar/leaderboard">
+<link rel="alternate" hreflang="zh-CN" href="https://quota.bar/zh/leaderboard">
+<link rel="alternate" hreflang="x-default" href="https://quota.bar/leaderboard">
+<meta property="og:title" content="[[Quota Run — who hits 100% first||Quota Run — 谁先把额度用满]]">
+<meta property="og:description" content="[[The opt-in leaderboard for how fast builders burn through their AI coding quota. Track on QuotaBar, compete on Quota Run.||看谁最快把 AI 编码额度烧完的自愿排行榜。QuotaBar 里看额度，Quota Run 上比速度。]]">
+<meta property="og:type" content="website">
+<meta property="og:url" content="{{url}}leaderboard">
+<meta property="og:site_name" content="QuotaBar">
+<meta property="og:locale" content="[[en_US||zh_CN]]">
+<meta property="og:locale:alternate" content="[[zh_CN||en_US]]">
+<meta property="og:image" content="https://quota.bar/assets/[[og.jpg||og-zh.jpg]]?v={{v}}">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="[[Quota Run — who hits 100% first||Quota Run — 谁先把额度用满]]">
+<meta name="twitter:description" content="[[The opt-in leaderboard for how fast builders burn through their AI coding quota.||看谁最快把 AI 编码额度烧完的自愿排行榜。]]">
+<meta name="twitter:image" content="https://quota.bar/assets/[[og.jpg||og-zh.jpg]]?v={{v}}">
+<link rel="icon" type="image/png" sizes="256x256" href="{{root}}assets/icon.png?v={{v}}">
+<link rel="icon" sizes="48x48" href="/favicon.ico?v={{v}}">
+<link rel="apple-touch-icon" sizes="180x180" href="{{root}}assets/apple-touch-icon.png?v={{v}}">
+<link rel="stylesheet" href="{{root}}styles.css?v={{v}}">
+<link rel="stylesheet" href="{{root}}run.css?v={{v}}">
+<!-- 自建统计。defer，不阻塞渲染；跨域脚本不参与本站的 ?v= 指纹。 -->
+<script defer src="https://tongji.giantaccel.com/script.js" data-website-id="8085631e-cc5d-4563-819f-ddd04c1bdcfa"></script>
+</head>
+<body class="logpage runpage" data-run-page="leaderboard">
+<a class="run-skip" href="#board">[[Skip to the leaderboard||跳到排行榜]]</a>
+<header class="logbar">
+  <div class="shell logbar__inner">
+    <a class="logbar__brand wordmark" href="./"><img src="{{root}}assets/icon.png?v={{v}}" alt="" width="22" height="22">QuotaBar</a>
+    <nav class="logbar__links" aria-label="[[Site||站点]]">
+      <a href="./">[[Home||首页]]</a>
+      <a href="leaderboard.html" aria-current="page">[[Leaderboard||排行榜]]</a>
+      <a href="{{dmg}}" download>[[Download||下载]]</a>
+      <a class="run-lang" href="{{other_url}}leaderboard.html" hreflang="[[zh-CN||en]]" lang="[[zh-CN||en]]" data-lang="[[zh||en]]">[[中文||EN]]</a>
+    </nav>
+  </div>
+</header>
+
+<main>
+  <!-- ── 首屏：一句话 + 全站数字 ──────────────────────────────────── -->
+  <section class="shell run-hero">
+    <p class="run-eyebrow"><i aria-hidden="true"></i>Quota Run<span class="run-eyebrow__season" id="runSeason"></span></p>
+    <h1>[[Who hits 100% first||谁先把额度用满]]</h1>
+    <p class="run-hero__sub">[[How fast real builders burn through a Codex week, a Claude five-hour window or a Cursor month — read by QuotaBar on their Mac, worked out by the server, ranked only for people who chose to join.||看真在写代码的人，多快能把 Codex 的一周、Claude 的五小时、Cursor 的一个月烧完。读数来自各自 Mac 上的 QuotaBar，成绩由服务器算，只有主动加入的人才上榜。]]</p>
+    <dl class="run-stats" id="runStats" aria-live="polite">
+      <div><dt>[[Runners||参赛者]]</dt><dd data-stat="users">—</dd></div>
+      <div><dt>[[Runs recorded||记录的轮次]]</dt><dd data-stat="runs">—</dd></div>
+      <div><dt>[[Verified runs||已验证轮次]]</dt><dd data-stat="verifiedRuns">—</dd></div>
+      <div><dt>[[Providers||服务商]]</dt><dd data-stat="providers">—</dd></div>
+    </dl>
+  </section>
+
+  <!-- ── 榜单 ─────────────────────────────────────────────────────── -->
+  <section class="shell run-board" id="board" aria-labelledby="boardHeading">
+    <h2 class="sr-only" id="boardHeading">[[Leaderboard||排行榜]]</h2>
+
+    <div class="run-picker">
+      <p class="run-label" id="boardsLabel">[[Board||榜单]]</p>
+      <div class="run-chips" id="runBoards" role="group" aria-labelledby="boardsLabel" aria-busy="true">
+        <span class="run-chip is-skeleton" aria-hidden="true"></span>
+        <span class="run-chip is-skeleton" aria-hidden="true"></span>
+        <span class="run-chip is-skeleton" aria-hidden="true"></span>
+      </div>
+    </div>
+
+    <form class="run-filters" id="runFilters" onsubmit="return false">
+      <fieldset class="run-seg">
+        <legend class="sr-only">[[Rank by||排名依据]]</legend>
+        <label><input type="radio" name="metric" value="speed" checked><span>[[Fastest to 100%||最快用满]]</span></label>
+        <label><input type="radio" name="metric" value="peak"><span>[[Highest peak||最高峰值]]</span></label>
+      </fieldset>
+      <fieldset class="run-seg">
+        <legend class="sr-only">[[Season||赛季]]</legend>
+        <label><input type="radio" name="season" value="current" checked><span>[[This week||本周]]</span></label>
+        <label><input type="radio" name="season" value="last"><span>[[Last week||上周]]</span></label>
+        <label><input type="radio" name="season" value="all"><span>[[All time||全部]]</span></label>
+      </fieldset>
+      <fieldset class="run-seg">
+        <legend class="sr-only">[[Region||地区]]</legend>
+        <label><input type="radio" name="region" value="" checked><span>[[Everyone||全部地区]]</span></label>
+        <label><input type="radio" name="region" value="global"><span>[[Global||国际]]</span></label>
+        <label><input type="radio" name="region" value="china"><span>[[China||中国]]</span></label>
+      </fieldset>
+      <label class="run-switch">
+        <input type="checkbox" name="verified" role="switch">
+        <span class="run-switch__track" aria-hidden="true"></span>
+        <span>[[Verified only||只看已验证]]</span>
+      </label>
+    </form>
+
+    <div class="run-layout">
+      <div class="run-panel" id="runPanel">
+        <header class="run-panel__head">
+          <div class="run-panel__title" id="runTitle">
+            <span class="run-logo is-skeleton" aria-hidden="true"></span>
+            <div><h3>&nbsp;</h3><p>&nbsp;</p></div>
+          </div>
+          <button class="run-copy" type="button" id="runCopy" data-done="[[Link copied||链接已复制]]">
+            <svg aria-hidden="true" width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6.5 9.5a3 3 0 0 0 4.2 0l2.3-2.3a3 3 0 0 0-4.2-4.2l-.9.9"/><path d="M9.5 6.5a3 3 0 0 0-4.2 0L3 8.8A3 3 0 0 0 7.2 13l.9-.9"/></svg>
+            <span>[[Copy link||复制链接]]</span>
+          </button>
+        </header>
+        <div class="run-panel__body" id="runBody" aria-live="polite" aria-busy="true">
+          <div class="run-loading" role="status"><span class="sr-only">[[Loading the leaderboard…||正在加载排行榜…]]</span>
+            <span class="run-skel"></span><span class="run-skel"></span><span class="run-skel"></span><span class="run-skel"></span><span class="run-skel"></span>
+          </div>
+        </div>
+      </div>
+
+      <aside class="run-aside" aria-label="[[Join Quota Run||加入 Quota Run]]">
+        <div class="run-box run-join">
+          <h3>[[Get on the board||上榜只要三步]]</h3>
+          <ol class="run-steps">
+            <li>[[Install QuotaBar on your Mac.||在 Mac 上装好 QuotaBar。]]</li>
+            <li>[[Open Settings → Quota Run. Your personal records start right away, no account needed.||打开「设置」→「Quota Run」。个人纪录马上开始记，不用注册。]]</li>
+            <li>[[Join when you want a place here: pick a username, read what gets uploaded, agree.||想上榜再加入：起个用户名，看清楚会上传什么，点同意。]]</li>
+          </ol>
+          <a class="btn btn--primary run-join__btn" href="{{dmg}}" download>
+            <svg width="15" height="18" viewBox="0 0 15 18" fill="currentColor" aria-hidden="true"><path d="M12.3 9.5c0-2 1.6-3 1.7-3-1-1.4-2.4-1.6-2.9-1.6-1.2-.1-2.4.7-3 .7-.6 0-1.6-.7-2.6-.7C4.2 5 3 5.7 2.3 7c-1.3 2.3-.3 5.7 1 7.5.6.9 1.4 1.9 2.4 1.9.9 0 1.3-.6 2.4-.6 1.1 0 1.4.6 2.4.6 1 0 1.7-.9 2.3-1.8.7-1 1-2 1-2.1 0 0-2-.8-2-3zM10.4 3.4c.5-.6.9-1.5.8-2.4-.8 0-1.7.5-2.3 1.2-.5.6-.9 1.5-.8 2.4.9.1 1.8-.5 2.3-1.2z"/></svg>
+            [[Download for Mac||下载 for Mac]]
+          </a>
+          <p class="run-join__meta">{{version}} · macOS 14+ · [[Free and open source||免费开源]]</p>
+        </div>
+        <div class="run-box">
+          <h3>[[Two tiers||两种级别]]</h3>
+          <p class="run-tierline"><span class="badge run-tier run-tier--verified">[[Verified||已验证]]</span>[[Readings climbed steadily from 50% or less, with no gap over 20 minutes, and real tokens in the local logs.||读数从 50% 以内一路平稳上升，没有超过 20 分钟的空档，本地日志里确实有 token 在消耗。]]</p>
+          <p class="run-tierline"><span class="badge run-tier run-tier--standard">[[Standard||标准]]</span>[[A believable run that misses one of those checks — joined mid-window, say, or the Mac slept.||读数可信，但少了其中一项——比如窗口过半才加入，或者中途合盖睡了一觉。]]</p>
+        </div>
+      </aside>
+    </div>
+  </section>
+
+  <!-- ── 怎么算、怎么防作弊 ───────────────────────────────────────── -->
+  <section class="shell run-how" id="how" aria-labelledby="howHeading">
+    <div class="run-how__head">
+      <h2 id="howHeading">[[How it works, and how it stays honest||怎么算的，怎么防作弊]]</h2>
+      <p>[[Track on QuotaBar, compete on Quota Run. The short version: nothing leaves your Mac until you say so, and nobody gets to report their own score.||QuotaBar 里看额度，Quota Run 上比速度。一句话：你不点头，什么都不出 Mac；谁也没法自己报成绩。]]</p>
+    </div>
+    <div class="run-how__grid">
+      <article class="run-box">
+        <h3>[[Local first||本地优先]]</h3>
+        <p>[[Personal records need no account. QuotaBar keeps every run on your Mac — fastest to 100%, time to 50% and 90%, highest peak — whether or not you ever join.||个人纪录不用注册。最快用满、用到 50% 和 90% 的时间、最高峰值，QuotaBar 都记在你自己的 Mac 上，加不加入都一样。]]</p>
+      </article>
+      <article class="run-box">
+        <h3>[[Opt-in, in writing||先说清楚，再上传]]</h3>
+        <p>[[Upload stays off until you join, and joining shows exactly what will leave the Mac before anything does. Leave Quota Run and every row about you is deleted from the server.||不加入就不上传。加入时先把会传出去的内容一条条列给你看，同意了才开始。退出 Quota Run，服务器上和你有关的数据全部删除。]]</p>
+      </article>
+      <article class="run-box">
+        <h3>[[Readings, not results||只传读数，不传成绩]]</h3>
+        <p>[[The app sends raw readings; the server works out every run and every rank. A client that claims “100% in two hours” is simply ignored.||应用只上传原始读数，每一轮的成绩和名次都由服务器自己算。客户端声称「两小时用满」，服务器根本不看。]]</p>
+      </article>
+      <article class="run-box run-how__lists">
+        <div>
+          <h3>[[Uploaded after you join||加入后会上传]]</h3>
+          <ul class="run-list run-list--yes">
+            <li>[[Provider and plan name||服务商和套餐名]]</li>
+            <li>[[Used percent, reset time and reading time for each window||每个额度窗口的已用百分比、重置时间、读取时间]]</li>
+            <li>[[The window's length and scope||窗口的长度和范围]]</li>
+            <li>[[A one-way digest of the provider account, never the email||服务商账号的单向摘要，不是邮箱本身]]</li>
+            <li>[[Tokens per minute from local CLI logs — counts only||本地 CLI 日志里每分钟的 token 数，只有数字]]</li>
+          </ul>
+        </div>
+        <div>
+          <h3>[[Never uploaded||绝不上传]]</h3>
+          <ul class="run-list run-list--no">
+            <li>[[Credentials, tokens, cookies, API keys||凭据、令牌、Cookie、API Key]]</li>
+            <li>[[Prompts, code, model outputs||提示词、代码、模型的输出]]</li>
+            <li>[[File and project paths||文件和项目路径]]</li>
+            <li>[[Your account email in the clear||明文的账号邮箱]]</li>
+          </ul>
+        </div>
+      </article>
+      <article class="run-box">
+        <h3>[[One ranked Mac||只认一台 Mac]]</h3>
+        <p>[[Each Mac signs its readings with a key that never leaves it, and an account ranks readings from one Mac only. Moving the ranking to another Mac waits seven days, and a provider account can belong to one runner.||每台 Mac 用一把不出本机的密钥给读数签名，一个账号只计其中一台的读数。换一台计分的 Mac 要等 7 天；同一个服务商账号只能归一个人。]]</p>
+      </article>
+      <article class="run-box">
+        <h3>[[Checked, then tiered||先核对，再分级]]</h3>
+        <p>[[Readings have to rise steadily and plausibly. Runs with a gap, or a late start, count as Standard; readings that drop or leap, or an account seen under two runners, are held back for review and never shown.||读数得平稳、合理地往上走。有空档或者开始得晚的算「标准」；读数往回掉、突然猛跳，或者同一个账号出现在两个人名下，先扣下来复核，不上榜也不上主页。]]</p>
+      </article>
+      <article class="run-box">
+        <h3>[[No prizes||没有奖品]]</h3>
+        <p>[[No money, no rewards. A desktop client can't be made impossible to cheat, only expensive and visible — so all there is to win is the bragging and a profile to show what you built.||不发钱，不发奖。桌面客户端做不到无法作弊，只能让作弊又费劲又显眼。能赢的只有面子，和一个展示你做了什么的主页。]]</p>
+      </article>
+    </div>
+  </section>
+</main>
+
+<footer class="footer">
+  <div class="shell">
+    <div class="footer__links">
+      <a href="./">[[Home||首页]]</a>
+      <a href="{{dmg}}" download>[[Download||下载]]</a>
+      <a href="changelog.html">[[Changelog||更新日志]]</a>
+      <a href="https://github.com/gentpan/QuotaBar">[[Source||源码]]</a>
+    </div>
+    <p class="footer__fine">© 2026 QuotaBar · <a href="https://github.com/gentpan/QuotaBar/blob/main/LICENSE">[[MIT License||MIT 许可证]]</a> · [[Quota Run is independent of every provider shown; logos belong to their owners.||Quota Run 与榜上任何服务商均无关联，标志归各自所有者。]]</p>
+  </div>
+</footer>
+
+<script type="application/json" id="run-providers">{{run_providers}}</script>
+<script src="{{root}}app.js?v={{v}}"></script>
+<script src="{{root}}run.js?v={{v}}"></script>
+</body>
+</html>

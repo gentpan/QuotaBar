@@ -10,7 +10,12 @@ web/
   changelog.html   英文更新日志，来自 CHANGELOG.en.md（生成）
   zh/index.html    中文首页（生成）
   zh/changelog.html 中文更新日志，来自 CHANGELOG.md（生成）
+  leaderboard.html zh/leaderboard.html   Quota Run 排行榜，模板 site/leaderboard.html（生成）
+  u.html           zh/u.html             Quota Run 个人主页，模板 site/u.html（生成）；
+                   Caddy 把 /@username、/zh/@username 改写到这里
   styles.css  replica.css  app.js  replica.js    两种语言共用；脚本按 <html lang> 取文案
+  run.css  run.js  两个 Quota Run 页面共用：读同源的 /api/run/v1（契约见 docs/quota-run.md），
+                   页面加 ?demo=1 用内置示例数据，不发请求
   assets/          真机截图（settings.png / settings-zh.png）、分享图（og.jpg / og-zh.jpg）、
                    应用图标、服务商 logo、Instrument Sans 字体
 ```
@@ -22,6 +27,9 @@ web/
 ```bash
 python3 -m http.server 8080 --directory web   # 然后打开 http://localhost:8080/ 与 /zh/
 ```
+
+Quota Run 两页在本地没有接口，用示例数据看：`/leaderboard.html?demo=1`、
+`/u.html?user=peter&demo=1`（本地预览时个人主页链接自动走 `u.html?user=`，不走 `/@username`）。
 
 ## 关于视觉
 

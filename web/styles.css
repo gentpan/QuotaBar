@@ -783,7 +783,7 @@ section { position: relative; }
 /* ── Footer ─────────────────────────────────────────────────────────── */
 .footer { border-top: 1px solid var(--line); padding-block: var(--s-16) var(--s-12); text-align: center; }
 .footer__icon { width: 34px; height: 34px; margin: 0 auto var(--s-6); border-radius: var(--r-md); }
-.footer__links { display: flex; justify-content: center; gap: var(--s-6); font-size: 14px; color: var(--body); }
+.footer__links { display: flex; flex-wrap: wrap; justify-content: center; gap: var(--s-2) var(--s-6); font-size: 14px; color: var(--body); }
 .footer__links a:hover { color: #fff; }
 .footer__fine { margin-top: var(--s-6); font-size: 12px; line-height: 1.7; color: var(--muted); }
 

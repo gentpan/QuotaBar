@@ -11,7 +11,9 @@ From CHANGELOG.md (Chinese), CHANGELOG.en.md (English) and `git log`:
   site/index.html is the template — every piece of copy is written there as
   [[English||中文]] — and becomes web/index.html and web/zh/index.html, with the
   recent-updates block and the provider strip filled in; web/changelog.html and
-  web/zh/changelog.html are the whole log as a page;
+  web/zh/changelog.html are the whole log as a page; site/leaderboard.html and
+  site/u.html (Quota Run's leaderboard and public profile, drawn by web/run.js
+  from the public API) become the same pair of pages under the same rules;
 - Assets/readme/activity.svg and activity.zh.svg, 26 weeks of commits;
 - the provider strip, provider count and download links, from ProviderID in
   Sources/QuotaCore/Models.swift, the app's logos and the latest release.
@@ -22,6 +24,7 @@ Standard library only, so it runs on a stock Mac and in CI.
 
 import datetime
 import html
+import json
 import math
 import pathlib
 import re
@@ -367,7 +370,7 @@ def site_page(intro, releases, lang, v, analytics):
     return "\n".join(out)
 
 
-def render_template(template, lang, values):
+def render_template(template, lang, values, source="site/index.html"):
     """[[English||中文]] picks a side, then {{name}} fills in a value.
 
     A block holds exactly one ||: a script inside one has to do without the
@@ -376,19 +379,19 @@ def render_template(template, lang, values):
         body = match.group(1)
         if body.count("||") != 1:
             line = template[:match.start()].count("\n") + 1
-            raise SystemExit(f"site/index.html:{line}: a [[…||…]] block needs exactly one ||")
+            raise SystemExit(f"{source}:{line}: a [[…||…]] block needs exactly one ||")
         en, zh = body.split("||")
         return en if lang == "en" else zh
     text = re.sub(r"\[\[((?:(?!\[\[|\]\]).)*)\]\]", choose, template, flags=re.S)
     for leftover in ("[[", "]]"):
         if leftover in text:
             line = text[:text.index(leftover)].count("\n") + 1
-            raise SystemExit(f"site/index.html: unbalanced {leftover} (line {line} of the {lang} page)")
+            raise SystemExit(f"{source}: unbalanced {leftover} (line {line} of the {lang} page)")
 
     def fill(match):
         name = match.group(1)
         if name not in values:
-            raise SystemExit(f"site/index.html: no value for {{{{{name}}}}}")
+            raise SystemExit(f"{source}: no value for {{{{{name}}}}}")
         return str(values[name])
     return re.sub(r"\{\{(\w+)\}\}", fill, text)
 
@@ -587,6 +590,12 @@ def site_providers(logos, count, lang, v):
     ])
 
 
+def run_providers(logos):
+    """Provider names and logo tones for web/run.js, as JSON that is safe inside <script>."""
+    table = {raw: {"en": en, "zh": zh, "tone": tone.strip().removeprefix("is-")} for raw, en, zh, tone in logos}
+    return json.dumps(table, ensure_ascii=False, separators=(",", ":")).replace("<", "\\u003c")
+
+
 def write_if_changed(path, content):
     path.parent.mkdir(parents=True, exist_ok=True)
     if path.exists() and path.read_text(encoding="utf-8") == content:
@@ -621,6 +630,9 @@ def main():
     analytics = re.search(r'<script defer src="https://tongji[^"]*"[^>]*></script>', template)
     logos = copy_logos()
     count = len(providers())
+    # Quota Run: the leaderboard and the public profile (u.html, which Caddy
+    # serves for /@username), built from their templates like the home page.
+    run_pages = {name: (ROOT / "site" / name).read_text(encoding="utf-8") for name in ("leaderboard.html", "u.html")}
     latest = latest_release(releases_zh)
     version = latest["version"] if latest else "0.0.0"
     for lang, intro, releases in (("en", intro_en, releases_en), ("zh", intro_zh, releases_zh)):
@@ -639,6 +651,14 @@ def main():
         out = ROOT / "web" / info["dir"] / "changelog.html"
         if write_if_changed(out, site_page(intro, releases, lang, f"?v={stamp}", analytics.group(0) if analytics else None)):
             changed.append(str(out.relative_to(ROOT)))
+        for name, source in run_pages.items():
+            page = render_template(source, lang, dict(values, run_providers=run_providers(logos)), f"site/{name}")
+            note = (f"<!-- Built from site/{name} by Scripts/sync_changelog.py: edit the template, not this file. -->"
+                    if lang == "en" else f"<!-- 由 Scripts/sync_changelog.py 从 site/{name} 生成：改模板，不要改这个文件。 -->")
+            page = page.replace("<!doctype html>\n", f"<!doctype html>\n{note}\n", 1)
+            out = ROOT / "web" / info["dir"] / name
+            if write_if_changed(out, page):
+                changed.append(str(out.relative_to(ROOT)))
     # The calendar runs through yesterday: a finished day does not change, so
     # running this again after today's commits leaves the chart alone rather
     # than redrawing it with every commit that records the redraw.

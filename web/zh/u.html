@@ -1,0 +1,73 @@
+<!doctype html>
+<!-- 由 Scripts/sync_changelog.py 从 site/u.html 生成：改模板，不要改这个文件。 -->
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Quota Run 个人主页 · QuotaBar</title>
+<meta name="description" content="一位开发者的 Quota Run 主页：各个额度榜单上的最好成绩、最近几轮，以及正在做的项目。">
+<meta name="theme-color" content="#101112">
+<!-- 同一个文件服务所有用户：canonical 与 hreflang 由 run.js 按用户名补上 -->
+<meta property="og:title" content="Quota Run 个人主页">
+<meta property="og:description" content="Quota Run 上的最好成绩、最近几轮和项目。Quota Run 是 QuotaBar 的自愿排行榜。">
+<meta property="og:type" content="profile">
+<meta property="og:site_name" content="QuotaBar">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:locale:alternate" content="en_US">
+<meta property="og:image" content="https://quota.bar/assets/og-zh.jpg?v=e7c60b14">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:image" content="https://quota.bar/assets/og-zh.jpg?v=e7c60b14">
+<link rel="icon" type="image/png" sizes="256x256" href="../assets/icon.png?v=e7c60b14">
+<link rel="icon" sizes="48x48" href="/favicon.ico?v=e7c60b14">
+<link rel="apple-touch-icon" sizes="180x180" href="../assets/apple-touch-icon.png?v=e7c60b14">
+<link rel="stylesheet" href="../styles.css?v=e7c60b14">
+<link rel="stylesheet" href="../run.css?v=e7c60b14">
+<!-- 自建统计。defer，不阻塞渲染；跨域脚本不参与本站的 ?v= 指纹。 -->
+<script defer src="https://tongji.giantaccel.com/script.js" data-website-id="8085631e-cc5d-4563-819f-ddd04c1bdcfa"></script>
+</head>
+<body class="logpage runpage" data-run-page="profile">
+<a class="run-skip" href="#profile">跳到主页内容</a>
+<header class="logbar">
+  <div class="shell logbar__inner">
+    <a class="logbar__brand wordmark" href="./"><img src="../assets/icon.png?v=e7c60b14" alt="" width="22" height="22">QuotaBar</a>
+    <nav class="logbar__links" aria-label="站点">
+      <a href="./">首页</a>
+      <a href="leaderboard.html">排行榜</a>
+      <a href="https://quota.bar/download/QuotaBar-0.5.3.dmg" download>下载</a>
+      <a class="run-lang" href="../u.html" hreflang="en" lang="en" data-lang="en">EN</a>
+    </nav>
+  </div>
+</header>
+
+<main class="shell run-profile" id="profile" aria-live="polite" aria-busy="true">
+  <!-- run.js 按 /@username（或 ?user=）读 /api/run/v1/users/<username>，把整页画在这里。
+       没跑 JS 时留下这一段加载骨架和下面的说明。 -->
+  <div class="run-loading run-loading--profile" role="status">
+    <span class="sr-only">正在加载主页…</span>
+    <span class="run-skel run-skel--avatar"></span>
+    <span class="run-skel run-skel--title"></span>
+    <span class="run-skel"></span>
+    <span class="run-skel"></span>
+  </div>
+  <noscript><p class="run-note">这个主页的内容来自 Quota Run 的公开接口，需要开启 JavaScript。</p></noscript>
+</main>
+
+<footer class="footer">
+  <div class="shell">
+    <div class="footer__links">
+      <a href="./">首页</a>
+      <a href="leaderboard.html">排行榜</a>
+      <a href="https://quota.bar/download/QuotaBar-0.5.3.dmg" download>下载</a>
+      <a href="https://github.com/gentpan/QuotaBar">源码</a>
+    </div>
+    <p class="footer__fine">© 2026 QuotaBar · <a href="https://github.com/gentpan/QuotaBar/blob/main/LICENSE">MIT 许可证</a> · 主页内容由本人填写；Quota Run 与页面上任何服务商均无关联。</p>
+  </div>
+</footer>
+
+<script type="application/json" id="run-providers">{"codex":{"en":"Codex","zh":"Codex","tone":"mono"},"claude":{"en":"Claude","zh":"Claude","tone":""},"cursor":{"en":"Cursor","zh":"Cursor","tone":"mono"},"kimi":{"en":"Kimi Code","zh":"Kimi Code","tone":""},"zai":{"en":"z.ai","zh":"z.ai","tone":"mono"},"opencode-go":{"en":"OpenCode Go","zh":"OpenCode Go","tone":"mono"},"minimax":{"en":"MiniMax","zh":"MiniMax","tone":""},"gemini":{"en":"Gemini","zh":"Gemini","tone":""},"manus":{"en":"Manus","zh":"Manus","tone":"mono"},"deepseek":{"en":"DeepSeek","zh":"DeepSeek","tone":""},"grok":{"en":"Grok","zh":"Grok","tone":"mono"},"antigravity":{"en":"Antigravity","zh":"Antigravity","tone":""},"qwen":{"en":"Qwen Cloud","zh":"Qwen Cloud","tone":"mono"},"alibaba":{"en":"Alibaba Coding Plan","zh":"阿里云百炼","tone":""},"volcengine":{"en":"Volcengine Ark","zh":"火山方舟","tone":""},"zhipu":{"en":"Zhipu GLM","zh":"智谱 GLM","tone":""},"moonshot":{"en":"Moonshot API","zh":"Kimi 开放平台","tone":"mono"},"copilot":{"en":"GitHub Copilot","zh":"GitHub Copilot","tone":"mono"},"openrouter":{"en":"OpenRouter","zh":"OpenRouter","tone":"mono"},"mimo":{"en":"Xiaomi MiMo","zh":"小米 MiMo","tone":""},"qoder":{"en":"Qoder","zh":"Qoder","tone":"dark"},"windsurf":{"en":"Windsurf","zh":"Windsurf","tone":"mono"},"kiro":{"en":"Kiro","zh":"Kiro","tone":""}}</script>
+<script src="../app.js?v=e7c60b14"></script>
+<script src="../run.js?v=e7c60b14"></script>
+</body>
+</html>
