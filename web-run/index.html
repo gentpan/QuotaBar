@@ -150,7 +150,7 @@
         <section class="view" id="view-track" role="tabpanel" aria-labelledby="tab-track" hidden></section>
         <section class="view" id="view-compare" role="tabpanel" aria-labelledby="tab-compare" hidden></section>
         <section class="view" id="view-providers" role="tabpanel" aria-labelledby="tab-providers" hidden>
-          <p class="prov__intro">Plans have windows of different lengths, so they're lined up by how much of the window had passed when people hit 100%. The further left, the sooner the quota runs out.</p>
+          <p class="prov__intro" id="provIntro" data-time="On a real time scale from one hour to a month, each plan is drawn against its own window, marked with a dashed line. The further left, the sooner the quota runs out.">Plans have windows of different lengths, so they're lined up by how much of the window had passed when people hit 100%. The further left, the sooner the quota runs out.</p>
           <div id="provBody"></div>
         </section>
 
@@ -169,7 +169,7 @@
 
       <!-- ── 一个榜单都没有：说明 Quota Run 是什么、怎么加入 ─────────── -->
       <section class="join" id="joinPanel" aria-labelledby="joinTitle" hidden>
-        <p class="eyebrow"><span class="eyebrow__dot" aria-hidden="true"></span>Quota Run · <span class="mono" id="joinSeason"></span></p>
+        <p class="eyebrow"><span class="eyebrow__dot" aria-hidden="true"></span><span>Quota Run</span><span aria-hidden="true">·</span><span class="mono" id="joinSeason"></span></p>
         <h1 class="join__title" id="joinTitle">Who hits 100% first?</h1>
         <p class="join__lede">Quota Run is QuotaBar's opt-in leaderboard: how fast real builders use up a Codex week, a Claude five-hour window or a Cursor month. The boards are empty this week — the first full window takes first place.</p>
         <ol class="steps">

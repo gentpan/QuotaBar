@@ -148,7 +148,7 @@
         <section class="view" id="view-track" role="tabpanel" aria-labelledby="tab-track" hidden></section>
         <section class="view" id="view-compare" role="tabpanel" aria-labelledby="tab-compare" hidden></section>
         <section class="view" id="view-providers" role="tabpanel" aria-labelledby="tab-providers" hidden>
-          <p class="prov__intro">不同套餐的窗口长短不一，按「用满时窗口已过去多少」放在一起比：越靠左，额度越不经用。</p>
+          <p class="prov__intro" id="provIntro" data-time="换成真实时长（从一小时到一个月）来看，每个套餐旁的虚线是它自己的窗口长度。越靠左，额度越快用完。">不同套餐的窗口长短不一，按「用满时窗口已过去多少」放在一起比：越靠左，额度越不经用。</p>
           <div id="provBody"></div>
         </section>
 
@@ -167,7 +167,7 @@
 
       <!-- ── 一个榜单都没有：说明 Quota Run 是什么、怎么加入 ─────────── -->
       <section class="join" id="joinPanel" aria-labelledby="joinTitle" hidden>
-        <p class="eyebrow"><span class="eyebrow__dot" aria-hidden="true"></span>Quota Run · <span class="mono" id="joinSeason"></span></p>
+        <p class="eyebrow"><span class="eyebrow__dot" aria-hidden="true"></span><span>Quota Run</span><span aria-hidden="true">·</span><span class="mono" id="joinSeason"></span></p>
         <h1 class="join__title" id="joinTitle">谁先把额度用满？</h1>
         <p class="join__lede">Quota Run 是 QuotaBar 的自愿排行榜：看真在写代码的人，多快用完 Codex 的一周、Claude 的五小时、Cursor 的一个月。本周的榜单还空着，谁先跑完一个窗口，谁就是第一。</p>
         <ol class="steps">

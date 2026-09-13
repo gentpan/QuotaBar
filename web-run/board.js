@@ -38,7 +38,7 @@
   var me = null;            // 登录着的用户名
   var boards = null;        // /boards
   var data = null;          // 当前榜单的 /leaderboard
-  var scale = "share";      // 服务商视图：按窗口占比 / 按实际时长
+  var scale = new URLSearchParams(location.search).get("scale") === "time" ? "time" : "share";   // 服务商视图：按窗口占比 / 按实际时长
   var expanded = { sheet: false, track: false };
   var seq = 0;
   var cache = {};
@@ -82,6 +82,7 @@
       region: state.region,
       tier: state.verified ? "verified" : "",
       compare: state.compare.join(","),
+      scale: state.view === "providers" && scale === "time" ? "time" : "",
     }, extra || {});
   }
 
@@ -183,7 +184,7 @@
     var d = valueOf(e) - valueOf(first);
     if (state.metric === "peak") {
       var pts = Math.round(Math.abs(d) * 10) / 10;
-      return pts ? (d < 0 ? "−" : "+") + pts + t(" pts", " 个点") : "0";
+      return pts ? (d < 0 ? "−" : "+") + pts + t(" pts", " 个点") : "±0";
     }
     return Q.gap(d, withSeconds);
   }
@@ -208,7 +209,7 @@
       '<a class="who__link" href="' + esc(Q.profileHref(e.username)) + '">' + Q.avatar(e) +
       '<span class="who__name">' + esc(e.displayName || e.username) + "</span>" +
       (extraClass === "who--row" ? '<span class="who__handle">@' + esc(e.username) + "</span>" : "") + "</a>" +
-      Q.accountMark(e.accountVerified) + (e.username === me ? you() : "") + "</div>";
+      (extraClass === "who--lane" ? "" : Q.accountMark(e.accountVerified)) + (e.username === me ? you() : "") + "</div>";
   }
 
   /* ── 左栏 ─────────────────────────────────────────────────────────── */
@@ -891,6 +892,9 @@
       return;
     }
     var time = scale === "time";
+    var intro = $("provIntro");
+    if (!intro.hasAttribute("data-share")) intro.setAttribute("data-share", intro.textContent);
+    intro.textContent = intro.getAttribute(time ? "data-time" : "data-share");
     var pos = function (seconds, W) { return time ? logPos(seconds) : pct(seconds, W); };
     list.sort(function (a, b) {
       var x = has(a.medianSeconds) ? (time ? a.medianSeconds : a.medianSeconds / a.windowSeconds) : -1;
@@ -901,7 +905,7 @@
     var timeTicks = [[3600, "1h"], [18000, "5h"], [86400, "1d"], [604800, "7d"], [2592000, "30d"]];
     var scaleHead = time
       ? '<span class="prov__scale prov__scale--abs">' + timeTicks.map(function (tk) { var p = logPos(tk[0]); return '<span style="left:' + at(p) + '"' + (p > 90 ? ' class="end"' : "") + ">" + tk[1] + "</span>"; }).join("") + "</span>"
-      : '<span class="prov__scale"><span>0%</span><span>25%</span><span>50%</span><span>75%</span><span>' + t("100% of window", "100% 窗口") + "</span></span>";
+      : '<span class="prov__scale prov__scale--abs"><span class="start" style="left:0%">0%</span><span style="left:25%">25%</span><span style="left:50%">50%</span><span style="left:75%">75%</span><span class="end" style="left:100%">' + t("100% of window", "100% 窗口") + "</span></span>";
     var gridLines = time
       ? timeTicks.map(function (tk) { return '<i style="left:' + at(logPos(tk[0])) + '"></i>'; }).join("")
       : "<i style=\"left:0%\"></i><i style=\"left:25%\"></i><i style=\"left:50%\"></i><i style=\"left:75%\"></i><i style=\"left:100%\"></i>";
@@ -1106,6 +1110,7 @@
     var button = event.target.closest("button[data-scale]");
     if (!button) return;
     scale = button.getAttribute("data-scale");
+    writeURL(false);
     syncControls();
     renderProviders();
   });

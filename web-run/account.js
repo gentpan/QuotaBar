@@ -153,7 +153,7 @@
 
   function clone(value) { return value == null ? value : JSON.parse(JSON.stringify(value)); }
 
-  /* ── 图标（线性，和 run.js 的一套） ──────────────────────────────────── */
+  /* ── 图标（线性，和 common.js 的一套） ──────────────────────────────────── */
 
   var SVG = '<svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">';
   var ICON = {
@@ -1485,7 +1485,7 @@
           { id: "idn_gh01", provider: "github", email: "peter@example.com", name: "Peter", linkedAt: NOW - 38 * 86400 },
           { id: "idn_em02", provider: "email", email: "peter@example.com", name: null, linkedAt: NOW - 12 * 86400 },
         ],
-        // 和 run.js 的示例主页对得上：Codex、Cursor 核实过，Claude 只绑定；第二个 Codex 账号（工作账号）归别人
+        // 和 demo.js 的示例主页对得上：Codex、Cursor 核实过，Claude 只绑定；第二个 Codex 账号（工作账号）归别人
         providerAccounts: params.get("accounts") === "0" ? [] : [
           { id: "3f9a2c71d04be815", provider: "codex", firstSeenAt: NOW - 37 * 86400, lastSeenAt: NOW - 240, status: "owned", verifiedByEmail: true, runs: 41 },
           { id: "b27e5d0c9a61f344", provider: "claude", firstSeenAt: NOW - 36 * 86400, lastSeenAt: NOW - 3 * 3600, status: "owned", verifiedByEmail: false, runs: 38 },

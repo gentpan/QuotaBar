@@ -6,7 +6,7 @@ QuotaBar.app
 dist/
 .claude/
 __pycache__/
-# quota.run 从 web/ 复制来的共享资源（Scripts/sync_changelog.py 生成）
+# quota.run 从 web/ 复制来的共享资源（Scripts/sync_changelog.py 生成）；styles.css、app.js 是浅色改版前的旧副本
 web-run/styles.css
 web-run/app.js
 web-run/favicon.ico

@@ -50,6 +50,7 @@ a.bd:hover { background: var(--color-neutral-100); }
 
 .view { position: relative; min-height: 320px; }
 .view[aria-busy="true"] .podium, .view[aria-busy="true"] .rows-skel { pointer-events: none; }
+.view > .state, #provBody > .state { margin-top: var(--space-6); }
 .more { display: flex; justify-content: center; padding: var(--space-4) 0 0; }
 
 /* ── 成绩单：颁奖台 ───────────────────────────────────────────────────── */
@@ -94,7 +95,7 @@ a.bd:hover { background: var(--color-neutral-100); }
 
 /* ── 成绩单：对比托盘 ─────────────────────────────────────────────────── */
 
-.tray { position: sticky; bottom: var(--space-4); z-index: 5; display: flex; align-items: center; gap: var(--space-3); margin-top: var(--space-6); padding: var(--space-3) var(--space-4); border: var(--border); border-radius: var(--radius); background: var(--color-neutral-0); box-shadow: var(--shadow-2); }
+.tray { position: sticky; bottom: var(--space-4); z-index: 5; display: flex; align-items: center; gap: var(--space-3); margin-top: var(--space-6); padding: var(--space-3) var(--space-4); border-radius: var(--radius); background: var(--color-neutral-0); box-shadow: var(--shadow-2); }
 .tray__count { flex: none; }
 .tray__chips { display: flex; gap: var(--space-2); min-width: 0; overflow-x: auto; }
 .chip { display: inline-flex; align-items: center; gap: var(--space-1); flex: none; height: 28px; padding: 0 var(--space-1); border-radius: var(--radius-full); background: var(--color-neutral-100); font-weight: 500; }
@@ -175,10 +176,11 @@ a.prov-row:hover { background: var(--color-neutral-50); }
 .prov-row--head { padding-bottom: var(--space-2); border-top: 0; color: var(--text-3); font-size: var(--text-xs); }
 .prov-row--head .num { text-align: right; }
 .prov-row--skel { min-height: var(--space-12); }
-.prov__scale { display: flex; justify-content: space-between; white-space: nowrap; }
+.prov__scale { white-space: nowrap; }
 .prov__scale--abs { position: relative; display: block; height: calc(var(--text-xs) * 1.5); }
 .prov__scale--abs span { position: absolute; transform: translateX(-50%); }
 .prov__scale--abs span.end { transform: translateX(-100%); }
+.prov__scale--abs span.start { transform: none; }
 .prov-row__name { display: flex; align-items: center; gap: var(--space-2); min-width: 0; }
 .prov-row__name b { overflow: hidden; font-weight: 500; text-overflow: ellipsis; white-space: nowrap; }
 .prov-row__name small { flex: none; color: var(--text-2); font-size: var(--text-xs); }
@@ -207,7 +209,7 @@ a.prov-row:hover { background: var(--color-neutral-50); }
 
 .join { max-width: 880px; padding: var(--space-8) 0 var(--space-4); }
 .join__title { margin-top: var(--space-3); font-size: var(--text-2xl); }
-.join__lede { max-width: 640px; margin-top: var(--space-3); color: var(--text-2); font-size: var(--text-base); }
+.join__lede { max-width: 640px; text-wrap: pretty; margin-top: var(--space-3); color: var(--text-2); font-size: var(--text-base); }
 .steps { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-4); margin-top: var(--space-8); counter-reset: step; }
 .step { display: grid; align-content: start; gap: var(--space-2); padding: var(--space-4); border: var(--border); border-radius: var(--radius); }
 .step__n { display: grid; place-items: center; width: var(--space-6); height: var(--space-6); border-radius: var(--radius-full); background: var(--color-primary-soft); color: var(--color-primary-ink); font-family: var(--font-mono); font-size: var(--text-xs); font-weight: 600; }
@@ -228,7 +230,7 @@ a.prov-row:hover { background: var(--color-neutral-50); }
 }
 
 @media (max-width: 960px) {
-  .board-page { grid-template-columns: minmax(0, 1fr); }
+  .board-page { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto 1fr; }
   .side { border-right: 0; border-bottom: var(--border); }
   .side__inner { position: static; display: flex; align-items: center; gap: var(--space-2); padding: var(--space-2) var(--space-4); overflow-x: auto; scrollbar-width: none; }
   .side__inner::-webkit-scrollbar { display: none; }
@@ -264,12 +266,13 @@ a.prov-row:hover { background: var(--color-neutral-50); }
   .lane .who, .lane > .skel:first-of-type { grid-column: 2; }
   .lane__time { grid-column: 3; grid-row: 1; }
 
+  .c-who .who__handle, .c-who .acct { display: none; }
   .tray { flex-wrap: wrap; bottom: var(--space-2); }
   .tray__hint { display: none; }
   .tray__chips { flex: 1 1 100%; order: 3; }
 
   .prov-row--head { display: none; }
-  .prov-row { grid-template-columns: repeat(3, minmax(0, 1fr)); row-gap: var(--space-2); padding: var(--space-4) 0; }
+  .prov-row { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1.6fr); row-gap: var(--space-2); padding: var(--space-4) 0; }
   .prov-row__name { grid-column: 1 / -1; }
   .prov-row .hbar { grid-column: 1 / -1; }
   .prov-row__num, .prov-row__region { text-align: left; }
