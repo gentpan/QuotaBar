@@ -52,7 +52,7 @@ final class UpdateFeedTests: XCTestCase {
 
     func testOnlyThisProjectsReleasesAreMirrored() {
         XCTAssertTrue(UpdateFeed.default.isMirrored)
-        XCTAssertTrue(UpdateFeed.github(repo: "gentpan/QuotaBar").isMirrored, "the repository was renamed in case only")
+        XCTAssertTrue(UpdateFeed.github(repo: "gentpan/quotabar").isMirrored, "a feed saved before the repository was renamed in case")
         XCTAssertFalse(UpdateFeed.github(repo: "someone/fork").isMirrored)
         XCTAssertFalse(UpdateFeed.mirror.isMirrored)
     }
@@ -65,12 +65,12 @@ final class UpdateFeedTests: XCTestCase {
     // MARK: Config round-trip
 
     func testOwnerSlashRepoMeansGitHub() throws {
-        let feed = try XCTUnwrap(UpdateFeed(configValue: "gentpan/quotabar"))
-        XCTAssertEqual(feed, .github(repo: "gentpan/quotabar"))
-        XCTAssertEqual(feed.configValue, "gentpan/quotabar")
+        let feed = try XCTUnwrap(UpdateFeed(configValue: "gentpan/QuotaBar"))
+        XCTAssertEqual(feed, .github(repo: "gentpan/QuotaBar"))
+        XCTAssertEqual(feed.configValue, "gentpan/QuotaBar")
         XCTAssertEqual(
             feed.requestURL.absoluteString,
-            "https://api.github.com/repos/gentpan/quotabar/releases/latest")
+            "https://api.github.com/repos/gentpan/QuotaBar/releases/latest")
     }
 
     func testAURLMeansACustomServer() throws {
@@ -156,7 +156,7 @@ final class UpdateConfigTests: XCTestCase {
 
     func testDefaultsToTheProjectRepository() {
         let store = ConfigStore(fileURL: fileURL, credentials: MemoryCredentialStorage())
-        XCTAssertEqual(store.updateFeed, .github(repo: "gentpan/quotabar"))
+        XCTAssertEqual(store.updateFeed, .github(repo: "gentpan/QuotaBar"))
         XCTAssertTrue(store.checksForUpdates)
     }
 

@@ -10,8 +10,8 @@
 开启 GitHub Issues：在服务器上写 `/etc/quotabar-feedback.env`：
 
 ```
-GITHUB_TOKEN=github_pat_…   # fine-grained，仅 gentpan/quotabar 的 Issues: Read and write
-GITHUB_REPO=gentpan/quotabar
+GITHUB_TOKEN=github_pat_…   # fine-grained，仅 gentpan/QuotaBar 的 Issues: Read and write
+GITHUB_REPO=gentpan/QuotaBar
 GITHUB_LABEL=feedback
 ```
 

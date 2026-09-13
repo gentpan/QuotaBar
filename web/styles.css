@@ -883,3 +883,24 @@ section { position: relative; }
 .mb-drop a.mb-lang { justify-content: flex-start; gap: 8px; }
 .mb-lang__check { width: 10px; font-size: 12px; visibility: hidden; }
 .mb-lang[aria-checked="true"] .mb-lang__check { visibility: visible; }
+
+/* 首屏两个下载按钮：quota.bar 服务器（主按钮）和 GitHub（次按钮），同一个文件 */
+.hero__buttons { display: flex; flex-wrap: wrap; justify-content: center; gap: var(--s-3); }
+.btn__src {
+  margin-left: 2px;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.12);
+  font-size: 11px;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.72);
+}
+.btn--ghost {
+  background: rgba(10, 12, 16, 0.28);
+  backdrop-filter: blur(20px) saturate(160%);
+  -webkit-backdrop-filter: blur(20px) saturate(160%);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.18);
+  color: rgba(255, 255, 255, 0.9);
+}
+.btn--ghost:hover { background: rgba(10, 12, 16, 0.42); color: #fff; }
+.btn--ghost:active { transform: translateY(1px); }

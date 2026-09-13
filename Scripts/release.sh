@@ -9,7 +9,7 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-REPO="${REPO:-gentpan/quotabar}"
+REPO="${REPO:-gentpan/QuotaBar}"
 DIST="${DIST:-dist}"
 NOTARY_PROFILE="${NOTARY_PROFILE:-QuotaBar}"
 # Resolved the same way package_app.sh does, so the disk image is signed with

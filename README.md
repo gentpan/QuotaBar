@@ -6,20 +6,20 @@
 
 **Every AI coding limit, at a glance — in the menu bar, the notch, at the screen's edge or on the desktop.**
 
-[![Release](https://img.shields.io/github/v/release/gentpan/quotabar?color=6ee02b&label=release)](https://github.com/gentpan/quotabar/releases/latest)
-[![Downloads](https://img.shields.io/github/downloads/gentpan/quotabar/total?color=6ee02b&label=downloads)](https://github.com/gentpan/quotabar/releases)
-[![Stars](https://img.shields.io/github/stars/gentpan/quotabar?style=flat&color=f5c518&label=stars)](https://github.com/gentpan/quotabar/stargazers)
-[![Last commit](https://img.shields.io/github/last-commit/gentpan/quotabar?color=black&label=last%20commit)](https://github.com/gentpan/quotabar/commits/main)
-[![Commit activity](https://img.shields.io/github/commit-activity/m/gentpan/quotabar?color=black&label=commits)](https://github.com/gentpan/quotabar/graphs/commit-activity)
-[![CI](https://github.com/gentpan/quotabar/actions/workflows/ci.yml/badge.svg)](https://github.com/gentpan/quotabar/actions/workflows/ci.yml)
-[![macOS](https://img.shields.io/badge/macOS-14%2B-black)](https://github.com/gentpan/quotabar/releases/latest)
+[![Release](https://img.shields.io/github/v/release/gentpan/QuotaBar?color=6ee02b&label=release)](https://github.com/gentpan/QuotaBar/releases/latest)
+[![Downloads](https://img.shields.io/github/downloads/gentpan/QuotaBar/total?color=6ee02b&label=downloads)](https://github.com/gentpan/QuotaBar/releases)
+[![Stars](https://img.shields.io/github/stars/gentpan/QuotaBar?style=flat&color=f5c518&label=stars)](https://github.com/gentpan/QuotaBar/stargazers)
+[![Last commit](https://img.shields.io/github/last-commit/gentpan/QuotaBar?color=black&label=last%20commit)](https://github.com/gentpan/QuotaBar/commits/main)
+[![Commit activity](https://img.shields.io/github/commit-activity/m/gentpan/QuotaBar?color=black&label=commits)](https://github.com/gentpan/QuotaBar/graphs/commit-activity)
+[![CI](https://github.com/gentpan/QuotaBar/actions/workflows/ci.yml/badge.svg)](https://github.com/gentpan/QuotaBar/actions/workflows/ci.yml)
+[![macOS](https://img.shields.io/badge/macOS-14%2B-black)](https://github.com/gentpan/QuotaBar/releases/latest)
 [![License](https://img.shields.io/badge/license-MIT-black)](LICENSE)
 
 QuotaBar is a macOS menu-bar app that shows how much of each AI coding service's quota
 you have used, when each window resets, and roughly what it has cost — for twenty-three
 providers, read and worked out on your own Mac. No account, no telemetry.
 
-[Download](https://github.com/gentpan/quotabar/releases/latest) ·
+[Download](https://github.com/gentpan/QuotaBar/releases/latest) ·
 [Website](https://quota.bar) ·
 [Changelog](CHANGELOG.en.md) ·
 [Architecture](ARCHITECTURE.md)
@@ -38,7 +38,7 @@ brew trust gentpan/tap      # Homebrew 6 gates third-party taps
 brew install --cask quotabar
 ```
 
-Or download the `.dmg` from [Releases](https://github.com/gentpan/quotabar/releases/latest)
+Or download the `.dmg` from [Releases](https://github.com/gentpan/QuotaBar/releases/latest)
 and drag `QuotaBar.app` into `/Applications`. Builds are signed with a Developer ID
 certificate and notarized by Apple, so Gatekeeper opens them without a detour.
 
@@ -188,10 +188,10 @@ Latest release **0.5.1** (2026-09-13) · [full changelog](CHANGELOG.en.md)
 </p>
 
 <p align="center">
-  <a href="https://star-history.com/#gentpan/quotabar&Date">
+  <a href="https://star-history.com/#gentpan/QuotaBar&Date">
     <picture>
-      <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=gentpan/quotabar&type=Date&theme=dark">
-      <img alt="Star history" src="https://api.star-history.com/svg?repos=gentpan/quotabar&type=Date" width="760">
+      <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=gentpan/QuotaBar&type=Date&theme=dark">
+      <img alt="Star history" src="https://api.star-history.com/svg?repos=gentpan/QuotaBar&type=Date" width="760">
     </picture>
   </a>
 </p>

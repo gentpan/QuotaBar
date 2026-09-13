@@ -6,19 +6,19 @@
 
 **每个 AI 编码额度，抬眼就看见——在菜单栏、刘海、屏幕边缘或桌面上。**
 
-[![Release](https://img.shields.io/github/v/release/gentpan/quotabar?color=6ee02b&label=%E7%89%88%E6%9C%AC)](https://github.com/gentpan/quotabar/releases/latest)
-[![Downloads](https://img.shields.io/github/downloads/gentpan/quotabar/total?color=6ee02b&label=%E4%B8%8B%E8%BD%BD)](https://github.com/gentpan/quotabar/releases)
-[![Stars](https://img.shields.io/github/stars/gentpan/quotabar?style=flat&color=f5c518&label=%E6%98%9F%E6%A0%87)](https://github.com/gentpan/quotabar/stargazers)
-[![Last commit](https://img.shields.io/github/last-commit/gentpan/quotabar?color=black&label=%E6%9C%80%E8%BF%91%E6%8F%90%E4%BA%A4)](https://github.com/gentpan/quotabar/commits/main)
-[![Commit activity](https://img.shields.io/github/commit-activity/m/gentpan/quotabar?color=black&label=%E6%8F%90%E4%BA%A4)](https://github.com/gentpan/quotabar/graphs/commit-activity)
-[![CI](https://github.com/gentpan/quotabar/actions/workflows/ci.yml/badge.svg)](https://github.com/gentpan/quotabar/actions/workflows/ci.yml)
-[![macOS](https://img.shields.io/badge/macOS-14%2B-black)](https://github.com/gentpan/quotabar/releases/latest)
+[![Release](https://img.shields.io/github/v/release/gentpan/QuotaBar?color=6ee02b&label=%E7%89%88%E6%9C%AC)](https://github.com/gentpan/QuotaBar/releases/latest)
+[![Downloads](https://img.shields.io/github/downloads/gentpan/QuotaBar/total?color=6ee02b&label=%E4%B8%8B%E8%BD%BD)](https://github.com/gentpan/QuotaBar/releases)
+[![Stars](https://img.shields.io/github/stars/gentpan/QuotaBar?style=flat&color=f5c518&label=%E6%98%9F%E6%A0%87)](https://github.com/gentpan/QuotaBar/stargazers)
+[![Last commit](https://img.shields.io/github/last-commit/gentpan/QuotaBar?color=black&label=%E6%9C%80%E8%BF%91%E6%8F%90%E4%BA%A4)](https://github.com/gentpan/QuotaBar/commits/main)
+[![Commit activity](https://img.shields.io/github/commit-activity/m/gentpan/QuotaBar?color=black&label=%E6%8F%90%E4%BA%A4)](https://github.com/gentpan/QuotaBar/graphs/commit-activity)
+[![CI](https://github.com/gentpan/QuotaBar/actions/workflows/ci.yml/badge.svg)](https://github.com/gentpan/QuotaBar/actions/workflows/ci.yml)
+[![macOS](https://img.shields.io/badge/macOS-14%2B-black)](https://github.com/gentpan/QuotaBar/releases/latest)
 [![License](https://img.shields.io/badge/license-MIT-black)](LICENSE)
 
 QuotaBar 是一款 macOS 菜单栏应用，显示每个 AI 编码服务的额度用了多少、各个窗口何时重置、
 大约花了多少钱。支持 23 个服务商，全部在你自己的 Mac 上读取和计算。无需注册账号，没有任何统计上报。
 
-[下载](https://github.com/gentpan/quotabar/releases/latest) ·
+[下载](https://github.com/gentpan/QuotaBar/releases/latest) ·
 [官网](https://quota.bar) ·
 [更新日志](CHANGELOG.md) ·
 [架构说明](ARCHITECTURE.md)
@@ -37,7 +37,7 @@ brew trust gentpan/tap      # Homebrew 6 需要先信任第三方 tap
 brew install --cask quotabar
 ```
 
-也可以从 [Releases](https://github.com/gentpan/quotabar/releases/latest) 下载 `.dmg`，
+也可以从 [Releases](https://github.com/gentpan/QuotaBar/releases/latest) 下载 `.dmg`，
 把 `QuotaBar.app` 拖进「应用程序」。安装包使用 Developer ID 证书签名并经过 Apple 公证，
 Gatekeeper 可以直接打开。
 
@@ -187,10 +187,10 @@ Gatekeeper 可以直接打开。
 </p>
 
 <p align="center">
-  <a href="https://star-history.com/#gentpan/quotabar&Date">
+  <a href="https://star-history.com/#gentpan/QuotaBar&Date">
     <picture>
-      <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=gentpan/quotabar&type=Date&theme=dark">
-      <img alt="星标增长曲线" src="https://api.star-history.com/svg?repos=gentpan/quotabar&type=Date" width="760">
+      <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=gentpan/QuotaBar&type=Date&theme=dark">
+      <img alt="星标增长曲线" src="https://api.star-history.com/svg?repos=gentpan/QuotaBar&type=Date" width="760">
     </picture>
   </a>
 </p>

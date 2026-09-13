@@ -12,7 +12,7 @@ $SSH "$HOST" bash -s <<'REMOTE'
 set -euo pipefail
 install -m 644 /opt/quotabar-feedback/quotabar-feedback.service /etc/systemd/system/quotabar-feedback.service
 mkdir -p /var/lib/quotabar && chown www-data:www-data /var/lib/quotabar
-[ -f /etc/quotabar-feedback.env ] || { echo "# GITHUB_TOKEN=…  GITHUB_REPO=gentpan/quotabar" > /etc/quotabar-feedback.env; chmod 600 /etc/quotabar-feedback.env; }
+[ -f /etc/quotabar-feedback.env ] || { echo "# GITHUB_TOKEN=…  GITHUB_REPO=gentpan/QuotaBar" > /etc/quotabar-feedback.env; chmod 600 /etc/quotabar-feedback.env; }
 systemctl daemon-reload
 systemctl enable --now quotabar-feedback >/dev/null
 systemctl restart quotabar-feedback

@@ -28,7 +28,7 @@ public enum UpdateFeed: Sendable, Equatable {
     /// `{"version":"0.3.0","url":"https://…/QuotaBar-0.3.0.zip","notes":"…"}`
     case custom(URL)
 
-    public static let `default` = UpdateFeed.github(repo: "gentpan/quotabar")
+    public static let `default` = UpdateFeed.github(repo: "gentpan/QuotaBar")
 
     /// The copy of every release on quota.bar, uploaded by
     /// Scripts/publish_release.sh — for networks where GitHub is slow or
@@ -42,7 +42,7 @@ public enum UpdateFeed: Sendable, Equatable {
     /// This project's own releases, which quota.bar mirrors. Someone else's
     /// repository or server has no copy there.
     var isMirrored: Bool {
-        if case let .github(repo) = self { return repo.lowercased() == "gentpan/quotabar" }
+        if case let .github(repo) = self { return repo.caseInsensitiveCompare("gentpan/QuotaBar") == .orderedSame }
         return false
     }
 

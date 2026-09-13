@@ -32,7 +32,7 @@ import zlib
 from collections import Counter
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
-REPO = "https://github.com/gentpan/quotabar"
+REPO = "https://github.com/gentpan/QuotaBar"
 RECENT_DAYS = 3
 SITE_PREVIEW_ITEMS = 5
 WEEKS = 26

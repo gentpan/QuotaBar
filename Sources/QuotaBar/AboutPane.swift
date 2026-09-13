@@ -42,7 +42,7 @@ struct AboutPane: View {
             // Where to find the project, its author and a person to write to.
             HStack(spacing: Design.space2) {
                 AboutLink(title: L10n.t("Website", "网站"), detail: "quota.bar", mark: .symbol("globe"), url: "https://quota.bar")
-                AboutLink(title: "GitHub", detail: "gentpan/quotabar", mark: .brand("github"), url: Self.repository)
+                AboutLink(title: "GitHub", detail: "gentpan/QuotaBar", mark: .brand("github"), url: Self.repository)
                 AboutLink(title: "X", detail: "@gentpan", mark: .brand("x"), url: "https://x.com/gentpan")
                 AboutLink(title: L10n.t("Email", "邮件"), detail: "hello@quota.bar", mark: .symbol("envelope"), url: "mailto:hello@quota.bar")
                 Spacer(minLength: 0)
@@ -117,7 +117,7 @@ struct AboutPane: View {
             .padding(.horizontal, Design.space1)
     }
 
-    private static let repository = "https://github.com/gentpan/quotabar"
+    private static let repository = "https://github.com/gentpan/QuotaBar"
 
     /// What the app is, for someone who landed here without knowing.
     private static var summary: String {

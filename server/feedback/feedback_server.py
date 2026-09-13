@@ -13,7 +13,7 @@ GITHUB_REPO，再以 issue 的形式建到仓库里（用户无需登录，令�
   FEEDBACK_DIR   存放目录，默认 /var/lib/quotabar
   FEEDBACK_PORT  监听端口，默认 8787（只绑 127.0.0.1，由 nginx 反代）
   GITHUB_TOKEN   可选，仅需 Issues 写权限的 fine-grained token
-  GITHUB_REPO    可选，如 gentpan/quotabar
+  GITHUB_REPO    可选，如 gentpan/QuotaBar
   GITHUB_LABEL   可选，默认 feedback
 """
 import json

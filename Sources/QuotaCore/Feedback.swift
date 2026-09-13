@@ -30,7 +30,7 @@ public enum FeedbackClient {
     public static let endpoint = URL(string: "https://quota.bar/api/feedback")!
     /// Where to send people when the receiver is unreachable: a new-issue
     /// page with the text already in it. That one does need a GitHub login.
-    public static let issuesURL = URL(string: "https://github.com/gentpan/quotabar/issues/new")!
+    public static let issuesURL = URL(string: "https://github.com/gentpan/QuotaBar/issues/new")!
 
     struct Receipt: Decodable {
         let ok: Bool?

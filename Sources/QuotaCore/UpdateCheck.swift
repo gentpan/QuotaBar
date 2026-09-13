@@ -14,9 +14,9 @@ public struct AvailableUpdate: Sendable, Equatable {
 /// the download page does the rest. Full in-place updating is a separate
 /// decision, not a prerequisite for people knowing they are behind.
 public enum UpdateCheck {
-    public static let releasesURL = URL(string: "https://github.com/gentpan/quotabar/releases/latest")!
+    public static let releasesURL = URL(string: "https://github.com/gentpan/QuotaBar/releases/latest")!
     private static let api = URL(
-        string: "https://api.github.com/repos/gentpan/quotabar/releases/latest")!
+        string: "https://api.github.com/repos/gentpan/QuotaBar/releases/latest")!
 
     /// Returns the newer release, or nil when current, offline, or rate-limited.
     public static func latest(currentVersion: String) async -> AvailableUpdate? {
