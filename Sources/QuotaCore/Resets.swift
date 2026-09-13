@@ -54,7 +54,7 @@ public enum ResetDetector {
     /// correcting itself; a moved reset time alone is a window that rolled
     /// with nothing used.
     public static func events(provider: ProviderID, previous: UsageSnapshot?, current: UsageSnapshot, now: Date = Date()) -> [ResetEvent] {
-        guard let previous else { return [] }
+        guard let previous, !accountChanged(from: previous, to: current) else { return [] }
         let before = Dictionary(previous.windows.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
         var events: [ResetEvent] = []
         for window in current.windows {
@@ -79,6 +79,16 @@ public enum ResetDetector {
                 noticedAt: now))
         }
         return events
+    }
+
+    /// The CLI was signed in to another account between the two readings.
+    /// Its figures and reset times are simply someone else's — a drop there
+    /// is not a reset. Unknown on either side counts as the same account.
+    public static func accountChanged(from previous: UsageSnapshot, to current: UsageSnapshot) -> Bool {
+        guard let before = previous.account?.lowercased(), let after = current.account?.lowercased(),
+              !before.isEmpty, !after.isEmpty
+        else { return false }
+        return before != after
     }
 
     /// When to read a provider again so a reset shows when it happens rather

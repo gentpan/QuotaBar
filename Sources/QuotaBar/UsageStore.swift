@@ -440,6 +440,12 @@ final class UsageStore: ObservableObject {
         switch result {
         case let .success(snapshot):
             let before = meterReading
+            // Signed in to another account: its trend starts afresh rather than
+            // splicing two accounts into one line.
+            if let previous = states[id]?.snapshot, ResetDetector.accountChanged(from: previous, to: snapshot) {
+                UsageHistoryStore.shared.clear(id)
+                history[id] = []
+            }
             let resets = ResetDetector.events(provider: id, previous: states[id]?.snapshot, current: snapshot)
             states[id] = .loaded(snapshot)
             if let old = renamingWindows.removeValue(forKey: id) {

@@ -28,6 +28,18 @@ final class ResetDetectorTests: XCTestCase {
         XCTAssertEqual(ResetDetector.events(provider: .codex, previous: before, current: after, now: now).count, 1)
     }
 
+    /// Signing the CLI in to another account is not a reset, however much
+    /// lower the other account's figure is.
+    func testSwitchingAccountsIsNotAReset() {
+        let before = UsageSnapshot(planName: nil, account: "work@example.com",
+                                   windows: [UsageWindow(title: "5h", usedPercent: 94, resetsAt: now.addingTimeInterval(-40), windowSeconds: 18_000)], fetchedAt: now)
+        let after = UsageSnapshot(planName: nil, account: "me@example.com",
+                                  windows: [UsageWindow(title: "5h", usedPercent: 3, resetsAt: now.addingTimeInterval(9_000), windowSeconds: 18_000)], fetchedAt: now)
+        XCTAssertTrue(ResetDetector.events(provider: .claude, previous: before, current: after, now: now).isEmpty)
+        XCTAssertTrue(ResetDetector.accountChanged(from: before, to: after))
+        XCTAssertFalse(ResetDetector.accountChanged(from: before, to: UsageSnapshot(planName: nil, account: nil, windows: [], fetchedAt: now)))
+    }
+
     /// A drop with the same reset time is a top-up or a correction.
     func testDropWithoutTimeRunningOutIsNotAReset() {
         let reset = now.addingTimeInterval(3_600)
