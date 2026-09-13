@@ -1383,9 +1383,12 @@ class RunTests(ServerTestCase):
         self.assertEqual(board["board"], {
             "provider": "claude", "plan": "max20x", "planLabel": "Max 20x", "windowKey": "18000:",
             "windowSeconds": FIVE_HOURS, "windowTitle": "5-hour window", "runners": 1, "season": "2026-W38"})
+        run_id = self.query("SELECT public_id FROM runs")[0][0]
+        self.assertRegex(run_id, r"^[A-Za-z0-9_-]{12}$")
         self.assertEqual(board["entries"], [{
             "rank": 1, "username": "sprinter", "displayName": "Sprinter", "value": 7200, "unit": "seconds",
-            "tier": "verified", "accountVerified": True, "achievedAt": start + 7200, "peakPercent": 100.0}])
+            "tier": "verified", "accountVerified": True, "achievedAt": start + 7200, "peakPercent": 100.0,
+            "runId": run_id, "secondsTo50": 3600, "secondsTo90": 6600, "secondsTo100": 7200, "seasonRuns": 1}])
         self.assertEqual(len(self.board(tier="verified")["entries"]), 1)
 
         status, boards = self.get("/boards", region="global")
@@ -1402,6 +1405,10 @@ class RunTests(ServerTestCase):
         # 账号摘要正好是注册邮箱算出来的：按 email 认领，run 带 accountVerified
         self.assertTrue(recent["accountVerified"])
         self.assertEqual([b["accountVerified"] for b in profile["bests"]], [True, True])
+        self.assertEqual(recent["runId"], run_id)
+        self.assertEqual([(b["metric"], b["runId"], b["secondsTo50"], b["secondsTo90"], b["secondsTo100"])
+                          for b in profile["bests"]],
+                         [("speed", run_id, 3600, 6600, 7200), ("peak", run_id, 3600, 6600, 7200)])
 
     def test_gap_over_twenty_minutes_is_standard(self):
         mac = self.joined("gappy")
@@ -1543,6 +1550,271 @@ class RunTests(ServerTestCase):
         self.assertEqual(names(region="global"), ["globe"])
         self.assertEqual(self.get("/boards", region="china")[1]["boards"][0]["runners"], 1)
         self.assertEqual(self.get("/leaderboard", provider="claude", window="18000:", region="mars")[0], 400)
+
+
+def to_full(minutes, step=10):
+    """从 0 匀速涨到 100%，第 minutes 分钟到顶，每 step 分钟一条。"""
+    return [(minute, round(minute * 100 / minutes, 1)) for minute in range(0, minutes + 1, step)]
+
+
+class ComparisonTests(ServerTestCase):
+    """多视图榜单的对比数据：to90/to50 榜、条目附加字段、summary、/runs/<runId>、/insights。"""
+
+    def run_ids(self, username):
+        return [row[0] for row in self.query(
+            "SELECT r.public_id FROM runs r JOIN users u ON u.id = r.user_id WHERE u.username = ? ORDER BY r.window_start",
+            (username,))]
+
+    def summary_fixture(self):
+        """本周（W38）：alice 两条（3600 / 12000），bob 7200（standard），carol 10800（china，账号不是 email 认领），
+        dave 没跑完（china），erin 14400（standard）。上周（W37）：alice 1800，frank 5400。"""
+        start = NOW - 4 * 3600
+        last_week = NOW - int(6.5 * DAY)
+        alice = self.joined("alice")
+        alice.run(last_week, [(0, 0), (10, 35), (20, 70), (30, 100)])
+        alice.run(start, [(0, 0), (20, 35), (40, 70), (60, 100)])
+        alice.run(NOW - 10 * 3600, [(0, 0), (10, 30), (20, 55)] + [(m, 55 + (m - 20) / 4) for m in range(30, 201, 10)])
+        self.joined("bob").run(start, [(0, 0), (30, 30), (60, 60), (90, 90), (120, 100)])
+        carol = self.joined("carol", region="china")
+        carol.digest = account_digest("claude", "carol-work@example.com")
+        carol.run(start, to_full(180))
+        self.joined("dave", region="china").run(start, [(0, 0), (10, 50), (20, 80)])
+        self.joined("erin").run(start, [(0, 0), (40, 40), (80, 60), (160, 90), (240, 100)])
+        self.joined("frank").run(last_week, to_full(90))
+
+    def test_to90_and_to50_boards_with_entry_extras(self):
+        self.summary_fixture()
+        alice_prev, alice_slow, alice_fast = self.run_ids("alice")
+        self.assertEqual(self.query("SELECT tier FROM runs r JOIN users u ON u.id = r.user_id WHERE u.username IN"
+                                    " ('bob', 'erin') ORDER BY u.username"), [("standard",), ("standard",)])
+
+        speed = self.board()
+        self.assertEqual([(e["username"], e["value"], e["seasonRuns"]) for e in speed["entries"]],
+                         [("alice", 3600, 2), ("bob", 7200, 1), ("carol", 10800, 1), ("erin", 14400, 1)])
+        self.assertEqual(speed["entries"][0]["runId"], alice_fast)
+
+        to90 = self.board(metric="to90")
+        self.assertEqual(to90["metric"], "to90")
+        self.assertEqual([(e["rank"], e["username"], e["value"], e["unit"]) for e in to90["entries"]], [
+            (1, "alice", 3600, "seconds"), (2, "bob", 5400, "seconds"), (3, "erin", 9600, "seconds"),
+            (4, "carol", 10200, "seconds")])
+
+        to50 = self.board(metric="to50")
+        self.assertEqual([(e["username"], e["value"]) for e in to50["entries"]],
+                         [("dave", 600), ("alice", 1200), ("bob", 3600), ("erin", 4800), ("carol", 5400)])
+        # 每人按这个指标取最好的一条：alice 到 50% 最快的是那条慢的
+        alice = to50["entries"][1]
+        self.assertEqual(alice, {
+            "rank": 2, "username": "alice", "displayName": "Alice", "value": 1200, "unit": "seconds",
+            "tier": "verified", "accountVerified": True, "achievedAt": NOW - 10 * 3600 + 1200, "peakPercent": 100.0,
+            "runId": alice_slow, "secondsTo50": 1200, "secondsTo90": 9600, "secondsTo100": 12000, "seasonRuns": 2})
+        dave = to50["entries"][0]
+        self.assertEqual((dave["secondsTo90"], dave["secondsTo100"], dave["peakPercent"]), (None, None, 80.0))
+
+        everything = self.board(metric="to50", season="all")
+        self.assertEqual([(e["username"], e["seasonRuns"]) for e in everything["entries"]][:2],
+                         [("dave", 1), ("alice", 3)])
+        self.assertEqual(self.board(metric="peak")["entries"][0]["seasonRuns"], 2)
+        self.assertEqual(self.board(metric="to90", region="china")["entries"][0]["username"], "carol")
+        self.assertEqual(len(self.board(metric="to50", limit="500")["entries"]), 5)  # 超过 200 按 200 算
+        status, data = self.get("/leaderboard", provider="claude", plan="max20x", window="18000:", metric="to100")
+        self.assertEqual((status, data["error"]), (400, "invalid_metric"))
+
+    def test_threshold_ties_go_to_the_earlier_achievement(self):
+        # grace 先上传（run id 小），但 heidi 的窗口早开一小时，同样 90 分钟到 90%，先达到
+        self.joined("grace").run(NOW - 4 * 3600, to_full(100))
+        self.joined("heidi").run(NOW - 5 * 3600, to_full(100))
+        for metric in ("to90", "to50", "speed"):
+            entries = self.board(metric=metric)["entries"]
+            self.assertEqual([e["username"] for e in entries], ["heidi", "grace"], metric)
+            self.assertEqual(entries[0]["value"], entries[1]["value"], metric)
+            self.assertLess(entries[0]["achievedAt"], entries[1]["achievedAt"])
+
+    def test_summary_numbers_and_previous_week(self):
+        self.summary_fixture()
+        bob_run = self.run_ids("bob")[0]
+        alice_prev, _, alice_fast = self.run_ids("alice")
+
+        current = self.board()["summary"]
+        self.assertEqual(current, {
+            "runners": 5, "runnersPrev": 2,
+            "fastest": {"username": "alice", "displayName": "Alice", "seconds": 3600},
+            "medianSecondsTo100": 7200, "medianSecondsTo100Prev": 1800, "medianRunId": bob_run,
+            "completed": 4, "completedShare": 0.8, "verifiedShare": 0.6, "accountVerifiedShare": 0.8})
+        # summary 与 metric 无关
+        self.assertEqual(self.board(metric="to50")["summary"], current)
+        self.assertEqual(self.board(metric="peak")["summary"], current)
+
+        verified = self.board(tier="verified")["summary"]
+        self.assertEqual(verified, {
+            "runners": 3, "runnersPrev": 2,
+            "fastest": {"username": "alice", "displayName": "Alice", "seconds": 3600},
+            "medianSecondsTo100": 3600, "medianSecondsTo100Prev": 1800, "medianRunId": alice_fast,
+            "completed": 2, "completedShare": 0.6667, "verifiedShare": 1.0, "accountVerifiedShare": 0.6667})
+
+        china = self.board(region="china")["summary"]
+        self.assertEqual((china["runners"], china["completed"], china["medianSecondsTo100"], china["fastest"]["username"],
+                          china["runnersPrev"], china["medianSecondsTo100Prev"]), (2, 1, 10800, "carol", 0, None))
+        self.assertEqual((china["completedShare"], china["verifiedShare"], china["accountVerifiedShare"]), (0.5, 1.0, 0.5))
+
+        everything = self.board(season="all")["summary"]
+        self.assertEqual((everything["runners"], everything["completed"], everything["medianSecondsTo100"],
+                          everything["fastest"]["seconds"], everything["runnersPrev"], everything["medianSecondsTo100Prev"]),
+                         (6, 5, 7200, 1800, None, None))
+
+        last = self.board(season="last")
+        self.assertEqual(last["season"], "2026-W37")
+        self.assertEqual(last["summary"], {
+            "runners": 2, "runnersPrev": 0,
+            "fastest": {"username": "alice", "displayName": "Alice", "seconds": 1800},
+            "medianSecondsTo100": 1800, "medianSecondsTo100Prev": None, "medianRunId": alice_prev,
+            "completed": 2, "completedShare": 1.0, "verifiedShare": 1.0, "accountVerifiedShare": 1.0})
+
+        empty = self.board(provider="codex", plan="pro")
+        self.assertEqual(empty["entries"], [])
+        self.assertEqual(empty["summary"], {
+            "runners": 0, "runnersPrev": 0, "fastest": None, "medianSecondsTo100": None,
+            "medianSecondsTo100Prev": None, "medianRunId": None, "completed": 0,
+            "completedShare": None, "verifiedShare": None, "accountVerifiedShare": None})
+
+    def test_season_last(self):
+        self.assertEqual(self.service.parse_season("last"), "2026-W37")
+        self.clock.value = 1_789_344_000          # 2026-09-14 00:00 UTC，W38 的第一秒
+        self.assertEqual((self.service.parse_season("current"), self.service.parse_season("last")),
+                         ("2026-W38", "2026-W37"))
+        self.clock.value = 1_789_343_999          # 前一秒还是 W37
+        self.assertEqual(self.service.parse_season("last"), "2026-W36")
+        self.clock.value = NOW
+        self.joined("lastweek").run(NOW - int(6.5 * DAY))
+        self.assertEqual([(b["provider"], b["season"]) for b in self.get("/boards", season="last")[1]["boards"]],
+                         [("claude", "2026-W37")])
+        self.assertEqual(self.get("/boards")[1]["boards"], [])
+        self.assertEqual([e["username"] for e in self.board(season="last")["entries"]], ["lastweek"])
+        insights = self.get("/insights", season="last")[1]
+        self.assertEqual((insights["season"], len(insights["boards"])), ("2026-W37", 1))
+        status, data = self.get("/insights", season="previous")
+        self.assertEqual((status, data["error"]), (400, "invalid_season"))
+
+    def test_run_detail_and_downsampled_curve(self):
+        mac = self.joined("curve")
+        start = NOW - FIVE_HOURS
+        # 每分钟一条，300 条：第 140 分钟 50%，252 分钟 90%，279 分钟 99.64%
+        points = [(minute, min(100.0, round(minute * 100 / 280, 2))) for minute in range(300)]
+        mac.run(start, points)
+        (run_id,) = self.run_ids("curve")
+        status, data, headers = self.http("GET", f"/runs/{run_id}")
+        self.assertEqual(status, 200, data)
+        self.assertEqual(headers["cache-control"], "public, max-age=30")
+        self.assertEqual(data["run"], {
+            "runId": run_id, "username": "curve", "displayName": "Curve", "provider": "claude", "plan": "max20x",
+            "planLabel": "Max 20x", "windowKey": "18000:", "windowSeconds": FIVE_HOURS, "windowTitle": "5-hour window",
+            "windowStart": start, "resetsAt": start + FIVE_HOURS, "season": "2026-W38", "tier": "verified",
+            "accountVerified": True, "peakPercent": 100.0, "secondsTo50": 140 * 60, "secondsTo90": 252 * 60,
+            "secondsTo100": 279 * 60, "completedAt": start + 279 * 60})
+        readings = data["readings"]
+        self.assertEqual(len(readings), 240)
+        self.assertEqual(readings[0], {"t": 0, "p": 0.0})
+        self.assertEqual(readings[-1], {"t": 299 * 60, "p": 100.0})
+        times = [r["t"] for r in readings]
+        self.assertEqual(times, sorted(set(times)))
+        for seconds, used in ((140 * 60, 50.0), (252 * 60, 90.0), (279 * 60, 99.64)):
+            self.assertIn({"t": seconds, "p": used}, readings)
+        self.assertTrue(all(set(r) == {"t", "p"} for r in readings))
+        self.assertEqual(json.dumps(data).count("@example.com"), 0)
+        self.assertNotIn(mac.device_id, json.dumps(data))
+
+        # 非计分设备的读数不进曲线
+        spare = self.paired(mac)
+        spare.upload(series(start, [(0.5, 55.0), (299.5, 100.0)], digest=mac.digest))
+        self.assertEqual(self.get(f"/runs/{run_id}")[1]["readings"], readings)
+        short = self.joined("short")
+        short.run(NOW - 4 * 3600, [(0, 0), (10, 40)])
+        detail = self.get(f"/runs/{self.run_ids('short')[0]}")[1]
+        self.assertEqual(detail["readings"], [{"t": 0, "p": 0.0}, {"t": 600, "p": 40.0}])
+        self.assertEqual((detail["run"]["secondsTo50"], detail["run"]["completedAt"]), (None, None))
+
+    def test_run_not_found(self):
+        self.joined("dropper").run(NOW - 4 * 3600, [(0, 0), (10, 30), (20, 27.5), (30, 60)])
+        self.joined("nodigest").run(NOW - 4 * 3600, digest=None)
+        self.assertEqual(self.run_tiers(), ["flagged", "unranked"])
+        for run_id in [row[0] for row in self.query("SELECT public_id FROM runs")] + ["AAAAAAAAAAAA", "short", "a" * 13]:
+            status, data, headers = self.http("GET", f"/runs/{run_id}")
+            self.assertEqual((status, data["error"]), (404, "run_not_found"), run_id)
+            self.assertEqual(headers["cache-control"], "public, max-age=30")
+        self.assertEqual(self.get("/runs/AAAAAAAAAAAA/readings")[1]["error"], "not_found")
+
+    def test_run_id_is_stable_across_recomputes(self):
+        mac = self.joined("steady")
+        start = NOW - 4 * 3600
+        mac.run(start, FAST[:6], with_activity=False)
+        (run_id,) = self.run_ids("steady")
+        self.assertEqual(self.board(metric="peak")["entries"][0]["runId"], run_id)
+        self.assertEqual(self.get(f"/runs/{run_id}")[1]["run"]["tier"], "standard")
+        mac.run(start, FAST[6:], with_activity=False)                     # 更多读数：重算
+        mac.upload([], [{"minute": start + 600, "source": "claude", "tokens": 5}])  # 活动升级：再重算
+        self.assertEqual(self.run_ids("steady"), [run_id])
+        detail = self.get(f"/runs/{run_id}")[1]
+        self.assertEqual((detail["run"]["tier"], detail["run"]["secondsTo100"], len(detail["readings"])),
+                         ("verified", 7200, len(FAST)))
+        self.assertEqual(self.board()["entries"][0]["runId"], run_id)
+        # 变成 flagged 时 id 还在，只是不公开；回落的读数删掉后又是同一个 id
+        mac.upload(series(start, [(125, 50)]))
+        self.assertEqual((self.run_tiers(), self.run_ids("steady")), (["flagged"], [run_id]))
+        self.assertEqual(self.get(f"/runs/{run_id}")[0], 404)
+        with self.service.lock:
+            self.service.db.execute("DELETE FROM snapshots WHERE observed_at = ?", (start + 125 * 60,))
+            self.service.recompute_run(tuple(self.query(
+                f"SELECT {run_server.RUN_KEY_COLUMNS} FROM runs")[0]), NOW)
+        self.assertEqual(self.get(f"/runs/{run_id}")[1]["run"]["runId"], run_id)
+
+    def test_insights(self):
+        start = NOW - 4 * 3600
+        self.joined("glo1").run(start, to_full(60))
+        self.joined("glo2").run(start, to_full(120))
+        self.joined("glo3").run(start, [(0, 0), (10, 40)])
+        self.joined("chn1", region="china").run(start, to_full(90))
+        self.joined("chn2", region="china").run(start, to_full(150))
+        codex = self.joined("codexer")
+        codex.digest = account_digest("codex", "codexer@example.com")
+        codex.run(start, to_full(60), provider="codex", plan="Pro")
+        flagged = self.joined("flaggy")
+        flagged.digest = account_digest("cursor", "flaggy@example.com")
+        flagged.run(start, [(0, 0), (10, 30), (20, 20)], provider="cursor", plan="Pro", with_activity=False)
+
+        status, data, headers = self.http("GET", "/insights")
+        self.assertEqual(status, 200, data)
+        self.assertEqual(headers["cache-control"], "public, max-age=30")
+        self.assertEqual((data["season"], data["updatedAt"]), ("2026-W38", NOW))
+        self.assertEqual(data["boards"], [
+            {"provider": "claude", "plan": "max20x", "planLabel": "Max 20x", "windowKey": "18000:",
+             "windowSeconds": FIVE_HOURS, "windowTitle": "5-hour window", "runners": 5, "completed": 4,
+             "completedShare": 0.8, "fastestSeconds": 3600, "p10Seconds": 3600, "medianSeconds": 5400,
+             "p90Seconds": 9000, "medianByRegion": {"global": 3600, "china": 5400}},
+            {"provider": "codex", "plan": "pro", "planLabel": "Pro", "windowKey": "18000:",
+             "windowSeconds": FIVE_HOURS, "windowTitle": "5-hour window", "runners": 1, "completed": 1,
+             "completedShare": 1.0, "fastestSeconds": 3600, "p10Seconds": 3600, "medianSeconds": 3600,
+             "p90Seconds": 3600, "medianByRegion": {"global": 3600, "china": None}},
+        ])
+        china = self.get("/insights", region="china")[1]["boards"]
+        self.assertEqual([(b["provider"], b["runners"], b["completed"], b["completedShare"], b["fastestSeconds"],
+                           b["p10Seconds"], b["medianSeconds"], b["p90Seconds"], b["medianByRegion"]) for b in china],
+                         [("claude", 2, 2, 1.0, 5400, 5400, 5400, 9000, {"global": 3600, "china": 5400})])
+        self.assertEqual(self.get("/insights", season="all")[1]["boards"][0]["runners"], 5)
+        self.assertEqual(self.get("/insights", region="mars")[0], 400)
+
+        # 和其他公开接口一样缓存、限流
+        late = self.joined("late")
+        self.service.cache_ttl = 30
+        self.get("/insights")
+        late.run(start, to_full(60), provider="codex", plan="Pro", digest=account_digest("codex", "late@example.com"))
+        self.assertEqual(self.get("/insights")[1]["boards"][1]["runners"], 1)
+        self.clock.advance(31)
+        self.assertEqual(self.get("/insights")[1]["boards"][1]["runners"], 2)
+        self.service.limits["public"] = (1, 1000.0)
+        run_id = self.run_ids("glo1")[0]
+        self.assertEqual(self.get(f"/runs/{run_id}")[0], 200)
+        status, data = self.get(f"/runs/{run_id}")
+        self.assertEqual((status, data["error"]), (429, "rate_limited"))
 
 
 class ProviderAccountTests(ServerTestCase):
@@ -2003,7 +2275,7 @@ class ComputationTests(unittest.TestCase):
                 run_server.RunService(path, b"k" * 32).close()
             connection = sqlite3.connect(path)
             try:
-                self.assertEqual(connection.execute("SELECT version FROM schema_version").fetchall(), [(1,), (2,), (3,)])
+                self.assertEqual(connection.execute("SELECT version FROM schema_version").fetchall(), [(1,), (2,), (3,), (4,)])
             finally:
                 connection.close()
 
@@ -2085,7 +2357,7 @@ class ComputationTests(unittest.TestCase):
 
             connection = sqlite3.connect(path)
             try:
-                self.assertEqual(connection.execute("SELECT version FROM schema_version").fetchall(), [(1,), (2,), (3,)])
+                self.assertEqual(connection.execute("SELECT version FROM schema_version").fetchall(), [(1,), (2,), (3,), (4,)])
                 self.assertEqual(sorted(connection.execute(
                     "SELECT account_hmac, provider, user_id, via FROM account_owners").fetchall()),
                     sorted([(shared, "cursor", 1, "first"), (late_own, "cursor", 2, "email")]))
@@ -2098,10 +2370,95 @@ class ComputationTests(unittest.TestCase):
                     "SELECT user_id, plan_norm, tier, flag_reason, account_verified FROM runs ORDER BY user_id, plan_norm"
                 ).fetchall(), [(1, "pro", "verified", None, 0), (2, "business", "verified", None, 1),
                                (2, "pro", "flagged", "account_elsewhere", 0), (3, "pro", "unranked", "no_account", 0)])
+                # 升级 3 里的重算已经按带 public_id 的表结构写
+                ids = [row[0] for row in connection.execute("SELECT public_id FROM runs")]
+                self.assertEqual(len(set(ids)), 4)
+                self.assertTrue(all(re.fullmatch(r"[A-Za-z0-9_-]{12}", run_id) for run_id in ids))
             finally:
                 connection.close()
             # 再打开一次不会重复升级
             run_server.RunService(path, secret).close()
+
+    def test_a_version_three_database_gets_run_ids(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "run.db")
+            run_server.RunService(path, b"k" * 32).close()
+            connection = sqlite3.connect(path, isolation_level=None)
+            connection.execute("INSERT INTO users(id, username, display_name, region, joined_at) VALUES (1, 'old', 'Old', 'global', 1)")
+            for bucket in (1000, 2000, 3000):
+                connection.execute(
+                    "INSERT INTO runs(user_id, provider, plan_norm, window_key, window_seconds, resets_bucket, resets_at,"
+                    " window_start, season, peak_percent, peak_at, first_observed_at, last_observed_at, readings, tier,"
+                    " updated_at) VALUES (1, 'claude', 'max20x', '18000:', 18000, ?, ?, ?, '2026-W38', 50, 1, 1, 1, 1,"
+                    " 'verified', 1)", (bucket, bucket, bucket - 18000))
+            # 退回到 schema 3 的样子：没有 public_id 列和索引
+            connection.execute("DROP INDEX runs_public_id")
+            connection.execute("ALTER TABLE runs DROP COLUMN public_id")
+            connection.execute("DELETE FROM schema_version WHERE version = 4")
+            connection.close()
+
+            run_server.RunService(path, b"k" * 32).close()
+            connection = sqlite3.connect(path)
+            try:
+                self.assertEqual(connection.execute("SELECT version FROM schema_version").fetchall(), [(1,), (2,), (3,), (4,)])
+                ids = [row[0] for row in connection.execute("SELECT public_id FROM runs ORDER BY id")]
+                self.assertEqual(len(set(ids)), 3)
+                self.assertTrue(all(re.fullmatch(r"[A-Za-z0-9_-]{12}", run_id) for run_id in ids))
+                index = connection.execute("SELECT sql FROM sqlite_master WHERE name = 'runs_public_id'").fetchone()[0]
+                self.assertIn("UNIQUE", index)
+                with self.assertRaises(sqlite3.IntegrityError):
+                    connection.execute("UPDATE runs SET public_id = ? WHERE id = (SELECT MAX(id) FROM runs)", (ids[0],))
+            finally:
+                connection.close()
+            # 再打开不会换 id
+            run_server.RunService(path, b"k" * 32).close()
+            connection = sqlite3.connect(path)
+            try:
+                self.assertEqual([row[0] for row in connection.execute("SELECT public_id FROM runs ORDER BY id")], ids)
+            finally:
+                connection.close()
+
+    def test_previous_season(self):
+        self.assertEqual(run_server.previous_season("2026-W38"), "2026-W37")
+        self.assertEqual(run_server.previous_season("2026-W01"), "2025-W52")
+        self.assertEqual(run_server.previous_season("2021-W01"), "2020-W53")
+        self.assertEqual(run_server.previous_season("2027-W01"), "2026-W53")
+        self.assertIsNone(run_server.previous_season("all"))
+        self.assertIsNone(run_server.previous_season("0001-W01"))
+
+    def test_percentiles_and_shares(self):
+        tens = list(range(1, 11))
+        self.assertEqual([run_server.nearest_rank(tens, p) for p in (10, 50, 90)], [1, 5, 9])
+        thirty = list(range(1, 31))
+        self.assertEqual([run_server.nearest_rank(thirty, p) for p in (10, 50, 90)], [3, 15, 27])
+        self.assertEqual([run_server.nearest_rank([7], p) for p in (10, 50, 90)], [7, 7, 7])
+        self.assertEqual([run_server.nearest_rank([1, 2], p) for p in (10, 50, 90)], [1, 1, 2])
+        self.assertIsNone(run_server.nearest_rank([], 50))
+        self.assertEqual(run_server.lower_median([1, 2, 3, 4]), 2)
+        self.assertEqual(run_server.lower_median([1, 2, 3]), 2)
+        self.assertIsNone(run_server.lower_median([]))
+        self.assertEqual((run_server.share(1, 3), run_server.share(2, 3), run_server.share(0, 4)), (0.3333, 0.6667, 0.0))
+        self.assertIsNone(run_server.share(0, 0))
+
+    def test_downsampling_keeps_first_last_and_thresholds(self):
+        few = [(i * 60, float(i)) for i in range(240)]
+        self.assertEqual(run_server.downsample_readings(few), few)
+        # 一开始就连跳三条线：均匀抽取不会碰到下标 1、2、3，只有保留规则会留下它们
+        many = [(0, 0.0), (60, 50.0), (120, 90.0), (180, 99.5)] + [(i * 60, 100.0) for i in range(4, 1000)]
+        kept = run_server.downsample_readings(many)
+        self.assertEqual(len(kept), 240)
+        self.assertEqual(kept[:4], many[:4])
+        self.assertEqual(kept[-1], many[-1])
+        self.assertEqual(kept, sorted(set(kept)))
+        # 没有到线的读数：保留首尾，其余按下标均匀抽
+        flat = [(i, 0.0) for i in range(10)]
+        self.assertEqual([t for t, _ in run_server.downsample_readings(flat, limit=6)], [0, 1, 3, 5, 8, 9])
+        # 阈值读数在中间、抽样步长跨过它们时照样保留
+        ramp = [(i, min(100.0, i / 10)) for i in range(2000)]
+        kept = run_server.downsample_readings(ramp)
+        self.assertEqual(len(kept), 240)
+        for index in (0, 500, 900, 995, 1999):
+            self.assertIn(ramp[index], kept)
 
     def test_secret_file_is_generated_private(self):
         with tempfile.TemporaryDirectory() as tmp:
