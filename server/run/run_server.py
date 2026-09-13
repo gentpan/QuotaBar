@@ -2541,7 +2541,7 @@ class RunService:
             "runnersPrev": runners_prev,
             "fastest": None if fastest is None else {
                 "username": fastest["username"], "displayName": fastest["display_name"],
-                "seconds": fastest["seconds_to_100"]},
+                "seconds": fastest["seconds_to_100"], "runId": fastest["public_id"]},
             "medianSecondsTo100": median["seconds_to_100"] if median else None,
             "medianSecondsTo100Prev": median_prev,
             "medianRunId": median["public_id"] if median else None,

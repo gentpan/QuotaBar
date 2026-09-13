@@ -270,7 +270,7 @@ filter). Omit it for everyone.
   `runId, secondsTo50, secondsTo90, secondsTo100, seasonRuns` (`seasonRuns` = that
   user's visible runs on this board in the selected season, all seasons for
   `all`), and the response has
-  `summary: {runners, runnersPrev, fastest: {username, displayName, seconds} | null,
+  `summary: {runners, runnersPrev, fastest: {username, displayName, seconds, runId} | null,
   medianSecondsTo100, medianSecondsTo100Prev, medianRunId, completed, completedShare,
   verifiedShare, accountVerifiedShare}` computed over each runner's best run
   (speed) on the board for the selected season/region/tier. `*Prev` compare with
