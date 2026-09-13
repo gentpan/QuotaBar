@@ -3,6 +3,7 @@
 #
 #   ./Scripts/configure_run_login.sh google ~/Downloads/client_secret_….json   # Google 控制台下载的 JSON
 #   ./Scripts/configure_run_login.sh github                                    # 终端里输入 Client ID 和 Secret（不回显）
+#   ./Scripts/configure_run_login.sh cloudflare                                # Cloudflare Email Sending：只输入 API 令牌（不回显）
 #   ./Scripts/configure_run_login.sh smtp                                      # 终端里输入 SMTP 设置（密码不回显）
 #
 # 凭据只经 ssh 的标准输入传过去，不出现在命令行参数、终端输出或仓库里；
@@ -56,7 +57,7 @@ PY
     payload="$(H="$host" P="${port:-465}" U="$user" W="$password" F="$from" python3 -c 'import json, os; print(json.dumps({"QUOTA_RUN_SMTP_HOST": os.environ["H"], "QUOTA_RUN_SMTP_PORT": os.environ["P"], "QUOTA_RUN_SMTP_USER": os.environ["U"], "QUOTA_RUN_SMTP_PASSWORD": os.environ["W"], "QUOTA_RUN_MAIL_FROM": os.environ["F"]}))')"
     ;;
   *)
-    die "用法：$0 google <client_secret.json> | github | smtp"
+    die "用法：$0 google <client_secret.json> | github | cloudflare | smtp"
     ;;
 esac
 
