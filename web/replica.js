@@ -199,6 +199,7 @@
 
     var rings = dock.querySelectorAll(".qb-ring[data-id]");
     function show(ring) {
+      if (dock.classList.contains("is-dragging")) return;
       var id = ring.getAttribute("data-id");
       callout.innerHTML = calloutMarkup(id);
       // 垂直居中对齐这一格，和应用里把气泡对准圆环中心是同一件事
@@ -224,6 +225,73 @@
     dock.addEventListener("focusout", function (e) {
       if (!dock.contains(e.relatedTarget)) hide();
     });
+
+    /* ── 拖动停靠条：和应用一样贴着屏幕边缘 ─────────────────────────
+     * 按住上下拖改变高度；横向跟着指针走，松手时落在首屏哪一半，就吸到
+     * 哪一侧的边缘。位置记在本地：哪一侧，加上中心点在首屏高度里的比例
+     * （用比例，窗口换了高度也还在差不多的地方）。 */
+    var desk = document.querySelector(".desktop");
+    var place = { side: "right", y: 0.5 };
+    try {
+      var saved = JSON.parse(localStorage.getItem("qb-dock") || "null");
+      if (saved && (saved.side === "left" || saved.side === "right") && saved.y > 0 && saved.y < 1) place = saved;
+    } catch (e) { /* 用默认 */ }
+    function applyPlace() {
+      dock.classList.toggle("is-left", place.side === "left");
+      dock.style.left = "";
+      dock.style.right = "";
+      dock.style.top = (place.y * 100).toFixed(2) + "%";
+    }
+    applyPlace();
+
+    var grab = null;
+    dock.addEventListener("pointerdown", function (e) {
+      if (e.button !== 0 || !desk) return;
+      var box = dock.getBoundingClientRect(), deskBox = desk.getBoundingClientRect();
+      grab = { id: e.pointerId, x: e.clientX, y: e.clientY, dx: e.clientX - box.left, cy: box.top + box.height / 2 - deskBox.top, moved: false };
+    });
+    window.addEventListener("pointermove", function (e) {
+      if (!grab || e.pointerId !== grab.id) return;
+      if (!grab.moved) {
+        if (Math.abs(e.clientX - grab.x) + Math.abs(e.clientY - grab.y) < 5) return;
+        grab.moved = true;
+        dock.setPointerCapture(e.pointerId);
+        dock.style.animation = "none";   // 进场动画的终态会压住拖动时的位置
+        dock.classList.remove("is-snapping");
+        dock.classList.add("is-dragging");
+        hide();
+      }
+      var deskBox = desk.getBoundingClientRect(), w = dock.offsetWidth, h = dock.offsetHeight;
+      var left = Math.min(Math.max(e.clientX - deskBox.left - grab.dx, 0), deskBox.width - w);
+      var cy = Math.min(Math.max(grab.cy + e.clientY - grab.y, 40 + h / 2), deskBox.height - h / 2 - 8);
+      dock.classList.remove("is-left");
+      dock.style.right = "auto";
+      dock.style.left = left + "px";
+      dock.style.top = cy + "px";
+    });
+    function drop(e) {
+      if (!grab || e.pointerId !== grab.id) return;
+      var moved = grab.moved;
+      grab = null;
+      if (!moved) return;
+      var deskBox = desk.getBoundingClientRect(), box = dock.getBoundingClientRect();
+      place = {
+        side: box.left + box.width / 2 - deskBox.left < deskBox.width / 2 ? "left" : "right",
+        y: (box.top + box.height / 2 - deskBox.top) / deskBox.height,
+      };
+      try { localStorage.setItem("qb-dock", JSON.stringify(place)); } catch (err) { /* 忽略 */ }
+      dock.classList.remove("is-dragging");
+      // 先把 left 动画到那一侧的边缘，落定后再交给 CSS 的 left/right: 0，
+      // 这样窗口再改宽度，条子仍然贴边。
+      dock.classList.add("is-snapping");
+      dock.style.left = (place.side === "left" ? 0 : deskBox.width - box.width) + "px";
+      setTimeout(function () {
+        dock.classList.remove("is-snapping");
+        applyPlace();
+      }, reduced() ? 0 : 300);
+    }
+    window.addEventListener("pointerup", drop);
+    window.addEventListener("pointercancel", drop);
   }
 
 })();
@@ -485,7 +553,7 @@
   host.innerHTML = '<div class="dc" tabindex="0" role="group" aria-label="' + T("QuotaBar desktop card. Right-click it, or use the button at the top right, to change its style", "QuotaBar 桌面卡片，右键或点右上角按钮更换样式") + '">' +
     '<div class="dc-body"></div><button class="dc-more" type="button" aria-label="' + T("Card settings", "卡片设置") + '" aria-haspopup="menu">' +
     '<svg viewBox="0 0 16 16" width="14" height="14" fill="currentColor"><circle cx="3.5" cy="8" r="1.4"/><circle cx="8" cy="8" r="1.4"/><circle cx="12.5" cy="8" r="1.4"/></svg></button></div>' +
-    '<p class="dc-hint">' + T("Right-click the card, or click ⋯, to change its style and size", "右键卡片，或点右上角 ⋯ 换样式和尺寸") + "</p>";
+    '<p class="dc-hint">' + T("Drag to move the card or the dock · right-click to restyle", "卡片和停靠条都能按住拖动 · 右键或点 ⋯ 换样式") + "</p>";
   var card = host.querySelector(".dc"), body = host.querySelector(".dc-body"), more = host.querySelector(".dc-more"), hint = host.querySelector(".dc-hint");
   try { if (localStorage.getItem("qb-deskcard-hinted")) hint.hidden = true; } catch (e) { /* 忽略 */ }
 
@@ -552,7 +620,12 @@
     var b = e.target.closest("button[data-action]");
     if (!b || b.disabled) return;
     var parts = b.getAttribute("data-action").split(":");
-    if (parts[0] === "reset") { state = { style: DEFAULT.style, size: DEFAULT.size, provider: DEFAULT.provider }; }
+    if (parts[0] === "reset") {
+      state = { style: DEFAULT.style, size: DEFAULT.size, provider: DEFAULT.provider };
+      // 恢复默认也把卡片放回左下角
+      host.style.left = host.style.top = host.style.bottom = "";
+      try { localStorage.removeItem("qb-deskcard-pos"); } catch (err) { /* 忽略 */ }
+    }
     else { state[parts[0]] = parts[1]; }
     save();
     closeMenu();
@@ -602,6 +675,22 @@
   window.addEventListener("pointerup", function (e) {
     if (!drag || e.pointerId !== drag.id) return;
     card.classList.remove("is-dragging");
+    if (drag.moved) {
+      // 按首屏的比例记，窗口大小变了也还在同一片区域
+      var d = desk.getBoundingClientRect();
+      var pos = { x: parseFloat(host.style.left) / d.width, y: parseFloat(host.style.top) / d.height };
+      host.style.left = (pos.x * 100).toFixed(2) + "%";
+      host.style.top = (pos.y * 100).toFixed(2) + "%";
+      try { localStorage.setItem("qb-deskcard-pos", JSON.stringify(pos)); } catch (err) { /* 忽略 */ }
+    }
     drag = null;
   });
+  try {
+    var pos = JSON.parse(localStorage.getItem("qb-deskcard-pos") || "null");
+    if (pos && pos.x >= 0 && pos.x < 1 && pos.y > 0 && pos.y < 1) {
+      host.style.left = (pos.x * 100).toFixed(2) + "%";
+      host.style.top = (pos.y * 100).toFixed(2) + "%";
+      host.style.bottom = "auto";
+    }
+  } catch (e) { /* 用默认位置 */ }
 })();

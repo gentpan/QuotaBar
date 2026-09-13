@@ -354,11 +354,14 @@
     </div>
   </div>
 
+  <!-- Dock 里是 QuotaBar 读额度的那几个桌面应用。前三个图标从本机装的 Claude、
+       ChatGPT（Codex）、Cursor 应用导出（Dock 实际显示的那张，裁到 824 的图标网格）；
+       Grok 没有装，用站点里的 Grok 标志按同样规格做成黑底图标。 -->
   <div class="dock" id="dock">
-    <span class="dock__tile" style="background:linear-gradient(160deg,#4aa3ff,#1c6fd6)" title="[[Finder||访达]]"></span>
-    <span class="dock__tile" style="background:linear-gradient(160deg,#3d4148,#191b1f)" title="[[Terminal||终端]]"></span>
-    <span class="dock__tile" style="background:linear-gradient(160deg,#ff9f43,#e4572e)" title="[[Editor||编辑器]]"></span>
-    <span class="dock__tile" style="background:linear-gradient(160deg,#8e7bff,#4f3ad6)" title="[[Browser||浏览器]]"></span>
+    <span class="dock__tile" title="Claude"><img src="{{root}}assets/dock/claude.png?v={{v}}" alt="" width="46" height="46"></span>
+    <span class="dock__tile" title="ChatGPT"><img src="{{root}}assets/dock/chatgpt.png?v={{v}}" alt="" width="46" height="46"></span>
+    <span class="dock__tile" title="Cursor"><img src="{{root}}assets/dock/cursor.png?v={{v}}" alt="" width="46" height="46"></span>
+    <span class="dock__tile" title="Grok"><img src="{{root}}assets/dock/grok.png?v={{v}}" alt="" width="46" height="46"></span>
     <span class="dock__sep"></span>
     <a class="dock__tile dock__tile--app" href="{{dmg}}" download title="[[Download QuotaBar||下载 QuotaBar]]">
       <img src="{{root}}assets/icon.png?v={{v}}" alt="QuotaBar">

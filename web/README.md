@@ -30,8 +30,10 @@ python3 -m http.server 8080 --directory web   # 然后打开 http://localhost:80
 没有复制 onlook.cam 的 `styles.css` 或 `app.js`，页面文案、截图和信息
 架构都是 QuotaBar 自己的。
 
-英雄区的壁纸是 CSS 渐变，不是任何现成图片；Dock 里除 QuotaBar 外的
-图标是抽象色块，没有复刻 Apple 的图标。
+首屏壁纸是 macOS Mojave 的沙丘（白天、夜晚各一张 WebP）。Dock 里是 QuotaBar 读额度的
+几个桌面应用：Claude、ChatGPT（Codex）、Cursor 的图标从装在 Mac 上的应用导出
+（`assets/dock/`，裁到 824 的图标网格），Grok 用站点里的 Grok 标志做成同规格的黑底图标。
+停靠条和桌面卡片都能拖动，位置记在本地（`qb-dock`、`qb-deskcard-pos`）。
 
 ## 截图怎么来的
 

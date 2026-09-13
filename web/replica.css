@@ -467,3 +467,40 @@
   .dc, .dc-body, .dc-more { transition: none !important; }
   .dc-steps > span, .dc-bar > span, .dc-gauge__arc, .dc-draw, .dc-bars__col i { animation: none !important; }
 }
+
+/* ── 英文页的字体 ─────────────────────────────────────────────────────
+ * 英文页上刘海岛面板、停靠条和它的悬停卡片、桌面卡片都用 Instrument Sans，
+ * 和标题、正文、字标同一套字。原来用 SF Mono 的百分比、重置时间、套餐芯片
+ * 也换过来，靠字体自带的等宽数字（tnum）继续对齐。
+ * 仿 macOS 的菜单栏、下拉菜单和右键菜单仍是系统字体——那是系统的界面。
+ * 中文页不动：中文落到苹方，数字仍是系统字体与 SF Mono。 */
+:root[lang="en"] .qb,
+:root[lang="en"] .qb-widget,
+:root[lang="en"] .dc,
+:root[lang="en"] .dc-hint,
+:root[lang="en"] :is(.qb-chip, .qb-ipct, .qb-itile__reset, .qb-callout__acct, .dc-plan, .dc-mono, .dc-figure b, .dc-stat b, .dc-money) {
+  font-family: "Instrument Sans", -apple-system, BlinkMacSystemFont, sans-serif;
+  font-variant-numeric: tabular-nums;
+}
+:root[lang="en"] .qb-chip { letter-spacing: .06em; }
+
+/* ── 拖动停靠条 ───────────────────────────────────────────────────────
+ * 和应用一样：按住沿屏幕边缘上下拖，拖过首屏中线就换到另一侧。拖动时条子
+ * 离开边缘、四角都圆，松手吸回最近的一侧。 */
+.desktop__strip { cursor: grab; touch-action: none; user-select: none; -webkit-user-select: none; }
+.desktop__strip.is-dragging {
+  cursor: grabbing;
+  border-radius: 14px;
+  box-shadow: rgba(0, 0, 0, 0.55) 0 18px 50px 0;
+}
+.desktop__strip.is-snapping { transition: left 280ms cubic-bezier(.2, .9, .25, 1), top 280ms cubic-bezier(.2, .9, .25, 1); }
+.desktop__strip.is-left { left: 0; right: auto; border-radius: 0 14px 14px 0; box-shadow: rgba(0, 0, 0, 0.5) 10px 0 30px 0; animation-name: slidein-left; }
+.desktop__strip.is-left .qb-callout { left: calc(100% + 8px); right: auto; transform: translateX(-6px); }
+.desktop__strip.is-left .qb-callout.is-on { transform: none; }
+@keyframes slidein-left {
+  from { opacity: 0; transform: translate(-28px, -50%); }
+  to { opacity: 1; transform: translateY(-50%); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .desktop__strip.is-snapping { transition: none; }
+}
