@@ -104,6 +104,87 @@ public enum RunAccountDigest {
         let input = "quota-run-account-v1\n" + provider + "\n" + cleaned
         return SHA256.hash(data: Data(input.utf8)).hexString
     }
+
+    /// Lower-case hex SHA-256, the only form a digest travels in.
+    public static func isDigest(_ text: String) -> Bool {
+        text.utf8.count == 64 && text.utf8.allSatisfy { (48...57).contains($0) || (97...102).contains($0) }
+    }
+
+    /// The account as this Mac may show it, and nowhere else: `p***@gmail.com`
+    /// for an email, the first four characters and an ellipsis for an id.
+    public static func masked(_ account: String) -> String {
+        let cleaned = account.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        if let at = cleaned.lastIndex(of: "@"), at != cleaned.startIndex, cleaned.index(after: at) != cleaned.endIndex {
+            return "\(cleaned[cleaned.startIndex])***\(cleaned[at...])"
+        }
+        // A short id would be shown whole by its first four characters.
+        return String(cleaned.prefix(cleaned.count > 8 ? 4 : 1)) + "…"
+    }
+}
+
+/// A provider account this Mac is signed in with, as the Quota Run page
+/// needs it: the digest to look up and unbind, and the masked form to show.
+/// The email or id itself is not kept.
+public struct RunLocalAccount: Equatable, Sendable, Identifiable {
+    public var provider: String
+    public var digest: String
+    public var masked: String
+    /// An email, which a quota.run sign-in could claim; not Codex's account id.
+    public var isEmail: Bool
+
+    public var id: String { digest }
+    public var providerID: ProviderID? { ProviderID(rawValue: provider) }
+
+    public init(provider: String, digest: String, masked: String, isEmail: Bool) {
+        self.provider = provider
+        self.digest = digest
+        self.masked = masked
+        self.isEmail = isEmail
+    }
+
+    public init?(provider: ProviderID, account: String) {
+        guard let digest = RunAccountDigest.digest(provider: provider.rawValue, account: account) else { return nil }
+        self.init(
+            provider: provider.rawValue, digest: digest, masked: RunAccountDigest.masked(account),
+            isEmail: RunAccountDigest.masked(account).contains("@"))
+    }
+
+    /// One per provider, the latest account each reported, in the providers'
+    /// own order.
+    public static func merge(_ list: [RunLocalAccount], with account: RunLocalAccount) -> [RunLocalAccount] {
+        var next = list.filter { $0.provider != account.provider }
+        next.append(account)
+        let order = Dictionary(uniqueKeysWithValues: ProviderID.allCases.enumerated().map { ($1.rawValue, $0) })
+        return next.sorted { (order[$0.provider] ?? .max, $0.provider) < (order[$1.provider] ?? .max, $1.provider) }
+    }
+}
+
+/// Where a provider account stands, for its row on the Quota Run page.
+public enum RunAccountStanding: Equatable, Sendable {
+    /// quota.run has no reading from it on this user yet.
+    case notUploaded
+    case bound(RunProviderAccount)
+    /// Owned through a verified sign-in email.
+    case verified(RunProviderAccount)
+    /// Another Quota account owns it; runs from it are flagged.
+    case elsewhere(RunProviderAccount)
+    /// On this Mac's exclusion list: not uploaded until bound again.
+    case unbound
+
+    public static func of(digest: String, lookups: [String: RunProviderAccount], excluded: Set<String>) -> RunAccountStanding {
+        if excluded.contains(digest) { return .unbound }
+        guard let account = lookups[digest] else { return .notUploaded }
+        if account.status == .elsewhere { return .elsewhere(account) }
+        return account.verifiedByEmail ? .verified(account) : .bound(account)
+    }
+
+    /// The server's id, when there is something on quota.run to unbind.
+    public var account: RunProviderAccount? {
+        switch self {
+        case let .bound(account), let .verified(account), let .elsewhere(account): account
+        case .notUploaded, .unbound: nil
+        }
+    }
 }
 
 extension Sequence where Element == UInt8 {
@@ -159,12 +240,51 @@ public struct RunRecord: Codable, Sendable, Equatable, Identifiable {
     public var readingCount: Int
     /// This Mac's estimate of the server's tier.
     public var tier: RunTier
+    /// A reading carried no provider account digest: the server stores such a
+    /// run as unranked, off every board, unless it is flagged anyway.
+    public var unbound: Bool = false
 
     public var id: String { "\(provider)|\(planNorm)|\(windowKey)|\(resetsAt)" }
     /// The board this run would be ranked on.
     public var boardKey: String { "\(provider)|\(planNorm)|\(windowKey)" }
 
     public var providerID: ProviderID? { ProviderID(rawValue: provider) }
+
+    /// Whether the server would rank it, as far as this Mac can tell.
+    public var wouldRank: Bool { tier != .flagged && !unbound }
+}
+
+extension RunRecord {
+    private enum CodingKeys: String, CodingKey {
+        case provider, plan, planNorm, windowKey, windowSeconds, scope, windowTitle, resetsAt, windowStart, peakPercent, lastPercent
+        case secondsTo50, secondsTo90, secondsTo100, completedAt, firstObservedAt, lastObservedAt, readingCount, tier, unbound
+    }
+
+    /// Bests kept from before `unbound` existed decode as bound: a record
+    /// that fails to decode would take every stored best with it.
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        provider = try c.decode(String.self, forKey: .provider)
+        plan = try c.decodeIfPresent(String.self, forKey: .plan)
+        planNorm = try c.decode(String.self, forKey: .planNorm)
+        windowKey = try c.decode(String.self, forKey: .windowKey)
+        windowSeconds = try c.decode(Int.self, forKey: .windowSeconds)
+        scope = try c.decodeIfPresent(String.self, forKey: .scope)
+        windowTitle = try c.decode(String.self, forKey: .windowTitle)
+        resetsAt = try c.decode(Int.self, forKey: .resetsAt)
+        windowStart = try c.decode(Int.self, forKey: .windowStart)
+        peakPercent = try c.decode(Double.self, forKey: .peakPercent)
+        lastPercent = try c.decode(Double.self, forKey: .lastPercent)
+        secondsTo50 = try c.decodeIfPresent(Int.self, forKey: .secondsTo50)
+        secondsTo90 = try c.decodeIfPresent(Int.self, forKey: .secondsTo90)
+        secondsTo100 = try c.decodeIfPresent(Int.self, forKey: .secondsTo100)
+        completedAt = try c.decodeIfPresent(Int.self, forKey: .completedAt)
+        firstObservedAt = try c.decode(Int.self, forKey: .firstObservedAt)
+        lastObservedAt = try c.decode(Int.self, forKey: .lastObservedAt)
+        readingCount = try c.decode(Int.self, forKey: .readingCount)
+        tier = try c.decode(RunTier.self, forKey: .tier)
+        unbound = (try? c.decodeIfPresent(Bool.self, forKey: .unbound)) ?? false
+    }
 }
 
 /// The contract's run arithmetic as pure functions, so the fixtures in the
@@ -288,7 +408,8 @@ public enum RunMath {
             firstObservedAt: first.observedAt,
             lastObservedAt: last.observedAt,
             readingCount: sorted.count,
-            tier: tier(sorted: sorted, completedAt: completedAt, activity: activity))
+            tier: tier(sorted: sorted, completedAt: completedAt, activity: activity),
+            unbound: sorted.contains { $0.accountDigest == nil })
     }
 
     // MARK: Tiers
@@ -345,8 +466,9 @@ public enum RunMath {
     }
 
     /// All five rules, with the binding of rule 1 unknowable on this Mac: a
-    /// digest on every reading passes it locally, and only the server can
-    /// call an account disputed.
+    /// digest on every reading passes it locally (a run missing one is
+    /// `unbound` besides), and only the server can say another Quota account
+    /// owns the provider account.
     public static func tier(sorted: [RunReading], completedAt: Int?, activity: ActivityCheck) -> RunTier {
         guard isMonotonic(sorted), isPlausible(sorted) else { return .flagged }
         guard let first = sorted.first, let last = sorted.last else { return .standard }

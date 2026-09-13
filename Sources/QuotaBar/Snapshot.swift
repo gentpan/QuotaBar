@@ -520,6 +520,15 @@ enum Snapshot {
             if let account = member.account {
                 write(runPane(RunProjectsCard(run: member, account: account, editing: 1)), to: base, name: "settings-run-project-editor-\(suffix)")
             }
+            // Every provider account standing, including an account id
+            // rather than an email and one unbound on this Mac.
+            let standings = RunCenter.preview(.signedIn, now: referenceDate)
+            standings.previewEveryStanding()
+            if let account = standings.account {
+                write(
+                    runPane(RunProviderAccountsCard(run: standings, account: account, accounts: standings.localAccounts)),
+                    to: base, name: "settings-run-provider-accounts-\(suffix)")
+            }
             if let best = records.bests.first {
                 render(RunShare.card(best, store: store), to: base, name: "run-share-card-\(suffix)", backing: .black)
             }

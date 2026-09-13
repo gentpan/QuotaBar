@@ -391,6 +391,89 @@ public struct RunProject: Codable, Equatable, Sendable {
     }
 }
 
+/// A provider account (the digest of a provider's email or account id) as
+/// quota.run holds it for this user. `id` is the first 16 hex characters of
+/// the server's HMAC of the digest: shown to its own user only, and all the
+/// app needs to unbind it.
+public struct RunProviderAccount: Codable, Equatable, Sendable, Identifiable {
+    public enum Status: String, Codable, Sendable {
+        /// This Quota account owns it; its runs can rank.
+        case owned
+        /// Another Quota account owns it, so this user's runs for it are flagged.
+        case elsewhere
+    }
+
+    public var id: String
+    public var provider: String
+    public var firstSeenAt: Date?
+    public var lastSeenAt: Date?
+    public var status: Status
+    /// Owned because its email is one of the account's verified sign-in emails.
+    public var verifiedByEmail: Bool
+    /// This user's runs for it that are neither flagged nor unranked.
+    public var runs: Int
+
+    public init(id: String, provider: String, firstSeenAt: Date? = nil, lastSeenAt: Date? = nil, status: Status = .owned, verifiedByEmail: Bool = false, runs: Int = 0) {
+        self.id = id
+        self.provider = provider
+        self.firstSeenAt = firstSeenAt
+        self.lastSeenAt = lastSeenAt
+        self.status = status
+        self.verifiedByEmail = verifiedByEmail
+        self.runs = runs
+    }
+
+    private enum CodingKeys: String, CodingKey { case id, provider, firstSeenAt, lastSeenAt, status, verifiedByEmail, runs }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        if let text = try? c.decode(String.self, forKey: .id) {
+            id = text
+        } else {
+            id = String(try c.decode(Int.self, forKey: .id))
+        }
+        provider = (try? c.decodeIfPresent(String.self, forKey: .provider)) ?? ""
+        firstSeenAt = c.lenientDate(.firstSeenAt)
+        lastSeenAt = c.lenientDate(.lastSeenAt)
+        // A status this version does not know is not a claim of ownership.
+        let rawStatus = (try? c.decodeIfPresent(String.self, forKey: .status)) ?? Status.owned.rawValue
+        status = Status(rawValue: rawStatus) ?? .elsewhere
+        verifiedByEmail = (try? c.decodeIfPresent(Bool.self, forKey: .verifiedByEmail)) ?? false
+        runs = max((try? c.decodeIfPresent(Int.self, forKey: .runs)) ?? 0, 0)
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(id, forKey: .id)
+        try c.encode(provider, forKey: .provider)
+        try c.encodeIfPresent(firstSeenAt.map { Int($0.timeIntervalSince1970) }, forKey: .firstSeenAt)
+        try c.encodeIfPresent(lastSeenAt.map { Int($0.timeIntervalSince1970) }, forKey: .lastSeenAt)
+        try c.encode(status, forKey: .status)
+        try c.encode(verifiedByEmail, forKey: .verifiedByEmail)
+        try c.encode(runs, forKey: .runs)
+    }
+}
+
+/// One answer of `POST /accounts/lookup`: the account, or nil when this user
+/// never uploaded the digest.
+public struct RunAccountLookup: Codable, Equatable, Sendable {
+    public var digest: String
+    public var account: RunProviderAccount?
+
+    public init(digest: String, account: RunProviderAccount?) {
+        self.digest = digest
+        self.account = account
+    }
+
+    private enum CodingKeys: String, CodingKey { case digest, account }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        digest = try c.decode(String.self, forKey: .digest).lowercased()
+        account = try? c.decodeIfPresent(RunProviderAccount.self, forKey: .account)
+    }
+}
+
 public struct RunMe: Codable, Equatable, Sendable {
     public var user: RunUser
     public var devices: [RunDevice]
@@ -399,17 +482,20 @@ public struct RunMe: Codable, Equatable, Sendable {
     public var projects: [RunProject]
     /// How the account signs in on quota.run.
     public var identities: [RunIdentity]
+    /// The provider accounts bound to the account, from every Mac.
+    public var providerAccounts: [RunProviderAccount]
 
-    public init(user: RunUser, devices: [RunDevice] = [], rankedChangeAvailableAt: Date? = nil, lastUploadAt: Date? = nil, projects: [RunProject] = [], identities: [RunIdentity] = []) {
+    public init(user: RunUser, devices: [RunDevice] = [], rankedChangeAvailableAt: Date? = nil, lastUploadAt: Date? = nil, projects: [RunProject] = [], identities: [RunIdentity] = [], providerAccounts: [RunProviderAccount] = []) {
         self.user = user
         self.devices = devices
         self.rankedChangeAvailableAt = rankedChangeAvailableAt
         self.lastUploadAt = lastUploadAt
         self.projects = projects
         self.identities = identities
+        self.providerAccounts = providerAccounts
     }
 
-    private enum CodingKeys: String, CodingKey { case user, devices, rankedChangeAvailableAt, lastUploadAt, projects, identities }
+    private enum CodingKeys: String, CodingKey { case user, devices, rankedChangeAvailableAt, lastUploadAt, projects, identities, providerAccounts }
 
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
@@ -419,6 +505,7 @@ public struct RunMe: Codable, Equatable, Sendable {
         lastUploadAt = c.lenientDate(.lastUploadAt)
         projects = (try? c.decodeIfPresent([RunProject].self, forKey: .projects)) ?? []
         identities = (try? c.decodeIfPresent([RunIdentity].self, forKey: .identities)) ?? []
+        providerAccounts = (try? c.decodeIfPresent([RunProviderAccount].self, forKey: .providerAccounts)) ?? []
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -429,6 +516,7 @@ public struct RunMe: Codable, Equatable, Sendable {
         try c.encodeIfPresent(lastUploadAt.map { Int($0.timeIntervalSince1970) }, forKey: .lastUploadAt)
         try c.encode(projects, forKey: .projects)
         try c.encode(identities, forKey: .identities)
+        try c.encode(providerAccounts, forKey: .providerAccounts)
     }
 
     /// The device this request came from, as the server sees it.
@@ -644,6 +732,10 @@ public struct QuotaRunError: LocalizedError, Equatable, Sendable {
         case "needs_signup":
             return L10n.t("Finish creating your account on quota.run first.", "请先在 quota.run 完成账户创建。")
         case "invalid_region": return L10n.t("quota.run does not know that region.", "quota.run 不认识这个地区。")
+        case "account_not_found":
+            return L10n.t("quota.run has no such provider account on your Quota account.", "你的 Quota 账户下没有这个服务商账号。")
+        case "invalid_digests":
+            return L10n.t("quota.run could not read this Mac's provider account digests.", "quota.run 无法识别这台 Mac 发送的服务商账号摘要。")
         case "current_device": return L10n.t("This Mac cannot remove itself here; use Disconnect This Mac.", "不能在这里移除本机，请使用「断开这台 Mac」。")
         case "ranked_device": return L10n.t("Make another Mac the ranked device before removing this one.", "请先把另一台 Mac 设为计分设备，再移除这台。")
         case "cooldown":
@@ -909,5 +1001,58 @@ public struct QuotaRunClient: Sendable {
 
     public func deleteAccount() async throws {
         _ = try await send("DELETE", "/account", json: Optional<Empty>.none)
+    }
+
+    /// The contract's limit per lookup.
+    public static let lookupLimit = 20
+
+    /// What quota.run holds for each provider account digest, asked for 20 at
+    /// a time. Only digests go out — never the email or account id behind
+    /// them. Duplicates and anything that is not a lower-case hex SHA-256 are
+    /// left out rather than refused.
+    public func lookupAccounts(digests: [String]) async throws -> [RunAccountLookup] {
+        struct Body: Encodable { let digests: [String] }
+        /// One malformed entry is dropped, not the answer.
+        struct Lenient: Decodable {
+            let value: RunAccountLookup?
+            init(from decoder: Decoder) throws { value = try? RunAccountLookup(from: decoder) }
+        }
+        struct Answer: Decodable {
+            let accounts: [RunAccountLookup]
+
+            private enum CodingKeys: String, CodingKey { case accounts }
+
+            init(from decoder: Decoder) throws {
+                let c = try decoder.container(keyedBy: CodingKeys.self)
+                accounts = try c.decode([Lenient].self, forKey: .accounts).compactMap(\.value)
+            }
+        }
+        var seen = Set<String>()
+        let clean = digests.map { $0.lowercased() }.filter { RunAccountDigest.isDigest($0) && seen.insert($0).inserted }
+        var results: [RunAccountLookup] = []
+        var start = 0
+        while start < clean.count {
+            let chunk = Array(clean[start..<min(start + Self.lookupLimit, clean.count)])
+            results += try decode(Answer.self, try await send("POST", "/accounts/lookup", json: Body(digests: chunk))).accounts
+            start += Self.lookupLimit
+        }
+        return results
+    }
+
+    /// Unbinds a provider account: quota.run deletes this user's readings and
+    /// runs for it. Answers with the accounts that remain.
+    public func unbindAccount(id: String) async throws -> [RunProviderAccount] {
+        struct Answer: Decodable {
+            let providerAccounts: [RunProviderAccount]
+
+            private enum CodingKeys: String, CodingKey { case providerAccounts }
+
+            init(from decoder: Decoder) throws {
+                let c = try decoder.container(keyedBy: CodingKeys.self)
+                providerAccounts = (try? c.decodeIfPresent([RunProviderAccount].self, forKey: .providerAccounts)) ?? []
+            }
+        }
+        let escaped = id.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed.subtracting(CharacterSet(charactersIn: "/"))) ?? id
+        return try decode(Answer.self, try await send("DELETE", "/accounts/\(escaped)", json: Optional<Empty>.none)).providerAccounts
     }
 }

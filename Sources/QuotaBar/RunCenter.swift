@@ -81,6 +81,15 @@ final class RunCenter: ObservableObject {
     @Published var devicesPhase: RunPhase = .idle
     @Published var disconnectPhase: RunPhase = .idle
     @Published var deletePhase: RunPhase = .idle
+    @Published var accountsPhase: RunPhase = .idle
+
+    // MARK: Provider accounts
+
+    /// The account each provider last reported, masked and digested — the
+    /// email or id itself is not kept. In memory only: seeded from the
+    /// snapshot cache, then from every successful refresh.
+    @Published private(set) var localAccounts: [RunLocalAccount] = []
+    private var lookingUp = false
 
     /// Previews and the off-screen renderer: sample data, no files, no key,
     /// no network.
@@ -106,6 +115,9 @@ final class RunCenter: ObservableObject {
         let file = RunStateFile.load(from: url)
         account = file.account
         upload = file.upload
+        for id in ProviderID.allCases {
+            if let snapshot = SnapshotCache.shared.snapshot(for: id) { noteAccount(id, snapshot) }
+        }
     }
 
     private init(inert ledger: RunLedgerStore, account: RunAccountState?, upload: RunUploadState) {
@@ -153,6 +165,15 @@ final class RunCenter: ObservableObject {
     func record(_ id: ProviderID, _ snapshot: UsageSnapshot) {
         guard !isInert else { return }
         ledger.record(provider: id, snapshot: snapshot)
+        noteAccount(id, snapshot)
+    }
+
+    /// A refresh that names no account leaves the last one standing, as the
+    /// ledger does within a period.
+    private func noteAccount(_ id: ProviderID, _ snapshot: UsageSnapshot) {
+        guard let name = snapshot.account, let local = RunLocalAccount(provider: id, account: name) else { return }
+        guard !localAccounts.contains(local) else { return }
+        localAccounts = RunLocalAccount.merge(localAccounts, with: local)
     }
 
     /// After every refresh: new readings go into the records, and to the
@@ -246,9 +267,11 @@ final class RunCenter: ObservableObject {
     }
 
     func updateQueued() {
-        guard account != nil else { queued = 0; return }
-        let oldest = Int(Date().timeIntervalSince1970) - RunUploadPlan.maximumAge
-        queued = ledger.readings(after: upload.sentSeq).reduce(0) { $0 + ($1.observedAt >= oldest ? 1 : 0) }
+        guard let account else { queued = 0; return }
+        let clock = Int(Date().timeIntervalSince1970)
+        queued = ledger.readings(after: upload.sentSeq).reduce(0) {
+            $0 + (RunUploadPlan.isUploadable($1, excluded: account.excludedDigests, clock: clock) ? 1 : 0)
+        }
     }
 
     /// The client for this Mac's key, loading the key the first time.
@@ -421,6 +444,7 @@ final class RunCenter: ObservableObject {
             // The key works again — a stop from an earlier refusal is over.
             if upload.stopped { updateUpload { $0.stopped = false; $0.lastError = nil; $0.failures = 0 } }
             updateQueued()
+            await lookupAccounts(force: true)
         } catch let error as QuotaRunError where error.isAuthFailure {
             updateUpload { $0.stopped = true; $0.lastError = Self.message(error) }
         } catch let error as QuotaRunError where error.clockSkew != nil {
@@ -514,6 +538,91 @@ final class RunCenter: ObservableObject {
                 state.ranked = current.ranked
             }
         }
+    }
+
+    // MARK: Provider accounts
+
+    /// Asks quota.run where this Mac's provider accounts stand. `force` skips
+    /// the ten minutes between lookups, not the two between forced ones.
+    func lookupAccounts(force: Bool = false) async {
+        guard !isInert, !lookingUp, let account, !localAccounts.isEmpty else { return }
+        if let checked = account.accountsCheckedAt {
+            let since = Date().timeIntervalSince(checked)
+            if since < (force ? 120 : 600) { return }
+        }
+        guard let client = client() else { return }
+        lookingUp = true
+        defer { lookingUp = false }
+        let digests = localAccounts.map(\.digest)
+        do {
+            let answers = try await client.lookupAccounts(digests: digests)
+            updateAccount { $0.apply(answers, at: Date()) }
+        } catch {
+            // Tried: wait the usual time before asking again. The key's own
+            // troubles surface through the upload and `/me`.
+            updateAccount { $0.accountsCheckedAt = Date() }
+        }
+    }
+
+    /// After an upload went through: look again when it carried an account
+    /// quota.run did not know yet, so a first binding shows at once.
+    func afterUpload(digests: Set<String>) {
+        guard let account else { return }
+        let fresh = digests.contains { account.accountLookups[$0] == nil }
+        Task { await lookupAccounts(force: fresh) }
+    }
+
+    /// Unbinds a provider account: quota.run deletes this user's readings and
+    /// runs for it, and this Mac stops uploading it. One never uploaded only
+    /// goes on the list.
+    func unbindAccount(_ local: RunLocalAccount) {
+        guard let account, !accountsPhase.isWorking else { return }
+        let digest = local.digest
+        // On the list first, so an upload in the meantime leaves it out.
+        updateAccount { $0.excludedDigests.insert(digest) }
+        updateQueued()
+        guard let bound = account.accountLookups[digest] else {
+            accountsPhase = .idle
+            return
+        }
+        guard let client = client() else {
+            updateAccount { $0.excludedDigests.remove(digest) }
+            updateQueued()
+            accountsPhase = .failed(missingKey)
+            return
+        }
+        accountsPhase = .working
+        Task {
+            do {
+                let remaining = try await client.unbindAccount(id: bound.id)
+                updateAccount { state in
+                    state.accountLookups.removeValue(forKey: digest)
+                    state.me?.providerAccounts = remaining
+                }
+                accountsPhase = .idle
+            } catch let error as QuotaRunError where error.code == "account_not_found" {
+                // Already gone on quota.run. A bare 404 — a server without
+                // the endpoint — is a failure like any other.
+                updateAccount { state in
+                    state.accountLookups.removeValue(forKey: digest)
+                    state.me?.providerAccounts.removeAll { $0.id == bound.id }
+                }
+                accountsPhase = .idle
+            } catch {
+                updateAccount { $0.excludedDigests.remove(digest) }
+                updateQueued()
+                accountsPhase = .failed(Self.message(error))
+            }
+        }
+    }
+
+    /// Takes a provider account off the list: its next readings upload again.
+    func bindAgain(_ local: RunLocalAccount) {
+        guard account != nil else { return }
+        updateAccount { $0.excludedDigests.remove(local.digest) }
+        accountsPhase = .idle
+        updateQueued()
+        uploadIfDue()
     }
 
     // MARK: Leaving
@@ -615,10 +724,10 @@ extension RunCenter {
         let clock = Int(now.timeIntervalSince1970)
         let week = 604_800
         let fiveHours = 18_000
-        func series(_ provider: String, plan: String, seconds: Int, reset: Int, points: [(Int, Double)]) -> [RunReading] {
+        func series(_ provider: String, plan: String, seconds: Int, reset: Int, points: [(Int, Double)], digest: String? = "sample") -> [RunReading] {
             points.map { offset, used in
                 RunReading(
-                    provider: provider, plan: plan, accountDigest: "sample",
+                    provider: provider, plan: plan, accountDigest: digest,
                     windowKey: RunMath.windowKey(seconds: seconds, scope: nil),
                     windowTitle: RunMath.canonicalTitle(seconds: seconds, scope: nil, fallback: ""),
                     windowSeconds: seconds, usedPercent: used, resetsAt: reset,
@@ -639,9 +748,11 @@ extension RunCenter {
         readings += series("claude", plan: "Max 20x", seconds: fiveHours, reset: hourReset - 3 * fiveHours, points: [
             (300, 12), (1_500, 44), (2_100, 58), (5_400, 90), (8_100, 99.6),
         ])
-        readings += series("cursor", plan: "Pro", seconds: 2_592_000, reset: RunMath.roundedReset(clock + 9 * 86_400), points: [(86_400, 12), (1_500_000, 61)])
+        // Cursor from before it reported an account: a record that would not rank.
+        readings += series("cursor", plan: "Pro", seconds: 2_592_000, reset: RunMath.roundedReset(clock + 9 * 86_400), points: [(86_400, 12), (1_500_000, 61)], digest: nil)
         let runs = RunMath.runs(from: readings) { _, _, _ in true }
 
+        let previewAccounts = Self.previewProviderAccounts(now: now)
         var account: RunAccountState?
         if state == .signedIn {
             let me = RunMe(
@@ -664,7 +775,8 @@ extension RunCenter {
                 identities: [
                     RunIdentity(id: "i1", provider: "github", email: "peter@quota.bar", name: "gentpan", linkedAt: now.addingTimeInterval(-12 * 86_400)),
                     RunIdentity(id: "i2", provider: "email", email: "peter@quota.bar", linkedAt: now.addingTimeInterval(-2 * 86_400)),
-                ])
+                ],
+                providerAccounts: previewAccounts.lookups.values.sorted { $0.provider < $1.provider })
             account = RunAccountState(
                 username: "gentpan", displayName: "Peter Pan", region: .china, deviceId: "d1",
                 joinedAt: now.addingTimeInterval(-12 * 86_400), ranked: true, me: me, meFetchedAt: now)
@@ -682,8 +794,47 @@ extension RunCenter {
                 verifyURL: URL(string: "https://quota.run/connect?code=KXPT-7M4Q")!,
                 expiresAt: now.addingTimeInterval(8 * 60 + 20))
         }
+        if state == .signedIn {
+            center.localAccounts = previewAccounts.local
+            center.account?.accountLookups = previewAccounts.lookups
+        }
         center.queued = state == .signedIn ? 3 : 0
         center.recordsReady = true
         return center
+    }
+}
+
+extension RunCenter {
+    /// Sample provider accounts: Codex verified by the sign-in email, Claude
+    /// bound, Cursor owned by another Quota account.
+    static func previewProviderAccounts(now: Date) -> (local: [RunLocalAccount], lookups: [String: RunProviderAccount]) {
+        let samples: [(ProviderID, String, RunProviderAccount.Status, Bool, Int)] = [
+            (.codex, "peter@quota.bar", .owned, true, 14),
+            (.claude, "pan.builds@icloud.com", .owned, false, 6),
+            (.cursor, "studio@gmail.com", .elsewhere, false, 0),
+        ]
+        var local: [RunLocalAccount] = []
+        var lookups: [String: RunProviderAccount] = [:]
+        for (index, sample) in samples.enumerated() {
+            guard let account = RunLocalAccount(provider: sample.0, account: sample.1) else { continue }
+            local.append(account)
+            lookups[account.digest] = RunProviderAccount(
+                id: String(account.digest.prefix(16)), provider: sample.0.rawValue,
+                firstSeenAt: now.addingTimeInterval(-Double(12 - index * 3) * 86_400), lastSeenAt: now.addingTimeInterval(-300),
+                status: sample.2, verifiedByEmail: sample.3, runs: sample.4)
+        }
+        return (local, lookups)
+    }
+
+    /// Every standing at once, for the renderer: the signed-in samples plus
+    /// an account not uploaded yet and one unbound on this Mac.
+    func previewEveryStanding() {
+        guard isInert else { return }
+        let extra = [
+            RunLocalAccount(provider: .zai, account: "8f2c61d0-4b7a-4e0f-9d2e-31c5a7b9e204"),
+            RunLocalAccount(provider: .kimi, account: "peter@quota.bar"),
+        ].compactMap { $0 }
+        for local in extra { localAccounts = RunLocalAccount.merge(localAccounts, with: local) }
+        if let unbound = extra.last { account?.excludedDigests.insert(unbound.digest) }
     }
 }
