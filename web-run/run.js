@@ -235,6 +235,109 @@
     });
   }
 
+  // 登录后的接口（会话 Cookie）：带上同源 Cookie，JSON 进出。浏览器在 POST/PUT/DELETE 上自己带 Origin。
+  // 出错时抛出的 Error 带 status、code（接口里的 error）和整个回应体 data；网络不通时 status 为 0。
+  function request(method, path, body) {
+    var init = { method: method, credentials: "same-origin", headers: { Accept: "application/json" } };
+    if (body !== undefined) {
+      init.headers["Content-Type"] = "application/json";
+      init.body = JSON.stringify(body);
+    }
+    return fetch(API + path, init).then(function (response) {
+      return response.text().then(function (text) {
+        var data = null;
+        try { data = text ? JSON.parse(text) : null; } catch (e) { /* 不是 JSON */ }
+        if (!response.ok) {
+          var error = new Error((data && data.message) || "HTTP " + response.status);
+          error.status = response.status;
+          error.code = (data && data.error) || "";
+          error.data = data || {};
+          throw error;
+        }
+        return data;
+      });
+    }, function () {
+      var error = new Error("Couldn't reach quota.run.");
+      error.status = 0;
+      error.code = "network";
+      error.data = {};
+      throw error;
+    });
+  }
+
+  // 登录、账号、连接三页的地址。线上 Caddy 把 /login 映射到 login.html；本地预览没有 Caddy，直接走文件
+  function pageHref(page, pairs) {
+    var q = new URLSearchParams();
+    Object.keys(pairs || {}).forEach(function (k) { if (pairs[k] !== "" && pairs[k] != null) q.set(k, pairs[k]); });
+    if (DEMO) q.set("demo", "1");
+    var s = q.toString();
+    var base = LOCAL ? ROOT + (ZH ? "zh/" : "") + page + ".html" : (ZH ? "/zh/" : "/") + page;
+    return base + (s ? "?" + s : "");
+  }
+
+  function homeHref() {
+    return ROOT + (ZH ? "zh/" : "") + (LOCAL ? "index.html" : "") + (DEMO ? "?demo=1" : "");
+  }
+
+  // 当前页的路径和查询串，登录回来时要回到这里
+  function currentPath() {
+    return location.pathname + location.search;
+  }
+
+  /* ── 顶栏右侧：登录 / @username ──────────────────────────────────── */
+
+  var sessionLoad = null;
+
+  function session(refresh) {
+    if (!sessionLoad || refresh) sessionLoad = DEMO ? Promise.resolve(demoSession()) : request("GET", "/session");
+    return sessionLoad;
+  }
+
+  function demoSession() {
+    var out = { signedIn: false, needsSignup: false, identity: null, user: null, suggestedUsername: null, suggestedDisplayName: null };
+    if (params.get("session") === "out") return out;
+    if (PAGE === "login") {
+      if (params.get("step") !== "signup") return out;
+      return { signedIn: true, needsSignup: true, identity: { provider: "github", email: "noor@example.com", name: "Noor Haddad" }, user: null, suggestedUsername: "noorh", suggestedDisplayName: "Noor Haddad" };
+    }
+    return { signedIn: true, needsSignup: false, identity: { provider: "github", email: "peter@example.com", name: "Peter" }, user: { username: "peter", displayName: "Peter", region: "global" }, suggestedUsername: null, suggestedDisplayName: null };
+  }
+
+  function renderAccountLink(s) {
+    var link = $("runAccount");
+    if (!link) return;
+    var user = s && s.signedIn && !s.needsSignup && s.user;
+    link.removeAttribute("aria-current");
+    if (user && user.username) {
+      link.textContent = "@" + user.username;
+      link.setAttribute("href", pageHref("account"));
+      link.setAttribute("data-state", "in");
+      link.setAttribute("title", t("Your account", "你的账号"));
+      if (PAGE === "account") link.setAttribute("aria-current", "page");
+    } else {
+      link.textContent = t("Sign in", "登录");
+      link.setAttribute("data-state", "out");
+      link.removeAttribute("title");
+      if (PAGE === "login") {
+        link.setAttribute("href", location.href);
+        link.setAttribute("aria-current", "page");
+      } else {
+        link.setAttribute("href", pageHref("login", { next: currentPath() }));
+      }
+    }
+    link.hidden = false;
+  }
+
+  function accountLink() {
+    var link = $("runAccount");
+    if (!link) return;
+    // 排行榜会随筛选改地址：点下去的那一刻再取当前路径
+    link.addEventListener("click", function () {
+      if (link.getAttribute("data-state") === "out" && PAGE !== "login") link.setAttribute("href", pageHref("login", { next: currentPath() }));
+    });
+    session().then(renderAccountLink, function () { renderAccountLink(null); });
+  }
+
   function copyText(text, button) {
     function done() {
       var label = button.querySelector("span");
@@ -923,6 +1026,17 @@
     return { leaderboard: leaderboard, boards: boards, stats: stats, user: user };
   })();
 
+  // 登录、账号、连接三页由 account.js 画，共用这里的格式、链接、会话和示例开关
+  window.QuotaRun = {
+    ZH: ZH, ROOT: ROOT, V: V, API: API, DEMO: DEMO, LOCAL: LOCAL, PAGE: PAGE, PROVIDERS: PROVIDERS, USERNAME: USERNAME,
+    t: t, esc: esc, each: each, $: $, number: number, toDate: toDate, relative: relative, timeTag: timeTag,
+    providerName: providerName, logo: logo, avatar: avatar, regionLabel: regionLabel, safeLink: safeLink,
+    stateBox: stateBox, copyText: copyText, request: request, pageHref: pageHref, homeHref: homeHref,
+    profileHref: profileHref, currentPath: currentPath, session: session, renderAccountLink: renderAccountLink, demoSession: demoSession,
+    FULL_FORMAT: FULL_FORMAT, YEAR_FORMAT: YEAR_FORMAT, ICONS: ICONS,
+  };
+
+  accountLink();
   if (PAGE === "leaderboard") leaderboardPage();
   else if (PAGE === "profile") profilePage();
 })();

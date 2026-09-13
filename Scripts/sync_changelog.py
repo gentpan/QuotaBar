@@ -13,7 +13,9 @@ From CHANGELOG.md (Chinese), CHANGELOG.en.md (English) and `git log`:
   recent-updates block and the provider strip filled in; web/changelog.html and
   web/zh/changelog.html are the whole log as a page; site/leaderboard.html and
   site/u.html (Quota Run's leaderboard and public profile on quota.run, drawn by web-run/run.js
-  from the public API) become the same pair of pages under the same rules;
+  from the public API) and site/login.html, site/account.html, site/connect.html (sign-in,
+  account and Mac connection, drawn by web-run/account.js) become pairs of pages in web-run/
+  under the same rules;
 - Assets/readme/activity.svg and activity.zh.svg, 26 weeks of commits;
 - the provider strip, provider count and download links, from ProviderID in
   Sources/QuotaCore/Models.swift, the app's logos and the latest release.
@@ -656,9 +658,13 @@ def main():
     logos = copy_logos()
     count = len(providers())
     # Quota Run lives on its own site, quota.run (web-run/): the leaderboard is
-    # its home page and u.html is the public profile Caddy serves for /@username.
+    # its home page, u.html is the public profile Caddy serves for /@username,
+    # and login, account and connect are the signed-in pages Caddy serves for
+    # /login, /account and /connect (drawn by web-run/account.js).
     run_pages = {out: (ROOT / "site" / name).read_text(encoding="utf-8")
-                 for name, out in (("leaderboard.html", "index.html"), ("u.html", "u.html"))}
+                 for name, out in (("leaderboard.html", "index.html"), ("u.html", "u.html"),
+                                   ("login.html", "login.html"), ("account.html", "account.html"),
+                                   ("connect.html", "connect.html"))}
     changed += copy_run_assets()
     latest = latest_release(releases_zh)
     version = latest["version"] if latest else "0.0.0"

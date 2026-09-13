@@ -23,16 +23,18 @@ RUN_ROOT="${RUN_ROOT:-/var/www/quota.run}"
 python3 Scripts/sync_changelog.py ${CHANGELOG_FILE:+--changelog "$CHANGELOG_FILE"}
 
 # 图片也算进去：只换了截图或分享图时，指纹不变的话 CDN 会继续给旧图。
-STAMP="$( { cat web/styles.css web/replica.css web/app.js web/replica.js web-run/run.css web-run/run.js \
+STAMP="$( { cat web/styles.css web/replica.css web/app.js web/replica.js web-run/run.css web-run/run.js web-run/account.css web-run/account.js \
            | /usr/bin/sed -E 's/\?v=[A-Za-z0-9]+//g'
            find web/assets -type f \( -name '*.png' -o -name '*.jpg' -o -name '*.webp' \) | sort | xargs cat; } \
          | shasum -a 256 | cut -c1-8)"
 echo "内容指纹 v=$STAMP"
 
 # Rewrite every ?v=… in the HTML, and the font URL the stylesheet carries.
-# quota.run 的排行榜和个人主页（u.html）同样带指纹；run.js 从自己的 ?v= 取 logo 的指纹，不用单独改。
+# quota.run 的排行榜、个人主页（u.html）和登录、账号、连接三页同样带指纹；run.js 从自己的 ?v= 取 logo 的指纹，不用单独改。
 /usr/bin/sed -i '' -E "s/\?v=[A-Za-z0-9]+/?v=$STAMP/g" web/index.html web/changelog.html web/zh/index.html web/zh/changelog.html \
-  web-run/index.html web-run/zh/index.html web-run/u.html web-run/zh/u.html
+  web-run/index.html web-run/zh/index.html web-run/u.html web-run/zh/u.html \
+  web-run/login.html web-run/zh/login.html web-run/account.html web-run/zh/account.html \
+  web-run/connect.html web-run/zh/connect.html
 /usr/bin/sed -i '' -E "s/(InstrumentSans-Variable\.ttf)\?v=[A-Za-z0-9]+/\1?v=$STAMP/" web/styles.css
 /usr/bin/sed -i '' -E "s/(wallpaper-[a-z0-9-]+\.webp)\?v=[A-Za-z0-9]+/\1?v=$STAMP/g" web/styles.css
 # replica.js 里的 LOGOV 也要跟上，否则 JS 渲染出的那些 logo 拿的是旧指纹。
@@ -52,7 +54,7 @@ echo "已同步"
 # copy is the failure this script exists to prevent, so it is checked, not
 # assumed.
 fail=0
-for f in web/styles.css web/replica.css web/app.js web/replica.js web-run/styles.css web-run/run.css web-run/run.js; do
+for f in web/styles.css web/replica.css web/app.js web/replica.js web-run/styles.css web-run/run.css web-run/run.js web-run/account.css web-run/account.js; do
   site=https://quota.bar; [[ $f == web-run/* ]] && site=https://quota.run
   want=$(stat -f%z "$f")
   got=$(curl -s -o /dev/null -w '%{size_download}' --max-time 20 "$site/${f#*/}?v=$STAMP")
@@ -63,7 +65,9 @@ for f in web/styles.css web/replica.css web/app.js web/replica.js web-run/styles
     fail=1
   fi
 done
-for page in quota.bar/ quota.bar/zh/ quota.run/ quota.run/zh/ quota.run/u.html quota.run/zh/u.html; do
+# /login、/account、/connect 走 Caddy 的 try_files，顺便验证这条映射在线上生效。
+for page in quota.bar/ quota.bar/zh/ quota.run/ quota.run/zh/ quota.run/u.html quota.run/zh/u.html \
+            quota.run/login quota.run/zh/login quota.run/account quota.run/zh/account quota.run/connect quota.run/zh/connect; do
   html=$(curl -s --max-time 20 "https://$page" | grep -c "?v=$STAMP" || true)
   [ "$html" -gt 0 ] && printf "  ✅ %-22s 引用 %s 处新指纹\n" "$page" "$html" \
                     || { printf "  ❌ %-22s 仍在引用旧指纹\n" "$page"; fail=1; }

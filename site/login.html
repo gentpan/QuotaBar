@@ -1,0 +1,156 @@
+<!doctype html>
+<html lang="{{lang}}">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>[[Sign in · Quota Run||登录 · Quota Run]]</title>
+<meta name="description" content="[[Sign in to Quota Run with GitHub, Google or an email code. No passwords.||用 GitHub、Google 或邮箱验证码登录 Quota Run，不用密码。]]">
+<meta name="robots" content="noindex">
+<meta name="theme-color" content="#101112">
+[[<!-- Caddy 把 /login 映射到这个文件。英文在根目录；浏览器语言是中文、或者之前选过中文的，去 /zh/login（带上 next 等查询串）。 -->
+<script>try{var l=localStorage.getItem("qb-lang"),n=navigator.languages&&navigator.languages[0]?navigator.languages[0]:navigator.language;if(l==="zh"?true:!l&&/^zh\b/i.test(String(n)))location.replace("zh/"+location.pathname.split("/").pop()+location.search+location.hash)}catch(e){}</script>
+||]]<link rel="canonical" href="{{run_url}}login">
+<link rel="icon" type="image/png" sizes="256x256" href="{{root}}assets/icon.png?v={{v}}">
+<link rel="icon" sizes="48x48" href="/favicon.ico?v={{v}}">
+<link rel="apple-touch-icon" sizes="180x180" href="{{root}}assets/apple-touch-icon.png?v={{v}}">
+<link rel="stylesheet" href="{{root}}styles.css?v={{v}}">
+<link rel="stylesheet" href="{{root}}run.css?v={{v}}">
+<link rel="stylesheet" href="{{root}}account.css?v={{v}}">
+<!-- 登录、账号、连接三页不挂统计脚本：地址里有 next 和连接码，不往第三方送。 -->
+</head>
+<body class="logpage runpage accpage" data-run-page="login">
+<a class="run-skip" href="#login">[[Skip to sign in||跳到登录]]</a>
+<header class="logbar">
+  <div class="shell logbar__inner">
+    <a class="logbar__brand wordmark" href="{{url}}"><img src="{{root}}assets/icon.png?v={{v}}" alt="" width="22" height="22">QuotaBar</a>
+    <nav class="logbar__links" aria-label="[[Site||站点]]">
+      <a href="{{url}}">[[Home||首页]]</a>
+      <a href="{{run_url}}">[[Leaderboard||排行榜]]</a>
+      <a href="{{dmg}}" download>[[Download||下载]]</a>
+      <a class="run-lang" href="[[/zh/login||/login]]" hreflang="[[zh-CN||en]]" lang="[[zh-CN||en]]" data-lang="[[zh||en]]">[[中文||EN]]</a>
+      <a class="run-account" id="runAccount" href="[[/login||/zh/login]]" data-state="out" aria-current="page">[[Sign in||登录]]</a>
+    </nav>
+  </div>
+</header>
+
+<main class="shell acc-main acc-main--center" id="login">
+  <div class="acc-card" id="loginCard" aria-busy="true">
+    <p class="run-eyebrow"><i aria-hidden="true"></i>Quota Run</p>
+
+    <!-- 读会话的时候先放一段骨架，不要一闪登录表单又跳走 -->
+    <div class="run-loading acc-loading" id="loginLoading" role="status">
+      <span class="sr-only">[[Checking whether you're signed in…||正在确认登录状态…]]</span>
+      <span class="run-skel run-skel--title"></span>
+      <span class="run-skel"></span>
+      <span class="run-skel"></span>
+    </div>
+
+    <!-- ① 选登录方式 -->
+    <section class="acc-step" id="stepMethods" aria-labelledby="methodsHeading" hidden>
+      <h1 class="acc-title" id="methodsHeading">[[Sign in to Quota Run||登录 Quota Run]]</h1>
+      <p class="acc-lede">[[One account for your profile, your projects and the Macs you rank from. No passwords.||一个账号管主页、项目和计分的 Mac。不用密码。]]</p>
+      <div class="acc-alert acc-alert--error" id="methodsError" role="alert" hidden></div>
+
+      <div class="acc-oauth" id="oauthButtons">
+        <a class="acc-btn acc-btn--oauth" id="oauthGithub" href="/api/v1/auth/github/start" data-provider="github">
+          <svg aria-hidden="true" width="18" height="18" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+          <span>[[Continue with GitHub||用 GitHub 继续]]</span>
+        </a>
+        <a class="acc-btn acc-btn--oauth" id="oauthGoogle" href="/api/v1/auth/google/start" data-provider="google">
+          <svg aria-hidden="true" width="18" height="18" viewBox="0 0 18 18"><path fill="#4285F4" d="M17.64 9.2c0-.64-.06-1.25-.16-1.84H9v3.48h4.84a4.14 4.14 0 0 1-1.8 2.72v2.26h2.92c1.7-1.57 2.68-3.88 2.68-6.62z"/><path fill="#34A853" d="M9 18c2.43 0 4.47-.8 5.96-2.18l-2.92-2.26c-.8.54-1.84.86-3.04.86-2.34 0-4.33-1.58-5.04-3.7H.96v2.33A9 9 0 0 0 9 18z"/><path fill="#FBBC05" d="M3.96 10.72A5.41 5.41 0 0 1 3.68 9c0-.6.1-1.18.28-1.72V4.95H.96A9 9 0 0 0 0 9c0 1.45.35 2.83.96 4.05l3-2.33z"/><path fill="#EA4335" d="M9 3.58c1.32 0 2.5.45 3.44 1.35l2.58-2.58A9 9 0 0 0 .96 4.95l3 2.33C4.67 5.16 6.66 3.58 9 3.58z"/></svg>
+          <span>[[Continue with Google||用 Google 继续]]</span>
+        </a>
+      </div>
+
+      <p class="acc-or" id="emailDivider"><span>[[or use your email||或者用邮箱]]</span></p>
+
+      <form class="acc-form" id="emailForm" novalidate>
+        <div class="acc-field">
+          <label class="acc-label" for="emailInput">[[Email address||邮箱地址]]</label>
+          <input class="acc-input" id="emailInput" name="email" type="email" inputmode="email" autocomplete="email" autocapitalize="off" spellcheck="false" maxlength="254" required placeholder="you@example.com" aria-describedby="emailHint">
+          <p class="acc-hint" id="emailHint">[[We'll send a 6-digit code. It works for new and existing accounts.||我们会发一个 6 位验证码。新账号、老账号都用它。]]</p>
+        </div>
+        <button class="acc-btn acc-btn--primary acc-btn--block" type="submit" id="emailSubmit">[[Email me a code||发送验证码]]</button>
+      </form>
+    </section>
+
+    <!-- ② 填验证码 -->
+    <section class="acc-step" id="stepCode" aria-labelledby="codeHeading" hidden>
+      <h1 class="acc-title" id="codeHeading">[[Check your email||查收邮件]]</h1>
+      <p class="acc-lede">[[We sent a 6-digit code to||验证码已发到]] <b class="acc-email" id="codeEmail"></b>[[. It expires in 10 minutes.||，10 分钟内有效。]]</p>
+      <div class="acc-alert acc-alert--error" id="codeError" role="alert" hidden></div>
+      <form class="acc-form" id="codeForm" novalidate>
+        <div class="acc-field">
+          <label class="acc-label" for="codeInput">[[6-digit code||6 位验证码]]</label>
+          <input class="acc-input acc-input--code" id="codeInput" name="code" type="text" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6}" maxlength="6" required spellcheck="false" aria-describedby="codeHint">
+          <p class="acc-hint" id="codeHint">[[Can't find it? Check spam, or send a new one — only the newest code works.||没收到？看看垃圾邮件，或者重新发一个——只有最新的那个验证码有效。]]</p>
+        </div>
+        <button class="acc-btn acc-btn--primary acc-btn--block" type="submit" id="codeSubmit">[[Continue||继续]]</button>
+      </form>
+      <div class="acc-inline-actions">
+        <button class="acc-link" type="button" id="codeResend" data-label="[[Send a new code||重新发送]]" data-wait="[[Send a new code in ||重新发送（]]" data-unit="[[s||秒）]]">[[Send a new code||重新发送]]</button>
+        <button class="acc-link" type="button" id="codeBack">[[Use a different email||换一个邮箱]]</button>
+      </div>
+      <p class="acc-status sr-only" id="codeStatus" role="status" aria-live="polite"></p>
+    </section>
+
+    <!-- ③ 新账号：起用户名 -->
+    <section class="acc-step" id="stepSignup" aria-labelledby="signupHeading" hidden>
+      <h1 class="acc-title" id="signupHeading">[[Choose your username||起一个用户名]]</h1>
+      <p class="acc-lede" id="signupWho"></p>
+      <div class="acc-alert acc-alert--error" id="signupError" role="alert" hidden></div>
+      <form class="acc-form" id="signupForm" novalidate>
+        <div class="acc-field">
+          <label class="acc-label" for="usernameInput">[[Username||用户名]]</label>
+          <div class="acc-affix">
+            <span class="acc-affix__text" aria-hidden="true">quota.run/@</span>
+            <input class="acc-input" id="usernameInput" name="username" type="text" autocomplete="username" autocapitalize="off" spellcheck="false" maxlength="20" required aria-describedby="usernameStatus usernameRules">
+          </div>
+          <p class="acc-check" id="usernameStatus" aria-live="polite"></p>
+          <p class="acc-hint" id="usernameRules">[[3–20 characters: lower-case letters, digits, “-” and “_”, starting with a letter or digit. It's your public address and can't be changed later.||3–20 个字符：小写字母、数字、“-” 和 “_”，以字母或数字开头。它就是你的公开地址，之后不能改。]]</p>
+        </div>
+        <div class="acc-field">
+          <label class="acc-label" for="displayNameInput">[[Display name||显示名称]]</label>
+          <input class="acc-input" id="displayNameInput" name="displayName" type="text" autocomplete="nickname" maxlength="40" aria-describedby="displayNameHint">
+          <p class="acc-hint" id="displayNameHint">[[Shown on the leaderboard and your profile. Up to 40 characters.||显示在排行榜和主页上，最多 40 个字符。]]</p>
+        </div>
+        <fieldset class="acc-field">
+          <legend class="acc-label">[[Region||地区]]</legend>
+          <div class="run-seg acc-seg">
+            <label><input type="radio" name="region" value="global"><span>[[Global||国际]]</span></label>
+            <label><input type="radio" name="region" value="china"><span>[[China||中国]]</span></label>
+          </div>
+          <p class="acc-hint">[[Used as a leaderboard filter. You can change it later.||用来筛选排行榜，之后可以改。]]</p>
+        </fieldset>
+        <button class="acc-btn acc-btn--primary acc-btn--block" type="submit" id="signupSubmit">[[Create account||创建账号]]</button>
+      </form>
+      <div class="acc-inline-actions">
+        <button class="acc-link" type="button" id="signupCancel">[[Not you? Sign out||不是你？退出登录]]</button>
+      </div>
+    </section>
+
+    <p class="acc-privacy">
+      <svg aria-hidden="true" width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="7" width="10" height="7" rx="1.5"/><path d="M5.5 7V5a2.5 2.5 0 0 1 5 0v2"/></svg>
+      <span>[[Your sign-in email stays on quota.run to sign you in. It's never shown on your profile, a leaderboard or to anyone else.||登录邮箱只留在 quota.run 用来让你登录，不会出现在主页、排行榜上，也不会给任何人看。]]</span>
+    </p>
+  </div>
+  <noscript><p class="run-note">[[Signing in needs JavaScript.||登录需要开启 JavaScript。]]</p></noscript>
+</main>
+
+<footer class="footer">
+  <div class="shell">
+    <div class="footer__links">
+      <a href="{{url}}">[[Home||首页]]</a>
+      <a href="{{run_url}}">[[Leaderboard||排行榜]]</a>
+      <a href="{{dmg}}" download>[[Download||下载]]</a>
+      <a href="https://github.com/gentpan/QuotaBar">[[Source||源码]]</a>
+    </div>
+    <p class="footer__fine">© 2026 QuotaBar · <a href="https://github.com/gentpan/QuotaBar/blob/main/LICENSE">[[MIT License||MIT 许可证]]</a> · [[Quota Run is independent of every provider shown; logos belong to their owners.||Quota Run 与页面上任何服务商均无关联，标志归各自所有者。]]</p>
+  </div>
+</footer>
+
+<script src="{{root}}app.js?v={{v}}"></script>
+<script src="{{root}}run.js?v={{v}}"></script>
+<script src="{{root}}account.js?v={{v}}"></script>
+</body>
+</html>

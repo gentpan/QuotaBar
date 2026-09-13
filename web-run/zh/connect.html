@@ -1,0 +1,64 @@
+<!doctype html>
+<!-- 由 Scripts/sync_changelog.py 从 site/connect.html 生成：改模板，不要改这个文件。 -->
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>连接 Mac · Quota Run</title>
+<meta name="description" content="批准一台运行 QuotaBar 的 Mac，让它往你的 Quota Run 账号上传读数。">
+<meta name="robots" content="noindex">
+<meta name="theme-color" content="#101112">
+<link rel="canonical" href="https://quota.run/zh/connect">
+<link rel="icon" type="image/png" sizes="256x256" href="../assets/icon.png?v=544371bc">
+<link rel="icon" sizes="48x48" href="/favicon.ico?v=544371bc">
+<link rel="apple-touch-icon" sizes="180x180" href="../assets/apple-touch-icon.png?v=544371bc">
+<link rel="stylesheet" href="../styles.css?v=544371bc">
+<link rel="stylesheet" href="../run.css?v=544371bc">
+<link rel="stylesheet" href="../account.css?v=544371bc">
+<!-- 登录、账号、连接三页不挂统计脚本：地址里有 next 和连接码，不往第三方送。 -->
+</head>
+<body class="logpage runpage accpage" data-run-page="connect">
+<a class="run-skip" href="#connect">跳到连接请求</a>
+<header class="logbar">
+  <div class="shell logbar__inner">
+    <a class="logbar__brand wordmark" href="https://quota.bar/zh/"><img src="../assets/icon.png?v=544371bc" alt="" width="22" height="22">QuotaBar</a>
+    <nav class="logbar__links" aria-label="站点">
+      <a href="https://quota.bar/zh/">首页</a>
+      <a href="https://quota.run/zh/">排行榜</a>
+      <a href="https://quota.bar/download/QuotaBar-0.5.3.dmg" download>下载</a>
+      <a class="run-lang" href="/connect" hreflang="en" lang="en" data-lang="en">EN</a>
+      <a class="run-account" id="runAccount" href="/zh/login" data-state="out">登录</a>
+    </nav>
+  </div>
+</header>
+
+<main class="shell acc-main acc-main--center" id="connect">
+  <!-- account.js 按 ?code= 读 /api/v1/connect/<code>，把请求、结果或者输入框画在这里 -->
+  <div class="acc-card acc-card--wide" id="connectCard" aria-live="polite" aria-busy="true">
+    <div class="run-loading acc-loading" role="status">
+      <span class="sr-only">正在读取连接请求…</span>
+      <span class="run-skel run-skel--title"></span>
+      <span class="run-skel"></span>
+      <span class="run-skel"></span>
+    </div>
+  </div>
+  <noscript><p class="run-note">连接 Mac 需要开启 JavaScript。</p></noscript>
+</main>
+
+<footer class="footer">
+  <div class="shell">
+    <div class="footer__links">
+      <a href="https://quota.bar/zh/">首页</a>
+      <a href="https://quota.run/zh/">排行榜</a>
+      <a href="https://quota.bar/download/QuotaBar-0.5.3.dmg" download>下载</a>
+      <a href="https://github.com/gentpan/QuotaBar">源码</a>
+    </div>
+    <p class="footer__fine">© 2026 QuotaBar · <a href="https://github.com/gentpan/QuotaBar/blob/main/LICENSE">MIT 许可证</a> · Quota Run 与页面上任何服务商均无关联，标志归各自所有者。</p>
+  </div>
+</footer>
+
+<script src="../app.js?v=544371bc"></script>
+<script src="../run.js?v=544371bc"></script>
+<script src="../account.js?v=544371bc"></script>
+</body>
+</html>
