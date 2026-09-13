@@ -230,10 +230,13 @@ public struct CostSummary: Sendable, Equatable {
     }
 }
 
-/// One pass over the logs: the archive's days and the recent minutes.
+/// One pass over the logs: the archive's days, the recent minutes, and the
+/// same tokens per project.
 public struct ArchiveScan: Sendable {
     public var days: ArchiveDays
     public var activity: ActivityMinutes
+    public var projects: ProjectDays = [:]
+    public var projectRefs: [String: ProjectRef] = [:]
 }
 
 /// Tokens per minute per CLI over the last 48 hours, from the local session
@@ -312,6 +315,13 @@ private struct TokenEvent {
     /// pricing the token counts — the tool knows its own rates better than a
     /// list-price table does.
     var presetCost: Double?
+    /// The directory the turn ran in, and the remote when the log names one
+    /// (Codex does); resolved to a project after the scan.
+    var cwd: String? = nil
+    var repositoryURL: String? = nil
+    var mode: CodingMode = .cli
+    /// Session the turn belongs to, for counting sessions per project.
+    var session: String? = nil
 }
 
 /// USD per million tokens; `marker` is substring-matched against the logged
@@ -593,24 +603,62 @@ public enum CostEstimator {
         var out: ArchiveDays = [:]
         var activity = ActivityMinutes(scannedAt: now)
         let recent = now.addingTimeInterval(-ActivityMinutes.horizon)
+        // Per day, project, CLI and mode: the day itself, plus the sessions and
+        // minutes seen, which only become counts at the end.
+        struct ProjectBucket {
+            var day = ProjectDay()
+            var sessions = Set<String>()
+            var minutes = Set<Int>()
+        }
+        var buckets: [String: [String: [String: [String: ProjectBucket]]]] = [:]
+        var refs: [String: ProjectRef] = [:]
+        let calendar = Calendar.current
         for event in events {
             if let key = event.dedupeKey {
                 guard seen.insert(key).inserted else { continue }
             }
             guard event.timestamp >= cutoff else { continue }
             let day = UsageArchive.dayKey(event.timestamp)
+            var fresh = ArchiveEntry()
+            fresh.usd = cost(of: event)
+            fresh.input = event.input
+            fresh.output = event.output
+            fresh.cacheRead = event.cacheRead
+            fresh.cacheWrite = event.cacheWrite5m + event.cacheWrite1h
             var entry = out[day]?[event.source.rawValue]?[event.model] ?? ArchiveEntry()
-            entry.usd += cost(of: event)
-            entry.input += event.input
-            entry.output += event.output
-            entry.cacheRead += event.cacheRead
-            entry.cacheWrite += event.cacheWrite5m + event.cacheWrite1h
+            entry.add(fresh)
             out[day, default: [:]][event.source.rawValue, default: [:]][event.model] = entry
+            let count = tokens(of: event)
             if event.timestamp >= recent, event.timestamp <= now {
-                activity.add(tokens: tokens(of: event), at: event.timestamp, source: event.source)
+                activity.add(tokens: count, at: event.timestamp, source: event.source)
+            }
+
+            let project = ProjectResolver.resolve(cwd: event.cwd, repositoryURL: event.repositoryURL)
+            refs[project.key] = project
+            var bucket = buckets[day]?[project.key]?[event.source.rawValue]?[event.mode.rawValue] ?? ProjectBucket()
+            var model = bucket.day.models[event.model] ?? ArchiveEntry()
+            model.add(fresh)
+            bucket.day.models[event.model] = model
+            if bucket.day.hours.isEmpty { bucket.day.hours = Array(repeating: 0, count: 24) }
+            bucket.day.hours[calendar.component(.hour, from: event.timestamp)] += count
+            if let session = event.session { bucket.sessions.insert(session) }
+            bucket.minutes.insert(ActivityMinutes.floor(event.timestamp))
+            buckets[day, default: [:]][project.key, default: [:]][event.source.rawValue, default: [:]][event.mode.rawValue] = bucket
+        }
+        var projects: ProjectDays = [:]
+        for (day, perProject) in buckets {
+            for (project, sources) in perProject {
+                for (source, modes) in sources {
+                    for (mode, bucket) in modes {
+                        var entry = bucket.day
+                        entry.sessions = bucket.sessions.count
+                        entry.activeMinutes = bucket.minutes.count
+                        projects[day, default: [:]][project, default: [:]][source, default: [:]][mode] = entry
+                    }
+                }
             }
         }
-        return ArchiveScan(days: out, activity: activity)
+        return ArchiveScan(days: out, activity: activity, projects: projects, projectRefs: refs)
     }
 
     /// How many files the parse memo holds; for the tests.
@@ -631,6 +679,16 @@ public enum CostEstimator {
     private static func scanClaude(root: URL, cutoff: Date) -> [TokenEvent] {
         return walk(root, cutoff: cutoff, filter: { $0.pathExtension == "jsonl" }) { url, formatter in
             var out: [TokenEvent] = []
+            // Every line repeats the directory and the entrypoint; one copy of
+            // each string per file is kept however many turns name it.
+            var strings: [String: String] = [:]
+            func intern(_ value: String?) -> String? {
+                guard let value else { return nil }
+                if let kept = strings[value] { return kept }
+                strings[value] = value
+                return value
+            }
+            let fileSession = url.deletingPathExtension().lastPathComponent
             streamLines(url) { line in
                 // Claude puts `usage` after the message content, so the whole
                 // line has to be searched.
@@ -667,7 +725,10 @@ public enum CostEstimator {
                     cacheWrite1h: write1h,
                     cacheRead: usage["cache_read_input_tokens"] as? Int ?? 0,
                     dedupeKey: dedupeKey,
-                    presetCost: nil))
+                    presetCost: nil,
+                    cwd: intern(obj["cwd"] as? String),
+                    mode: CodingMode.claude(entrypoint: obj["entrypoint"] as? String),
+                    session: intern(obj["sessionId"] as? String ?? fileSession)))
             }
             return out
         }
@@ -679,18 +740,33 @@ public enum CostEstimator {
         return walk(root, cutoff: cutoff, filter: { $0.lastPathComponent.hasPrefix("rollout-") }) { url, formatter in
             var out: [TokenEvent] = []
             var currentModel = "gpt-5-codex"
+            // The session's first record says where it ran and from what; each
+            // turn's context repeats the directory in case it moved.
+            var cwd: String?
+            var repository: String?
+            var mode = CodingMode.cli
+            var session = url.deletingPathExtension().lastPathComponent
             streamLines(url) { line in
                 let head = line.count > Markers.codexHeadBytes
                     ? UnsafeRawBufferPointer(rebasing: line[0..<Markers.codexHeadBytes])
                     : line
                 return contains(head, Markers.turnContext) || contains(head, Markers.tokenCount)
+                    || contains(head, Markers.sessionMeta)
             } handle: { line in
                 guard let obj = try? JSONSerialization.jsonObject(with: line) as? [String: Any]
                 else { return }
                 let type = obj["type"] as? String ?? ""
                 let payload = obj["payload"] as? [String: Any] ?? [:]
-                if type == "turn_context", let model = payload["model"] as? String {
-                    currentModel = model
+                if type == "session_meta" {
+                    cwd = payload["cwd"] as? String ?? cwd
+                    repository = (payload["git"] as? [String: Any])?["repository_url"] as? String ?? repository
+                    mode = CodingMode.codex(originator: payload["originator"] as? String, source: payload["source"] as? String)
+                    if let id = payload["id"] as? String { session = id }
+                    return
+                }
+                if type == "turn_context" {
+                    if let directory = payload["cwd"] as? String { cwd = directory }
+                    if let model = payload["model"] as? String { currentModel = model }
                     return
                 }
                 guard type == "event_msg", payload["type"] as? String == "token_count",
@@ -716,7 +792,11 @@ public enum CostEstimator {
                     cacheWrite1h: 0,
                     cacheRead: cached,
                     dedupeKey: "codex|\(obj["timestamp"] as? String ?? "")|\(rawInput)|\(output)",
-                    presetCost: nil))
+                    presetCost: nil,
+                    cwd: cwd,
+                    repositoryURL: repository,
+                    mode: mode,
+                    session: session))
             }
             return out
         }
@@ -733,14 +813,20 @@ public enum CostEstimator {
     /// need per-message costs, which the table does not carry.
     private static func scanOpenCode(database: URL, cutoff: Date) -> [TokenEvent] {
         let cutoffMillis = Int(cutoff.timeIntervalSince1970 * 1000)
-        let rows = SQLiteRead.rows(
-            inFile: database.path,
-            query: """
-            SELECT time_updated, cost, tokens_input, tokens_output,
-                   tokens_cache_read, tokens_cache_write, id
-            FROM session
-            WHERE cost > 0 AND time_updated >= \(cutoffMillis)
-            """)
+        func read(_ directory: String) -> [[String?]] {
+            SQLiteRead.rows(
+                inFile: database.path,
+                query: """
+                SELECT time_updated, cost, tokens_input, tokens_output,
+                       tokens_cache_read, tokens_cache_write, id\(directory)
+                FROM session
+                WHERE cost > 0 AND time_updated >= \(cutoffMillis)
+                """)
+        }
+        // Older opencode databases have no `directory` column; the query then
+        // fails as a whole, so it is asked again without it.
+        var rows = read(", directory")
+        if rows.isEmpty { rows = read("") }
         return rows.compactMap { row in
             guard row.count >= 7,
                   let millis = row[0].flatMap(Double.init),
@@ -759,7 +845,9 @@ public enum CostEstimator {
                 cacheWrite1h: 0,
                 cacheRead: count(4),
                 dedupeKey: row[6].map { "opencode|\($0)" },
-                presetCost: cost)
+                presetCost: cost,
+                cwd: row.count > 7 ? row[7] : nil,
+                session: row[6])
         }
     }
 
@@ -860,6 +948,7 @@ public enum CostEstimator {
         static let usage = Array("\"usage\"".utf8)
         static let turnContext = Array("turn_context".utf8)
         static let tokenCount = Array("token_count".utf8)
+        static let sessionMeta = Array("session_meta".utf8)
 
         /// Codex writes `"type"` near the start of every record, while the bulk
         /// of the file is enormous tool-output lines. Measured over a real

@@ -531,20 +531,28 @@
     <div class="shell">
       <div class="section-head">
         <h2>更新日志</h2>
-        <p>当前版本 0.5.3 · 最近更新于 2026-09-13。每天改了什么，都记在这里。</p>
+        <p>当前版本 0.5.3 · 最近更新于 2026-09-14。每天改了什么，都记在这里。</p>
       </div>
       <div class="log">
         <article class="log__day">
-          <header class="log__head"><time datetime="2026-09-13">2026-09-13</time><span class="log__tag">未发布</span></header>
-          <p class="log__counts">新增 8 · 样式 6 · 修复 3</p>
+          <header class="log__head"><time datetime="2026-09-14">2026-09-14</time><span class="log__tag">未发布</span></header>
+          <p class="log__counts">新增 2</p>
           <ul class="log__list">
+            <li><span class="badge badge--add">新增</span>设置新增「项目」页：从本机 Claude Code、Codex、OpenCode 的会话日志里认出每次用量属于哪个项目。按 Git 仓库的远端地址识别，同一个仓库的不同目录和 worktree 算一个项目，没有仓库的按文件夹分；同名文件夹会并进对应的仓库。可以按 7、30、90、365 天查看概览（项目数、等价花费、token、会话数、编程方式数），以及按花费排序的项目排行（按工具分色的占比条）。点开一个项目，能看到每天的花费柱状图（悬停看当天数字）、按工具和编程方式（命令行、桌面版、编辑器插件、SDK）的占比、用得最多的模型，以及按星期和小时的活跃热力图。文件夹路径只留在本机。</li>
+            <li><span class="badge badge--add">新增</span>项目公开到 Quota Run：登录 Quota Run 后，每个项目有「公开到 quota.run」开关，默认全部不公开，还可以改公开名称，公开后可以一键打开项目页。这台 Mac 会按天上传各项目、各工具、各编程方式、各模型的 token 数：公开的项目带名称和仓库地址，不公开的合并成「其他项目」、不带名字；路径和会话内容永远不上传。花费由 quota.run 按公开价目统一计算。改动开关或名称后会把全部日子重传一遍，关掉的项目立刻从网站上撤下。</li>
+          </ul>
+        </article>
+        <article class="log__day">
+          <header class="log__head"><time datetime="2026-09-13">2026-09-13</time><span class="log__tag">未发布</span></header>
+          <p class="log__counts">新增 9 · 样式 6 · 修复 3</p>
+          <ul class="log__list">
+            <li><span class="badge badge--add">新增</span>菜单栏图标的右键菜单和下拉面板的「更多」菜单新增 Quota Run 入口：未登录时显示「登录 Quota Run…」，点击打开设置并直接滚动到登录卡片；已登录时显示「Quota Run · @用户名…」，点击打开 Quota Run 设置页。</li>
             <li><span class="badge badge--add">新增</span>下拉面板服务商卡片的右键菜单新增三组快捷设置：「卡片上显示的额度」逐项勾选哪些额度显示在外面、哪些收进展开箭头（每个服务商分别记住，可恢复默认，最后一项不能取消）；「圆环跟随的额度」选择停靠条圆环、刘海岛和菜单栏跟随的窗口，与双击窗口是同一个设置；「显示位置」勾选这个服务商是否出现在下拉面板、停靠条、刘海岛和桌面卡片，另有「菜单栏只显示此服务商」和「添加一张此服务商的桌面卡片」。原来的「在下拉面板中隐藏」和「圆环改回按最满的窗口显示」并入这几组。</li>
             <li><span class="badge badge--add">新增</span>在线更新改为更新卡片：发现新版本时弹出一张卡片，显示新版本号、当前版本、发布日期和这一版的更新内容（按界面语言显示中文或英文，分新增、样式、修复，可展开全部并打开完整更新日志），点「安装并重启」后下载、验证开发者签名和 Apple 公证，完成后自动替换并重启；不会再不打招呼就重启。「更新方式」改为「后台下载」（发现后先在后台下载验证好，点安装即刻完成）和「安装时再下载」。原地替换失败（例如没有「应用程序」文件夹的写入权限）时，卡片说明原因并提供「重试」和「下载安装包」。菜单栏右键菜单、面板顶部横幅和设置里的更新页都打开这张卡片；同一版本每次启动只自动弹出一次。</li>
             <li><span class="badge badge--add">新增</span>花费预算提醒：设置 → 提醒新增「花费」卡片，可设每日预算和每月预算（按设置时选的货币，留空即不设），花费用到 80% 和超出时各发一次通知，按天和按自然月分别计算。</li>
             <li><span class="badge badge--add">新增</span>每周用量周报：每周一上午 9 点后推送一条通知，写明上周的花费、token 数和用得最多的 CLI 所占比例；上周没有用量时不发。可在设置 → 提醒 →「花费」里关闭。</li>
-            <li><span class="badge badge--add">新增</span>额度重置日历：设置 → 用量统计顶部新增「接下来 7 天的额度重置」，按天列出已开启服务商的每个额度窗口什么时候重置（今天、明天、具体日期和时间），以及当前剩余或已用，快用完的标成橙色或红色。</li>
           </ul>
-          <a class="log__more" href="changelog.html#d-2026-09-13">还有 12 项 →</a>
+          <a class="log__more" href="changelog.html#d-2026-09-13">还有 13 项 →</a>
         </article>
         <article class="log__day">
           <header class="log__head"><time datetime="2026-09-13">2026-09-13</time><span class="log__tag">0.5.3</span></header>
@@ -552,15 +560,6 @@
           <ul class="log__list">
             <li><span class="badge badge--add">新增</span>菜单栏图标的右键菜单重做：新增「显示在菜单栏」，可选「自动（用得最满的额度）」或任一已开启的服务商，每项带 logo 和图标会显示的读数（剩余或已用），当前选择打勾；这个选择只影响菜单栏，停靠条、刘海岛、桌面卡片仍按各自的设置显示。菜单还新增「检查更新…」（有新版本时显示「更新到 x.y.z…」，下载好后显示「重新启动以更新到 x.y.z」）、「反馈…」和「关于 QuotaBar」，保留立即刷新（⌘R）、设置（⌘,）和退出（⌘Q）。</li>
             <li><span class="badge badge--fix">修复</span>关闭了自动检查更新时，更新页的「立即检查」和面板选项菜单里的「检查更新…」点了没有反应：手动检查现在不受自动检查开关限制。</li>
-          </ul>
-        </article>
-        <article class="log__day">
-          <header class="log__head"><time datetime="2026-09-13">2026-09-13</time><span class="log__tag">0.5.2</span></header>
-          <p class="log__counts">新增 2 · 样式 1</p>
-          <ul class="log__list">
-            <li><span class="badge badge--add">新增</span>边缘停靠条在服务商太多、屏幕放不下时可以滚动：条子最高到屏幕上下各留 24pt，其余圆环用滚轮或触控板在条子里滚动。系统滚动条换成内侧一条 2pt 的细线，静止时很淡，滚动时稍亮，停下后淡回去；上下还有更多圆环时，两端渐隐到黑色。滚动时悬停卡片先收起，悬停卡片与圆环的对齐会算上滚动距离；额度重置时，对应的圆环会先自动滚到可见处。</li>
-            <li><span class="badge badge--add">新增</span>下拉面板里的服务商卡片可以按住拖动排序：拖动时卡片微微浮起、跟着鼠标走，经过相邻卡片一半时两张互换位置，其他卡片滑开让位；松手后卡片落位，新顺序同时用于停靠条、刘海岛和桌面卡片。卡片里的点击（切换已用和剩余、重置时间等）不受影响，移动超过几个点才开始拖动；在面板外松手也会正常落位并保存。</li>
-            <li><span class="badge badge--style">样式</span>关于页的 GitHub 链接显示为仓库的新名字 gentpan/QuotaBar，反馈、更新检查等地址也一并换成新地址。</li>
           </ul>
         </article>
       </div>

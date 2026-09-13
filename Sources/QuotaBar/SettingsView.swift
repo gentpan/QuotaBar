@@ -13,6 +13,7 @@ import QuotaCore
 enum SettingsSection: String, CaseIterable, Identifiable {
     case providers
     case usage
+    case projects
     case run
     case status
     case appearance
@@ -29,6 +30,7 @@ enum SettingsSection: String, CaseIterable, Identifiable {
         switch self {
         case .providers: L10n.t("Providers", "服务商")
         case .usage: L10n.t("Usage", "用量统计")
+        case .projects: L10n.t("Projects", "项目")
         case .run: "Quota Run"
         case .status: L10n.t("Service status", "服务状态")
         case .appearance: L10n.t("Appearance", "外观")
@@ -49,6 +51,9 @@ enum SettingsSection: String, CaseIterable, Identifiable {
         case .usage:
             L10n.t("Tokens from this Mac's CLI session logs: a year grid and the figures behind it.",
                    "本机 CLI 会话日志里的 token 用量：全年热力图，以及各周期的数据量。")
+        case .projects:
+            L10n.t("Where the tokens went: each repository, CLI and way of working, and which projects are public on quota.run.",
+                   "token 用在了哪个项目：每个仓库、每个工具、每种编程方式，以及哪些项目公开到 quota.run。")
         case .run:
             L10n.t("Personal records from every reading, and the opt-in leaderboard.",
                    "每次读数都记成个人纪录；排行榜需要自愿加入。")
@@ -83,6 +88,7 @@ enum SettingsSection: String, CaseIterable, Identifiable {
         switch self {
         case .providers: "square.grid.2x2"
         case .usage: "chart.bar.xaxis"
+        case .projects: "folder"
         case .run: "flag.checkered"
         case .status: "waveform.path.ecg"
         case .appearance: "paintbrush"
@@ -337,6 +343,7 @@ struct SettingsView: View {
         switch section {
         case .providers: ProvidersPane(store: store, expanded: initialExpanded)
         case .usage: UsagePane(store: store)
+        case .projects: ProjectsPane(store: store, run: store.run)
         case .run: RunPane(store: store, run: store.run)
         case .status: StatusPane(store: store)
         case .appearance: AppearancePane(store: store)

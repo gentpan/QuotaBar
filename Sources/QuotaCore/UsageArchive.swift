@@ -217,10 +217,15 @@ public final class UsageArchiveStore: @unchecked Sendable {
     private let lock = NSLock()
     private let fileURL: URL
     private var archive: UsageArchive
+    /// Filled from the same pass over the logs.
+    public let projects: ProjectArchiveStore
 
-    public init(fileURL: URL? = nil) {
+    public init(fileURL: URL? = nil, projects: ProjectArchiveStore? = nil) {
         let url = fileURL ?? AppSupport.directory.appendingPathComponent("usage-archive.json")
         self.fileURL = url
+        self.projects = projects ?? (fileURL == nil
+            ? .shared
+            : ProjectArchiveStore(fileURL: url.deletingLastPathComponent().appendingPathComponent("project-archive.json")))
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .secondsSince1970
         self.archive = (try? Data(contentsOf: url)).flatMap { try? decoder.decode(UsageArchive.self, from: $0) }
@@ -246,8 +251,12 @@ public final class UsageArchiveStore: @unchecked Sendable {
     @discardableResult
     public func update(paths: CostPaths = .default, now: Date = Date()) -> UsageArchive {
         let snapshot = current
-        let cutoff = snapshot.incrementalCutoff() ?? .distantPast
+        // The project archive came later: until it has had its own full read,
+        // the scan goes all the way back for it, whatever this archive has.
+        let projectCutoff = projects.current.incrementalCutoff() ?? .distantPast
+        let cutoff = min(snapshot.incrementalCutoff() ?? .distantPast, projectCutoff)
         let scan = CostEstimator.archiveScan(paths: paths, since: cutoff, now: now)
+        projects.merge(scan.projects, infos: scan.projectRefs, scannedAt: now, full: cutoff == .distantPast)
         lock.lock()
         archive.merge(scan.days, scannedAt: now, full: cutoff == .distantPast)
         activity = scan.activity

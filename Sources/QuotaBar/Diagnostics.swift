@@ -229,6 +229,30 @@ enum Diagnostics {
         FileHandle.standardOutput.write(Data(out.utf8))
     }
 
+    /// `QuotaBar --projects [days]`: which project the last `days` of tokens
+    /// went to, how each was driven, and how long the read took. Nothing is
+    /// written; the paths shown never leave this Mac.
+    static func printProjects(days: Int) {
+        let start = Date()
+        let now = Date()
+        let cutoff = Calendar.current.date(byAdding: .day, value: -days, to: Calendar.current.startOfDay(for: now)) ?? now
+        let scan = CostEstimator.archiveScan(since: cutoff, now: now)
+        var archive = ProjectArchive()
+        archive.merge(scan.projects, infos: scan.projectRefs, scannedAt: now, full: true)
+        let overview = archive.overview(from: cutoff, to: now)
+        var out = "Projects over \(days) days (read in \(String(format: "%.1f", Date().timeIntervalSince(start))) s): "
+        out += "\(overview.projects.count) projects, \(QuotaFormat.usd(overview.usd)), \(QuotaFormat.compact(overview.tokens)) tokens, "
+        out += "\(overview.sessions) sessions, \(overview.waysOfWorking) ways of working\n"
+        for summary in overview.projects.prefix(25) {
+            let sources = summary.sources.map { "\($0.source.displayName) \(QuotaFormat.usd($0.share.usd))" }.joined(separator: ", ")
+            let modes = summary.modes.map { "\($0.mode.rawValue) \(QuotaFormat.compact($0.tokens))" }.joined(separator: ", ")
+            out += "- \(summary.info.displayName) [\(summary.info.repo ?? summary.info.key)] \(QuotaFormat.usd(summary.usd)) · "
+            out += "\(QuotaFormat.compact(summary.tokens)) tokens · \(summary.sessions) sessions · \(summary.activeMinutes) min · "
+            out += "\(summary.activeDays) days\n    \(sources)\n    \(modes)\n"
+        }
+        FileHandle.standardOutput.write(Data(out.utf8))
+    }
+
     /// `QuotaBar --provider <id>`: one provider's reading, fetched now,
     /// whether or not it is enabled. Never the credential.
     static func printProvider(_ raw: String) {

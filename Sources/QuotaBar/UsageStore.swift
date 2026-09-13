@@ -114,6 +114,8 @@ final class UsageStore: ObservableObject {
     @Published var experienceRevision = 0
     /// QuotaBar's own record of local token traffic, from the archive.
     @Published var archive: UsageArchive = UsageArchiveStore.shared.current
+    /// The same tokens by project, from the project archive.
+    @Published var projectArchive: ProjectArchive = UsageArchiveStore.shared.projects.current
     @Published var isUpdatingArchive = false
     /// When the next automatic refresh is due, for the panel footer.
     @Published var nextRefreshAt = Date().addingTimeInterval(300)
@@ -818,6 +820,7 @@ final class UsageStore: ObservableObject {
     /// Everything local-log shaped, re-derived from the archive.
     func applyArchive(_ archive: UsageArchive) {
         self.archive = archive
+        projectArchive = UsageArchiveStore.shared.projects.current
         guard archive.fullScanDone else { return }
         cost = archive.costSummary()
         ledger = archive.ledger()

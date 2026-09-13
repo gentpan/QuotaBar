@@ -944,6 +944,12 @@ public struct QuotaRunClient: Sendable {
         try decode(RunUploadReceipt.self, try await send("POST", "/snapshots", json: body))
     }
 
+    /// Tokens per day by project, CLI, mode and model; whole days replace
+    /// what quota.run had for them from this Mac.
+    public func uploadUsage(_ body: RunUsageBody) async throws -> RunUsageReceipt {
+        try decode(RunUsageReceipt.self, try await send("POST", "/usage", json: body))
+    }
+
     public struct ProfileBody: Encodable, Sendable {
         public var displayName: String
         public var bio: String

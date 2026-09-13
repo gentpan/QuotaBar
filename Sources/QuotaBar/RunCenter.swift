@@ -91,6 +91,13 @@ final class RunCenter: ObservableObject {
     @Published private(set) var localAccounts: [RunLocalAccount] = []
     private var lookingUp = false
 
+    // MARK: Projects
+
+    /// Which projects are public on quota.run, and their names there.
+    @Published private(set) var projectSharing = ProjectSharingPrefs()
+    var isUploadingUsage = false
+    var usageTask: Task<Void, Never>?
+
     /// Previews and the off-screen renderer: sample data, no files, no key,
     /// no network.
     let isInert: Bool
@@ -115,6 +122,7 @@ final class RunCenter: ObservableObject {
         let file = RunStateFile.load(from: url)
         account = file.account
         upload = file.upload
+        projectSharing = ProjectSharingStore.shared.current
         for id in ProviderID.allCases {
             if let snapshot = SnapshotCache.shared.snapshot(for: id) { noteAccount(id, snapshot) }
         }
@@ -182,6 +190,27 @@ final class RunCenter: ObservableObject {
         guard !isInert else { return }
         refreshRecords()
         uploadIfDue()
+        uploadUsageIfDue()
+    }
+
+    /// Makes a project public on quota.run or takes it off; every day is sent
+    /// again under the new list.
+    func setProjectPublic(_ on: Bool, info: ProjectInfo) {
+        guard !isInert else { return }
+        projectSharing = ProjectSharingStore.shared.update { $0.setPublic(on, info: info) }
+        uploadUsageIfDue(now: true)
+    }
+
+    func renameProject(_ info: ProjectInfo, to name: String) {
+        guard !isInert else { return }
+        projectSharing = ProjectSharingStore.shared.update { $0.rename(info.key, to: name, info: info) }
+        uploadUsageIfDue(now: true)
+    }
+
+    func noteProjectSlugs(_ receipt: RunUsageReceipt) {
+        let slugs = Dictionary(receipt.projects.map { ($0.id, $0.slug) }, uniquingKeysWith: { first, _ in first })
+        guard slugs != projectSharing.slugs else { return }
+        projectSharing = ProjectSharingStore.shared.update { $0.slugs = slugs }
     }
 
     /// Works the runs and bests out again, off the main actor, when anything

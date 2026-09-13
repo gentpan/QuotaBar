@@ -64,6 +64,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             Snapshot.settingsPreview(directory: directory)
             NSApp.terminate(nil)
         }
+        if let index = arguments.firstIndex(of: "--projects-preview") {
+            let directory = index + 1 < arguments.count ? arguments[index + 1] : "./projects"
+            Snapshot.projectsPreview(directory: directory)
+            NSApp.terminate(nil)
+        }
         if let index = arguments.firstIndex(of: "--icon-preview") {
             let directory = index + 1 < arguments.count ? arguments[index + 1] : "./icons"
             Snapshot.iconPreview(directory: directory)
@@ -109,6 +114,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         if arguments.contains("--archive-timing") {
             Diagnostics.printArchiveTiming()
+            NSApp.terminate(nil)
+        }
+        if let index = arguments.firstIndex(of: "--projects") {
+            // `QuotaBar --projects [days]`: tokens per project from the logs, read now.
+            let days = index + 1 < arguments.count ? Int(arguments[index + 1]) ?? 30 : 30
+            Diagnostics.printProjects(days: days)
             NSApp.terminate(nil)
         }
         if arguments.contains("--json") {

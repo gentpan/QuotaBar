@@ -114,3 +114,65 @@ extension RunCenter {
         }
     }
 }
+
+// MARK: - Usage by project
+
+/// Tokens per day by project, CLI, mode and model go up from every Mac on the
+/// account (each Mac's logs are its own work). Recent days go again every ten
+/// minutes; a change to which projects are public sends every day again, a
+/// month at a time, so nothing taken private stays on quota.run.
+extension RunCenter {
+    func uploadUsageIfDue(now manual: Bool = false) {
+        guard !isInert, account != nil, !upload.stopped, !isUploadingUsage else { return }
+        let archiveStore = UsageArchiveStore.shared.projects
+        guard archiveStore.current.fullScanDone else { return }
+        let sharing = projectSharing
+        var pending = upload.usagePending
+        if upload.usageRevision != sharing.revision {
+            // A new list: everything again, newest first.
+            pending = RunUsagePlan.allDays(in: archiveStore.current)
+            updateUpload {
+                $0.usagePending = pending
+                $0.usageRevision = sharing.revision
+            }
+        }
+        if pending.isEmpty {
+            let stale = upload.usageSentAt.map { Date().timeIntervalSince($0) >= RunUsagePlan.interval } ?? true
+            guard stale || manual else { return }
+            pending = RunUsagePlan.recent()
+        }
+        guard let client = client() else { return }
+        let batch = Array(pending.prefix(RunUsagePlan.batchDays))
+        isUploadingUsage = true
+        Task {
+            let body = await Task.detached(priority: .utility) {
+                RunUsagePlan.body(days: batch, archive: archiveStore.current.canonical(), sharing: sharing)
+            }.value
+            do {
+                let receipt = try await client.uploadUsage(body)
+                noteProjectSlugs(receipt)
+                updateUpload {
+                    $0.usagePending.removeAll { batch.contains($0) }
+                    $0.usageSentAt = Date()
+                    $0.usageError = nil
+                }
+            } catch let error as QuotaRunError where error.isAuthFailure {
+                updateUpload {
+                    $0.stopped = true
+                    $0.lastError = error.errorDescription
+                }
+            } catch {
+                updateUpload { $0.usageError = (error as? QuotaRunError)?.errorDescription ?? error.localizedDescription }
+            }
+            isUploadingUsage = false
+            if !upload.usagePending.isEmpty, upload.usageError == nil {
+                usageTask?.cancel()
+                usageTask = Task { [weak self] in
+                    try? await Task.sleep(for: .seconds(RunUploadPlan.minimumInterval))
+                    guard !Task.isCancelled else { return }
+                    self?.uploadUsageIfDue()
+                }
+            }
+        }
+    }
+}

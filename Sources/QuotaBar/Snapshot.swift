@@ -703,6 +703,28 @@ enum Snapshot {
         FileHandle.standardOutput.write(Data("Wrote snapshots to \(base.path)\n".utf8))
     }
 
+    /// `QuotaBar --projects-preview [dir]`: the Projects pane over this Mac's
+    /// real logs of the last 90 days, off-screen, in both languages. Reads the
+    /// logs; writes only the PNGs.
+    static func projectsPreview(directory: String) {
+        let base = URL(fileURLWithPath: directory)
+        try? FileManager.default.createDirectory(at: base, withIntermediateDirectories: true)
+        let now = Date()
+        let cutoff = Calendar.current.date(byAdding: .day, value: -90, to: now) ?? now
+        let scan = CostEstimator.archiveScan(since: cutoff, now: now)
+        var archive = ProjectArchive()
+        archive.merge(scan.projects, infos: scan.projectRefs, scannedAt: now, full: true)
+        let store = makeStore(selected: nil)
+        store.projectArchive = archive
+        for language in [L10n.Language.zhHans, .en] {
+            L10n.override = language
+            let suffix = language == .en ? "en" : "zh"
+            write(SettingsView(store: store, scrollable: false, section: .projects), to: base, name: "settings-projects-\(suffix)")
+        }
+        L10n.override = ConfigStore.shared.language
+        FileHandle.standardOutput.write(Data("Wrote the projects pane to \(base.path)\n".utf8))
+    }
+
     private static func write(
         _ view: some View,
         to directory: URL,

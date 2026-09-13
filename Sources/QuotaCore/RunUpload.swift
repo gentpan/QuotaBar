@@ -121,11 +121,18 @@ public struct RunUploadState: Codable, Equatable, Sendable {
     public var stopped: Bool = false
     public var lastAccepted: Int = 0
     public var lastRejected: Int = 0
+    /// Usage by project: when recent days last went, which sharing revision
+    /// every day has been sent under (-1: never), and the days still to send.
+    public var usageSentAt: Date?
+    public var usageRevision: Int = -1
+    public var usagePending: [String] = []
+    public var usageError: String?
 
     public init() {}
 
     private enum CodingKeys: String, CodingKey {
         case sentSeq, activityMinute, lastUploadAt, lastAttemptAt, lastError, failures, retryAt, stopped, lastAccepted, lastRejected
+        case usageSentAt, usageRevision, usagePending, usageError
     }
 
     public init(from decoder: Decoder) throws {
@@ -140,6 +147,10 @@ public struct RunUploadState: Codable, Equatable, Sendable {
         stopped = (try? c.decodeIfPresent(Bool.self, forKey: .stopped)) ?? false
         lastAccepted = (try? c.decodeIfPresent(Int.self, forKey: .lastAccepted)) ?? 0
         lastRejected = (try? c.decodeIfPresent(Int.self, forKey: .lastRejected)) ?? 0
+        usageSentAt = c.lenientDate(.usageSentAt)
+        usageRevision = (try? c.decodeIfPresent(Int.self, forKey: .usageRevision)) ?? -1
+        usagePending = (try? c.decodeIfPresent([String].self, forKey: .usagePending)) ?? []
+        usageError = try? c.decodeIfPresent(String.self, forKey: .usageError)
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -155,6 +166,10 @@ public struct RunUploadState: Codable, Equatable, Sendable {
         try c.encode(stopped, forKey: .stopped)
         try c.encode(lastAccepted, forKey: .lastAccepted)
         try c.encode(lastRejected, forKey: .lastRejected)
+        try c.encodeIfPresent(seconds(usageSentAt), forKey: .usageSentAt)
+        try c.encode(usageRevision, forKey: .usageRevision)
+        try c.encode(usagePending, forKey: .usagePending)
+        try c.encodeIfPresent(usageError, forKey: .usageError)
     }
 }
 
