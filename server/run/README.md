@@ -28,7 +28,10 @@ Python 服务，数据放 SQLite（WAL）。验签、存读数、算 run 和 tie
 
 - `GET /stats`：用户数、run 数、verified run 数、服务商数
 - `GET /boards?region=&season=`：本赛季有 run 的榜单，人多的在前
-- `GET /leaderboard?provider=&plan=&window=&metric=speed|peak&season=current|2026-W37|all&region=&tier=all|verified&limit=`
+- `GET /leaderboard?provider=&plan=&window=&metric=speed|to90|to50|peak&season=current|last|2026-W37|all&region=&tier=all|verified&limit=`：
+  条目带 `runId`、`secondsTo50/90/100`、`seasonRuns`，响应带 `summary`
+- `GET /runs/<runId>`：一条公开 run 和最多 240 个点的用量曲线 `readings: [{t, p}]`
+- `GET /insights?season=&region=`：各榜的人数、完成比例、最快、p10 / 中位数 / p90、按地区的中位数
 - `GET /users/<username>`：资料、链接、项目、各榜最好成绩（名次、人数、前百分之几）、最近 20 条 run、统计
 
 以下全部 `Cache-Control: no-store`。
@@ -92,11 +95,33 @@ Python 服务，数据放 SQLite（WAL）。验签、存读数、算 run 和 tie
   `completedAt`（没到 100% 用最后一次观察）早的在前。`limit` 默认 100，超过 200 按 200 算。
   `achievedAt`：速度榜是 `completedAt`，峰值榜是首次观察到峰值的时间。
   `board.runners` 是该赛季、该地区在这个榜上有 verified/standard run 的人数（不分指标和 tier）。
+- **赛季**：`last` 是「现在减 7 天」所在的 ISO 周，所有带 `season` 的公开接口都认。
+- **runId**：`runs.public_id`，`secrets.token_urlsafe(9)` 生成的 12 位 base64url，唯一索引。新建 run 时给，
+  重算（包括 tier 变化）不换；run 因为读数全删而被删掉、之后又出现时是新的 id。升级（schema 4）给已有的 run 补上。
+  schema 3 的升级里有重算，所以那一步开头就先把这一列加上。
+- **to90 / to50 榜**：只看到达该线的 run，每人按这个指标取最好的一条（所以 `runId` 可能和速度榜上不是同一条），
+  并列时先达到的在前（`windowStart + secondsTo90/50`），再按 run 号。`value` 是秒，`achievedAt` 是
+  `windowStart + value`。`seasonRuns` 是这个人在这个榜、这个赛季（`all` 为全部）verified/standard run 的条数，
+  不受 `region`、`tier` 过滤影响。
+- **summary**：每人取「速度最好的一条」：到 100% 的按速度榜同样的顺序在前，没到的排后面（峰值高的、早观察到的在前），
+  所以没跑完的人也算进 `runners`。按所选赛季、地区、tier 过滤（`tier=verified` 时 `runners` 可能小于
+  `board.runners`）；与 `metric` 无关。`fastest` 就是速度榜第一；`medianSecondsTo100` 是跑完的人里的下中位数
+  （偶数个取前一个），`medianRunId` 是那一条。`*Prev` 用所选 ISO 周的上一周同样算（`runnersPrev` 可以是 0），
+  `season=all` 时为 `null`。比例保留 4 位小数；这个筛选下没人时比例是 `null`，`fastest`、中位数也是 `null`。
+- **`/runs/<runId>`**：只给 verified/standard，其余（以及格式不对、不存在的 id）一律 `404 run_not_found`，
+  404 同样缓存 30 秒。读数和 `recompute_run` 用的是同一批（计分设备、可计分），按时间排；`t` = `observedAt − windowStart`，
+  和 `secondsTo*` 一样不小于 0，所以首次达到 50/90/99.5% 那条读数的 `t` 正好等于对应的秒数。超过 240 条时保留第一条、
+  最后一条和首次达到 50/90/99.5% 的读数，其余按下标均匀抽取。
+- **`/insights`**：一次查询取出本赛季每个榜每人速度最好的一条（规则同 summary），只列有 verified/standard run 的榜，
+  人多的在前。秒数统计只看跑完的，用最近秩百分位（第 ⌈p × n / 100⌉ 个，整数运算），没人跑完时为 `null`；
+  `medianSeconds` 与 summary 的下中位数一致。`region` 过滤人数和各项统计，`medianByRegion` 不受它影响
+  （始终按全部人分地区算）。`planLabel`、`windowSeconds`、`windowTitle` 取这个赛季该榜最近一条 run 的。
+- **个人页**：`bests` 多了那条最好成绩的 `runId`、`secondsTo50/90/100`；`recent` 每条多了 `runId`。
 - **stats**：`providers` 是数量（整数）；`runs`/`verifiedRuns` 不含 flagged 和 unranked；`users` 是全部已加入用户。
 - **个人页 bests**：名次按全部赛季、全部地区、全部 tier 算；`runners` 是该指标榜上的人数，
   `percentile` = ⌈名次 ÷ 人数 × 100⌉（整数，「前 X%」）；`season` 是那条最好成绩所在的赛季；
   另附 `unit` 和 `achievedAt`。`recent` 里每条 run 是
-  `{provider, plan, planLabel, windowKey, windowSeconds, windowTitle, season, windowStart, resetsAt, peakPercent, secondsTo50, secondsTo90, secondsTo100, completedAt, lastObservedAt, tier, accountVerified}`。
+  `{runId, provider, plan, planLabel, windowKey, windowSeconds, windowTitle, season, windowStart, resetsAt, peakPercent, secondsTo50, secondsTo90, secondsTo100, completedAt, lastObservedAt, tier, accountVerified}`。
   `activeDays` 是有计分读数或有 token 的 UTC 日数。
 - **链接**：`links.website` 必须是 https；`links.github`、`links.x` 可以填账号名（可带 @）或
   对应站点的 https 地址，统一存成 https 地址返回。项目的 `github` 可以填 `owner/repo`，同样存成地址。

@@ -43,7 +43,7 @@ import traceback
 import urllib.error
 import urllib.request
 from contextlib import contextmanager
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from email.message import EmailMessage
 from email.utils import formatdate, make_msgid
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -910,6 +910,8 @@ def migrate_v3(service):
         db.execute("ALTER TABLE account_bindings ADD COLUMN provider TEXT NOT NULL DEFAULT ''")
         db.execute("ALTER TABLE account_bindings ADD COLUMN last_seen_at INTEGER NOT NULL DEFAULT 0")
         db.execute("ALTER TABLE runs ADD COLUMN account_verified INTEGER NOT NULL DEFAULT 0")
+        # 下面要用 recompute_run 重算，它按最新的 runs 表结构写，所以后来加的列在这里先补上
+        ensure_run_public_ids(db)
         # 绑定只来自计分读数；之前非计分设备的读数也建过绑定，这里去掉（读数本身保留）
         db.execute(
             "DELETE FROM account_bindings WHERE NOT EXISTS (SELECT 1 FROM snapshots s"
@@ -941,11 +943,57 @@ def migrate_v3(service):
         db.execute("INSERT INTO schema_version(version) VALUES (3)")
 
 
-MIGRATIONS = [(1, SCHEMA_V1), (2, SCHEMA_V2), (3, migrate_v3)]
+def new_run_id():
+    # 9 个随机字节正好是 12 个 base64url 字符，不带填充
+    return secrets.token_urlsafe(9)
+
+
+def ensure_run_public_ids(db):
+    """runs.public_id：公开接口里的 runId，不透明、重算不变。可重复执行：列已在就只补空值。"""
+    columns = {row[1] for row in db.execute("PRAGMA table_info(runs)")}
+    if "public_id" not in columns:
+        db.execute("ALTER TABLE runs ADD COLUMN public_id TEXT")
+    used = {row[0] for row in db.execute("SELECT public_id FROM runs WHERE public_id IS NOT NULL")}
+    for (run_id,) in db.execute("SELECT id FROM runs WHERE public_id IS NULL").fetchall():
+        public_id = new_run_id()
+        while public_id in used:
+            public_id = new_run_id()
+        used.add(public_id)
+        db.execute("UPDATE runs SET public_id = ? WHERE id = ?", (public_id, run_id))
+    db.execute("CREATE UNIQUE INDEX IF NOT EXISTS runs_public_id ON runs(public_id)")
+
+
+def migrate_v4(service):
+    """给每条 run 一个公开 id（/runs/<runId>、榜单条目和个人页里的 runId）。"""
+    with service.transaction():
+        ensure_run_public_ids(service.db)
+        service.db.execute("INSERT INTO schema_version(version) VALUES (4)")
+
+
+MIGRATIONS = [(1, SCHEMA_V1), (2, SCHEMA_V2), (3, migrate_v3), (4, migrate_v4)]
 
 PUBLIC_TIERS = "('verified', 'standard')"   # flagged 和 unranked 不上榜、不进个人页和统计
 PROVIDER_ACCOUNT_ID_RE = re.compile(r"[0-9a-f]{16}")
 MAX_LOOKUP_DIGESTS = 20
+RUN_ID_RE = re.compile(r"[A-Za-z0-9_-]{12}")
+MAX_CURVE_POINTS = 240
+CURVE_THRESHOLDS = (50.0, 90.0, FULL_THRESHOLD)
+MAX_LEADERBOARD_LIMIT = 200
+
+# 每人一条最好成绩的排序，{p} 是表别名前缀（子查询里 runs 和 users 都有 id 列）。
+# speed / to90 / to50 只看达到该线的 run；overall 是摘要和 insights 用的「速度最好的一条」：
+# 到 100% 的按速度在前，没到的排在后面（峰值高的、早观察到的在前），这样没跑完的人也算进人数
+BEST_ORDERS = {
+    "speed": "{p}seconds_to_100 ASC, {p}completed_at ASC, {p}id ASC",
+    "to90": "{p}seconds_to_90 ASC, {p}window_start + {p}seconds_to_90 ASC, {p}id ASC",
+    "to50": "{p}seconds_to_50 ASC, {p}window_start + {p}seconds_to_50 ASC, {p}id ASC",
+    "peak": "{p}peak_percent DESC, COALESCE({p}completed_at, {p}last_observed_at) ASC, {p}id ASC",
+    # 跑完的之间和 speed 完全同序（CASE 对它们都是 NULL），摘要里的 fastest 就是速度榜第一
+    "overall": "{p}seconds_to_100 IS NULL, {p}seconds_to_100 ASC, {p}completed_at ASC,"
+               " CASE WHEN {p}seconds_to_100 IS NULL THEN {p}peak_percent END DESC,"
+               " CASE WHEN {p}seconds_to_100 IS NULL THEN {p}last_observed_at END ASC, {p}id ASC",
+}
+METRIC_COLUMNS = {"speed": "seconds_to_100", "to90": "seconds_to_90", "to50": "seconds_to_50"}
 
 RUN_KEY_COLUMNS = "user_id, provider, plan_norm, window_key, resets_bucket"
 RUN_KEY_WHERE = "user_id = ? AND provider = ? AND plan_norm = ? AND window_key = ? AND resets_bucket = ?"
@@ -1050,7 +1098,8 @@ class RunService:
         method = request.method
         self._purge(self.now())
         if method == "GET":
-            if route in ("/stats", "/boards", "/leaderboard") or route.startswith("/users/"):
+            if (route in ("/stats", "/boards", "/leaderboard", "/insights") or route.startswith("/users/")
+                    or (route.startswith("/runs/") and route.count("/") == 2)):
                 return self._public(request, route)
             if route == "/me":
                 return Response(200, self.me(self.actor(request)))
@@ -1129,6 +1178,10 @@ class RunService:
                 response = Response(200, self.boards(request.query), public=True)
             elif route == "/leaderboard":
                 response = Response(200, self.leaderboard(request.query), public=True)
+            elif route == "/insights":
+                response = Response(200, self.insights(request.query), public=True)
+            elif route.startswith("/runs/"):
+                response = Response(200, self.run_detail(unquote(route[len("/runs/"):])), public=True)
             else:
                 response = Response(200, self.profile(unquote(route[len("/users/"):])), public=True)
         except ApiError as error:
@@ -2250,9 +2303,11 @@ class RunService:
             "INSERT INTO runs(user_id, provider, plan_norm, plan_label, window_key, window_seconds, window_title,"
             " resets_bucket, resets_at, window_start, season, peak_percent, peak_at, seconds_to_50, seconds_to_90,"
             " seconds_to_100, completed_at, first_observed_at, last_observed_at, readings, tier, flag_reason,"
-            " account_verified, updated_at)"
-            " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+            " account_verified, updated_at, public_id)"
+            " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+            # public_id 只在新建时给：重算不换 runId，网页上的链接和对比一直有效
             " ON CONFLICT(user_id, provider, plan_norm, window_key, resets_bucket) DO UPDATE SET"
+            " public_id = COALESCE(runs.public_id, excluded.public_id),"
             " plan_label = excluded.plan_label, window_seconds = excluded.window_seconds,"
             " window_title = excluded.window_title, resets_at = excluded.resets_at,"
             " window_start = excluded.window_start, season = excluded.season,"
@@ -2266,7 +2321,7 @@ class RunService:
              window_start, season_of(window_start), summary["peak_percent"], summary["peak_at"],
              summary["seconds_to_50"], summary["seconds_to_90"], summary["seconds_to_100"], summary["completed_at"],
              summary["first_observed_at"], summary["last_observed_at"], len(rows), tier,
-             ",".join(reasons) or None, int(account_verified), now))
+             ",".join(reasons) or None, int(account_verified), now, new_run_id()))
 
     # —— 个人资料与项目 ——
 
@@ -2370,6 +2425,9 @@ class RunService:
     def parse_season(self, value):
         if value in (None, "", "current"):
             return season_of(self.now())
+        if value == "last":
+            # 七天前所在的 ISO 周一定是上一周
+            return season_of(self.now() - 7 * 86400)
         if value == "all":
             return "all"
         match = SEASON_RE.fullmatch(value)
@@ -2379,7 +2437,7 @@ class RunService:
                 return value
             except ValueError:
                 pass
-        raise ApiError(400, "invalid_season", "season is \"current\", \"all\" or an ISO week like 2026-W37.")
+        raise ApiError(400, "invalid_season", "season is \"current\", \"last\", \"all\" or an ISO week like 2026-W37.")
 
     def boards(self, query):
         season = self.parse_season(query.get("season"))
@@ -2429,18 +2487,13 @@ class RunService:
             "runners": runners, "season": season,
         }
 
-    def best_runs(self, provider, plan_norm, window_key, metric, season, region, tier):
-        """每人一条最好成绩，按榜单顺序排好。"""
-        if metric == "speed":
-            inner = "r.seconds_to_100 ASC, r.completed_at ASC, r.id ASC"
-            outer = "seconds_to_100 ASC, completed_at ASC, id ASC"
-        else:
-            inner = "r.peak_percent DESC, COALESCE(r.completed_at, r.last_observed_at) ASC, r.id ASC"
-            outer = "peak_percent DESC, COALESCE(completed_at, last_observed_at) ASC, id ASC"
-        where = ["r.provider = ?", "r.plan_norm = ?", "r.window_key = ?", f"r.tier IN {PUBLIC_TIERS}"]
-        params = [provider, plan_norm, window_key]
-        if metric == "speed":
-            where.append("r.seconds_to_100 IS NOT NULL")
+    def run_filters(self, season, region=None, tier=None, board=None):
+        """公开查询的公共条件：只有 verified/standard；board 是 (provider, plan_norm, window_key)。
+        region 条件用到 users 表，调用方要 JOIN users u。"""
+        where, params = [f"r.tier IN {PUBLIC_TIERS}"], []
+        if board is not None:
+            where += ["r.provider = ?", "r.plan_norm = ?", "r.window_key = ?"]
+            params += list(board)
         if season != "all":
             where.append("r.season = ?")
             params.append(season)
@@ -2449,11 +2502,54 @@ class RunService:
             params.append(region)
         if tier == "verified":
             where.append("r.tier = 'verified'")
+        return where, params
+
+    def best_runs(self, provider, plan_norm, window_key, metric, season, region, tier):
+        """每人一条最好成绩，按榜单顺序排好（metric 见 BEST_ORDERS）。"""
+        where, params = self.run_filters(season, region, tier, (provider, plan_norm, window_key))
+        if metric in METRIC_COLUMNS:
+            where.append(f"r.{METRIC_COLUMNS[metric]} IS NOT NULL")
+        order = BEST_ORDERS[metric]
         return self.db.execute(
-            "SELECT * FROM (SELECT r.*, u.username, u.display_name,"
-            f" ROW_NUMBER() OVER (PARTITION BY r.user_id ORDER BY {inner}) AS best"
+            "SELECT * FROM (SELECT r.*, u.username, u.display_name, u.region,"
+            f" ROW_NUMBER() OVER (PARTITION BY r.user_id ORDER BY {order.format(p='r.')}) AS best"
             f" FROM runs r JOIN users u ON u.id = r.user_id WHERE {' AND '.join(where)})"
-            f" WHERE best = 1 ORDER BY {outer}", params).fetchall()
+            f" WHERE best = 1 ORDER BY {order.format(p='')}", params).fetchall()
+
+    def season_runs(self, board, season):
+        """seasonRuns：每人在这个榜、这个赛季（all 为全部赛季）可见的 run 数，一次 GROUP BY 查完。"""
+        where, params = self.run_filters(season, board=board)
+        return dict(self.db.execute(
+            f"SELECT r.user_id, COUNT(*) FROM runs r WHERE {' AND '.join(where)} GROUP BY r.user_id", params).fetchall())
+
+    def board_summary(self, board, season, region, tier):
+        """榜单上方的摘要：每人速度最好的一条（没跑完的也算人数），上一周同样算一遍做对比。"""
+        rows = self.best_runs(*board, "overall", season, region, tier)
+        completed = [row for row in rows if row["seconds_to_100"] is not None]
+        median = lower_median(completed)
+        previous = previous_season(season)
+        runners_prev = median_prev = None
+        if previous is not None:
+            prev_rows = self.best_runs(*board, "overall", previous, region, tier)
+            runners_prev = len(prev_rows)
+            prev_median = lower_median([row for row in prev_rows if row["seconds_to_100"] is not None])
+            median_prev = prev_median["seconds_to_100"] if prev_median else None
+        fastest = completed[0] if completed else None
+        runners = len(rows)
+        return {
+            "runners": runners,
+            "runnersPrev": runners_prev,
+            "fastest": None if fastest is None else {
+                "username": fastest["username"], "displayName": fastest["display_name"],
+                "seconds": fastest["seconds_to_100"]},
+            "medianSecondsTo100": median["seconds_to_100"] if median else None,
+            "medianSecondsTo100Prev": median_prev,
+            "medianRunId": median["public_id"] if median else None,
+            "completed": len(completed),
+            "completedShare": share(len(completed), runners),
+            "verifiedShare": share(sum(row["tier"] == "verified" for row in rows), runners),
+            "accountVerifiedShare": share(sum(bool(row["account_verified"]) for row in rows), runners),
+        }
 
     def leaderboard(self, query):
         provider = query.get("provider", "")
@@ -2464,8 +2560,8 @@ class RunService:
         if not WINDOW_KEY_RE.fullmatch(window_key):
             raise ApiError(400, "invalid_window", "window is a window key like 604800:.")
         metric = query.get("metric") or "speed"
-        if metric not in ("speed", "peak"):
-            raise ApiError(400, "invalid_metric", "metric is \"speed\" or \"peak\".")
+        if metric not in ("speed", "to90", "to50", "peak"):
+            raise ApiError(400, "invalid_metric", "metric is \"speed\", \"to90\", \"to50\" or \"peak\".")
         season = self.parse_season(query.get("season"))
         region = parse_region(query.get("region"))
         tier = query.get("tier") or "all"
@@ -2474,14 +2570,93 @@ class RunService:
         raw_limit = query.get("limit") or "100"
         if not raw_limit.isdigit() or int(raw_limit) < 1:
             raise ApiError(400, "invalid_limit", "limit is a positive integer.")
-        limit = min(int(raw_limit), 200)
-        rows = self.best_runs(provider, plan_norm, window_key, metric, season, region, tier)[:limit]
+        limit = min(int(raw_limit), MAX_LEADERBOARD_LIMIT)
+        board = (provider, plan_norm, window_key)
+        rows = self.best_runs(*board, metric, season, region, tier)[:limit]
+        counts = self.season_runs(board, season)
         return {
             "board": self.board_meta(provider, plan_norm, window_key, season, region),
             "season": season,
             "metric": metric,
-            "entries": [entry_payload(rank, row, metric) for rank, row in enumerate(rows, start=1)],
+            "entries": [entry_payload(rank, row, metric, counts.get(row["user_id"], 0))
+                        for rank, row in enumerate(rows, start=1)],
+            "summary": self.board_summary(board, season, region, tier),
             "updatedAt": self.now(),
+        }
+
+    def insights(self, query):
+        """服务商对比：每个榜每人速度最好的一条，一次查询取完再在内存里分组。
+
+        medianByRegion 不受 region 过滤影响（它本身就是按地区拆开的）；其余字段按 region 过滤。
+        """
+        season = self.parse_season(query.get("season"))
+        region = parse_region(query.get("region"))
+        where, params = self.run_filters(season)
+        order = BEST_ORDERS["overall"].format(p="r.")
+        board_cols = "r.provider, r.plan_norm, r.window_key"
+        # 标签、窗口长度和标题取这个赛季里最近一条 run 的（和 /boards 一样）
+        latest = f"OVER (PARTITION BY {board_cols} ORDER BY r.last_observed_at DESC, r.id DESC)"
+        rows = self.db.execute(
+            "SELECT * FROM (SELECT r.provider, r.plan_norm, r.window_key, r.seconds_to_100, u.region,"
+            f" ROW_NUMBER() OVER (PARTITION BY {board_cols}, r.user_id ORDER BY {order}) AS best,"
+            f" FIRST_VALUE(r.plan_label) {latest} AS label, FIRST_VALUE(r.window_seconds) {latest} AS seconds,"
+            f" FIRST_VALUE(r.window_title) {latest} AS title"
+            f" FROM runs r JOIN users u ON u.id = r.user_id WHERE {' AND '.join(where)})"
+            " WHERE best = 1", params).fetchall()
+        groups = {}
+        for row in rows:
+            groups.setdefault((row["provider"], row["plan_norm"], row["window_key"]), []).append(row)
+        boards = []
+        for (provider, plan_norm, window_key), members in groups.items():
+            selected = [row for row in members if region is None or row["region"] == region]
+            if not selected:
+                continue
+            seconds = sorted(row["seconds_to_100"] for row in selected if row["seconds_to_100"] is not None)
+            by_region = {name: nearest_rank(sorted(row["seconds_to_100"] for row in members
+                                                   if row["region"] == name and row["seconds_to_100"] is not None), 50)
+                         for name in REGIONS}
+            meta = members[0]
+            boards.append({
+                "provider": provider, "plan": plan_norm, "planLabel": meta["label"],
+                "windowKey": window_key, "windowSeconds": meta["seconds"], "windowTitle": meta["title"],
+                "runners": len(selected), "completed": len(seconds),
+                "completedShare": share(len(seconds), len(selected)),
+                "fastestSeconds": seconds[0] if seconds else None,
+                "p10Seconds": nearest_rank(seconds, 10),
+                "medianSeconds": nearest_rank(seconds, 50),
+                "p90Seconds": nearest_rank(seconds, 90),
+                "medianByRegion": by_region,
+            })
+        boards.sort(key=lambda item: (-item["runners"], item["provider"], item["plan"], item["windowKey"]))
+        return {"season": season, "boards": boards, "updatedAt": self.now()}
+
+    def run_detail(self, run_id):
+        """一条公开 run 和它的用量曲线（计分、可计分的读数，和 recompute_run 取的是同一批）。"""
+        row = None
+        if RUN_ID_RE.fullmatch(run_id):
+            row = self.db.execute(
+                "SELECT r.*, u.username, u.display_name FROM runs r JOIN users u ON u.id = r.user_id"
+                f" WHERE r.public_id = ? AND r.tier IN {PUBLIC_TIERS}", (run_id,)).fetchone()
+        if row is None:
+            raise ApiError(404, "run_not_found", "No such run.")
+        key = (row["user_id"], row["provider"], row["plan_norm"], row["window_key"], row["resets_bucket"])
+        readings = self.db.execute(
+            f"SELECT observed_at, used_percent FROM snapshots WHERE {RUN_KEY_WHERE} AND counted = 1 AND rankable = 1"
+            " ORDER BY observed_at, id", key).fetchall()
+        # 和 secondsTo* 一样不让 t 变负数（允许的时钟误差会让第一条读数略早于 windowStart）
+        points = [(max(0, at - row["window_start"]), used) for at, used in readings]
+        return {
+            "run": {
+                "runId": row["public_id"], "username": row["username"], "displayName": row["display_name"],
+                "provider": row["provider"], "plan": row["plan_norm"], "planLabel": row["plan_label"],
+                "windowKey": row["window_key"], "windowSeconds": row["window_seconds"],
+                "windowTitle": row["window_title"], "windowStart": row["window_start"], "resetsAt": row["resets_at"],
+                "season": row["season"], "tier": row["tier"], "accountVerified": bool(row["account_verified"]),
+                "peakPercent": row["peak_percent"], "secondsTo50": row["seconds_to_50"],
+                "secondsTo90": row["seconds_to_90"], "secondsTo100": row["seconds_to_100"],
+                "completedAt": row["completed_at"],
+            },
+            "readings": [{"t": t, "p": used} for t, used in downsample_readings(points)],
         }
 
     def profile(self, raw_username):
@@ -2514,6 +2689,8 @@ class RunService:
                         "percentile": max(1, math.ceil(rank * 100 / runners)),
                         "tier": row["tier"], "accountVerified": bool(row["account_verified"]), "season": row["season"],
                         "achievedAt": row["completed_at"] if metric == "speed" else row["peak_at"],
+                        "runId": row["public_id"], "secondsTo50": row["seconds_to_50"],
+                        "secondsTo90": row["seconds_to_90"], "secondsTo100": row["seconds_to_100"],
                     })
                     break
         recent = self.db.execute(
@@ -2558,6 +2735,7 @@ def private_user(user):
 def run_payload(row):
     # 公开的 run 不带设备号和账号摘要
     return {
+        "runId": row["public_id"],
         "provider": row["provider"], "plan": row["plan_norm"], "planLabel": row["plan_label"],
         "windowKey": row["window_key"], "windowSeconds": row["window_seconds"], "windowTitle": row["window_title"],
         "season": row["season"], "windowStart": row["window_start"], "resetsAt": row["resets_at"],
@@ -2568,17 +2746,78 @@ def run_payload(row):
     }
 
 
-def entry_payload(rank, row, metric):
-    speed = metric == "speed"
+def entry_payload(rank, row, metric, season_runs):
+    if metric == "peak":
+        value, unit, achieved_at = row["peak_percent"], "percent", row["peak_at"]
+    else:
+        value, unit = row[METRIC_COLUMNS[metric]], "seconds"
+        # 到 100% 就是 completedAt；到 90/50% 是 windowStart 加上用时，也就是首次达到那条线的读数时间
+        achieved_at = row["completed_at"] if metric == "speed" else row["window_start"] + value
     return {
         "rank": rank, "username": row["username"], "displayName": row["display_name"],
-        "value": row["seconds_to_100"] if speed else row["peak_percent"],
-        "unit": "seconds" if speed else "percent",
+        "value": value,
+        "unit": unit,
         "tier": row["tier"],
         "accountVerified": bool(row["account_verified"]),
-        "achievedAt": row["completed_at"] if speed else row["peak_at"],
+        "achievedAt": achieved_at,
         "peakPercent": row["peak_percent"],
+        "runId": row["public_id"],
+        "secondsTo50": row["seconds_to_50"],
+        "secondsTo90": row["seconds_to_90"],
+        "secondsTo100": row["seconds_to_100"],
+        "seasonRuns": season_runs,
     }
+
+
+def previous_season(season):
+    """ISO 周的上一周；all（或无法往前的周）返回 None。"""
+    match = SEASON_RE.fullmatch(season or "")
+    if not match:
+        return None
+    try:
+        monday = datetime.fromisocalendar(int(match.group(1)), int(match.group(2)), 1)
+        year, week, _ = (monday - timedelta(days=7)).isocalendar()
+    except (ValueError, OverflowError):
+        return None
+    return f"{year}-W{week:02d}"
+
+
+def share(count, total):
+    """0–1 的比例，保留 4 位小数；分母为 0（这个筛选下没人）时是 null。"""
+    return round(count / total, 4) if total else None
+
+
+def lower_median(rows):
+    """已按用时排好的行里取下中位数那一行（偶数个取前一个），空列表返回 None。"""
+    return rows[(len(rows) - 1) // 2] if rows else None
+
+
+def nearest_rank(values, percent):
+    """最近秩百分位：排好序的 values 里第 ⌈percent × n / 100⌉ 个（至少第 1 个）。整数运算，免得 0.1 × 30 算出 3.0000000000000004。"""
+    if not values:
+        return None
+    rank = max(1, (percent * len(values) + 99) // 100)
+    return values[rank - 1]
+
+
+def downsample_readings(points, limit=MAX_CURVE_POINTS):
+    """曲线最多 limit 个点：保留第一条、最后一条和首次达到 50/90/99.5% 的读数，其余按下标均匀抽取。"""
+    count = len(points)
+    if count <= limit:
+        return list(points)
+    keep = {0, count - 1}
+    for threshold in CURVE_THRESHOLDS:
+        index = next((i for i, (_, used) in enumerate(points) if used >= threshold), None)
+        if index is not None:
+            keep.add(index)
+    rest = [i for i in range(count) if i not in keep]
+    slots = limit - len(keep)
+    if slots == 1:
+        keep.add(rest[len(rest) // 2])
+    elif slots > 1:
+        # rest 比 slots 多，步长 ≥ 1，向下取整后下标互不相同
+        keep.update(rest[k * (len(rest) - 1) // (slots - 1)] for k in range(slots))
+    return [points[i] for i in sorted(keep)]
 
 
 def parse_region(value):
