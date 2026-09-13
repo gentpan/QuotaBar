@@ -50,10 +50,10 @@ English and Simplified Chinese and follows the system language unless you pick o
 <!-- changelog:start -->
 <!-- Generated from CHANGELOG.en.md by Scripts/sync_changelog.py. Do not edit by hand. -->
 
-Latest release **0.5.3** (2026-09-13) · **16** changes in development · [full changelog](CHANGELOG.en.md)
+Latest release **0.5.3** (2026-09-13) · **17** changes in development · [full changelog](CHANGELOG.en.md)
 
 <details open>
-<summary><b>2026-09-13</b> · Unreleased · 8 added · 5 style · 3 fixed</summary>
+<summary><b>2026-09-13</b> · Unreleased · 8 added · 6 style · 3 fixed</summary>
 
 **Added**
 
@@ -68,6 +68,7 @@ Latest release **0.5.3** (2026-09-13) · **16** changes in development · [full 
 
 **Style**
 
+- Explanations in Settings no longer sit under every setting: the grey text that crowded the label column and often broke onto two lines is now a small question mark by the title that shows the explanation on hover (or click), and a card's general notes sit behind a question mark by its heading. A wrong proxy address is still called out beside the field, the bio and project description counters sit by their fields, and "optional" moved into the placeholders.
 - An expanded row in Settings → Providers no longer gives "Test connection" and "Console" a line of their own: "Console" follows the provider's name and "Test connection" sits on the right ahead of the service status, level with the name; the test's result still appears below. Providers that need Save, browser sign-in or keychain authorisation keep those buttons on a line below.
 - Each Settings section's title and its explanation now share one line, on a common baseline, instead of stacking; in a narrow window the explanation is cut short first, with the full text on hover.
 - "Test connection" in a provider row's header is a small chip with an icon, about as tall as the status pills, instead of a 30 pt button that made an open row taller than a closed one; in the open row, the service status text now lines up with its label, where it sat about 7 pt higher.

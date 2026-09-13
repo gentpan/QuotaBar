@@ -37,16 +37,18 @@ struct PresentationPane: View {
             }
 
             if store.presentation == .island {
-                SettingRow(L10n.t("Per side", "每侧显示")) {
+                SettingRow(
+                    L10n.t("Per side", "每侧显示"),
+                    caption: L10n.t(
+                        "How many providers sit either side of the notch, in the order they are enabled. Hover to open the full panel.",
+                        "刘海两侧各显示几个服务商，按启用顺序排列。悬停即从顶部展开完整面板。"))
+                {
                     GlassSegmented(
                         options: [1, 2, 3].map { (value: $0, label: L10n.t("\($0)", "\($0) 个")) },
                         selection: store.islandSlots,
                         onSelect: { store.setIslandSlots($0) })
                     .frame(maxWidth: 200)
                 }
-                SettingFootnote(L10n.t(
-                    "How many providers sit either side of the notch, in the order they are enabled. Hover to open the full panel.",
-                    "刘海两侧各显示几个服务商，按启用顺序排列。悬停即从顶部展开完整面板。"))
             SettingToggle(
                 L10n.t("Glow", "光晕"), caption: L10n.t("A halo that turns amber or red near the limit, and a light that orbits the outline.", "轮廓外的柔光，接近上限时变琥珀或红色，另有一道光沿轮廓环绕。"),
                 isOn: Binding(
@@ -74,7 +76,12 @@ struct PresentationPane: View {
             }
 
             if store.presentation == .edgeDock {
-                SettingRow(L10n.t("Docked edge", "停靠边缘")) {
+                SettingRow(
+                    L10n.t("Docked edge", "停靠边缘"),
+                    caption: L10n.t(
+                        "Drag the dock up or down to move it; the position is remembered. Click a ring to open the panel for that provider.",
+                        "上下拖动可移动停靠条，位置会被记住。点击圆环可打开该服务商的完整面板。"))
+                {
                     GlassSegmented(
                         options: DockEdge.allCases.map { (value: $0, label: $0.displayName) },
                         selection: store.dockEdge,
@@ -86,9 +93,6 @@ struct PresentationPane: View {
                     isOn: Binding(
                         get: { store.dockAlwaysVisible },
                         set: { store.setDockAlwaysVisible($0) }))
-                SettingFootnote(L10n.t(
-                    "Drag the dock up or down to move it; the position is remembered. Click a ring to open the panel for that provider.",
-                    "上下拖动可移动停靠条，位置会被记住。点击圆环可打开该服务商的完整面板。"))
             }
         }
 
@@ -96,7 +100,12 @@ struct PresentationPane: View {
             screens = NSScreen.screens
         }
 
-        SettingsCard(L10n.t("What each place shows", "各处显示的服务商")) {
+        SettingsCard(
+            L10n.t("What each place shows", "各处显示的服务商"),
+            help: L10n.t(
+                "Hiding a provider only takes it off that place: it is still read, still alerts, and still counts in spend. Turning it off in Providers stops reading it.",
+                "隐藏只是不在那里显示：该服务商仍会读取数据、发提醒、计入花费。在「服务商」里停用才会停止读取。"))
+        {
             if store.enabled.isEmpty {
                 SettingFootnote(L10n.t("No providers are on.", "还没有开启服务商。"))
             } else {
@@ -106,12 +115,14 @@ struct PresentationPane: View {
                     }
                 }
             }
-            SettingFootnote(L10n.t(
-                "Hiding a provider only takes it off that place: it is still read, still alerts, and still counts in spend. Turning it off in Providers stops reading it.",
-                "隐藏只是不在那里显示：该服务商仍会读取数据、发提醒、计入花费。在「服务商」里停用才会停止读取。"))
         }
 
-        SettingsCard(L10n.t("Desktop cards", "桌面卡片")) {
+        SettingsCard(
+            L10n.t("Desktop cards", "桌面卡片"),
+            help: L10n.t(
+                "Cards sit on the desktop, below your windows, unless kept above. Drag one to move it, double-click for the menu panel, right-click to change its style, size or provider, or to remove it.",
+                "卡片默认位于桌面、在窗口之下，可改为置顶。拖动移动位置，双击打开下拉面板，右键可更换样式、尺寸、服务商或删除。"))
+        {
             SettingToggle(
                 L10n.t("Show on the desktop", "在桌面显示"),
                 isOn: Binding(
@@ -151,9 +162,6 @@ struct PresentationPane: View {
                 isOn: Binding(
                     get: { store.experience.widgetSortsByUrgency },
                     set: { value in store.updateExperience { $0.widgetSortsByUrgency = value } }))
-            SettingFootnote(L10n.t(
-                "Cards sit on the desktop, below your windows, unless kept above. Drag one to move it, double-click for the menu panel, right-click to change its style, size or provider, or to remove it.",
-                "卡片默认位于桌面、在窗口之下，可改为置顶。拖动移动位置，双击打开下拉面板，右键可更换样式、尺寸、服务商或删除。"))
         }
     }
 }

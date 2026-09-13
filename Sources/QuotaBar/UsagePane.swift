@@ -33,6 +33,9 @@ struct UsagePane: View {
                 selection: tab,
                 onSelect: { tab = $0 })
             .frame(width: 200)
+            if store.logsReady && store.ledger.hasData {
+                HelpMark(footnote)
+            }
             Button {
                 ShareStudio.open(store: store)
             } label: {
@@ -57,7 +60,6 @@ struct UsagePane: View {
             case .heatmap: HeatmapCards(ledger: store.ledger)
             case .volume: VolumeCards(ledger: store.ledger)
             }
-            SettingFootnote(footnote)
         }
         Color.clear.frame(height: 0).onAppear { store.wantLedger() }
     }

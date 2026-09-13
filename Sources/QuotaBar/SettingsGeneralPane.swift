@@ -67,13 +67,13 @@ struct GeneralPane: View {
         SettingsCard(L10n.t("Advanced", "高级")) {
             ProxyRow(store: store)
             SettingToggle(
-                L10n.t("Local API", "本地接口"), caption: L10n.t("Serves http://127.0.0.1:6736/v1/limits to other tools on this Mac. No credentials, no account names.", "在 http://127.0.0.1:6736/v1/limits 提供额度数据给本机其他工具，不含凭据和账号。"),
+                L10n.t("Local API", "本地接口"),
+                caption: L10n.t(
+                    "Serves http://127.0.0.1:6736/v1/limits to other tools on this Mac. No credentials, no account names.\n\nFrom a terminal: /Applications/QuotaBar.app/Contents/MacOS/QuotaBar --json prints the same limits; add --force to skip the five-minute cache.",
+                    "在 http://127.0.0.1:6736/v1/limits 提供额度数据给本机其他工具，不含凭据和账号。\n\n在终端运行 /Applications/QuotaBar.app/Contents/MacOS/QuotaBar --json 可输出同样的额度数据，加 --force 跳过 5 分钟缓存。"),
                 isOn: Binding(
                     get: { store.experience.localAPI },
                     set: { value in store.updateExperience { $0.localAPI = value } }))
-            SettingFootnote(L10n.t(
-                "From a terminal: /Applications/QuotaBar.app/Contents/MacOS/QuotaBar --json prints the same limits; add --force to skip the five-minute cache.",
-                "在终端运行 /Applications/QuotaBar.app/Contents/MacOS/QuotaBar --json 可输出同样的额度数据，加 --force 跳过 5 分钟缓存。"))
         }
 
         SettingsCard(L10n.t("System", "系统")) {
@@ -133,12 +133,19 @@ private struct ProxyRow: View {
     }
 
     var body: some View {
-        SettingRow(L10n.t("Proxy", "代理"), caption: invalid ? L10n.t("Not a proxy address.", "不是有效的代理地址。") : L10n.t("http://, https:// or socks5://; empty is direct.", "支持 http://、https:// 或 socks5://，留空为直连。")) {
+        SettingRow(L10n.t("Proxy", "代理"), caption: L10n.t("http://, https:// or socks5://; empty is direct.", "支持 http://、https:// 或 socks5://，留空为直连。")) {
             HStack(spacing: Design.space2) {
                 GlassTextField(placeholder: "socks5://127.0.0.1:7890", text: $text, onSubmit: apply)
                     .frame(width: 260)
                 Button(L10n.t("Apply", "应用"), action: apply)
                     .glassAction()
+                // A mistake stays in sight; only the how-to waits behind the question mark.
+                if invalid {
+                    Text(L10n.t("Not a proxy address.", "不是有效的代理地址。"))
+                        .font(.system(size: 12))
+                        .foregroundStyle(.red)
+                        .lineLimit(1)
+                }
                 Spacer(minLength: 0)
             }
         }

@@ -290,15 +290,14 @@ struct SettingRow<Control: View>: View {
 
     var body: some View {
         HStack(alignment: .top, spacing: Design.space3) {
-            VStack(alignment: .leading, spacing: 2) {
+            // The explanation waits behind a question mark: under the title it
+            // wrapped in the narrow label column and made every row look uneven.
+            HStack(spacing: Design.space1) {
                 Text(title)
                     .font(.system(size: 13))
                     .fixedSize(horizontal: false, vertical: true)
                 if let caption {
-                    Text(caption)
-                        .font(.system(size: 11))
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
+                    HelpMark(caption)
                 }
             }
             .frame(width: Design.labelColumn, alignment: .leading)
@@ -342,19 +341,15 @@ struct SettingToggle: View {
     }
 
     var body: some View {
-        // A one-line switch row is as tall as a field row, so a card that
-        // mixes the two keeps one rhythm; a captioned one keeps the switch
-        // level with its title.
-        HStack(alignment: caption == nil ? .center : .top, spacing: Design.space3) {
-            VStack(alignment: .leading, spacing: 2) {
+        // A switch row is as tall as a field row, so a card that mixes the
+        // two keeps one rhythm. The explanation sits behind a question mark.
+        HStack(alignment: .center, spacing: Design.space3) {
+            HStack(spacing: Design.space1) {
                 Text(title)
                     .font(.system(size: 13))
                     .fixedSize(horizontal: false, vertical: true)
                 if let caption {
-                    Text(caption)
-                        .font(.system(size: 11))
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
+                    HelpMark(caption)
                 }
             }
             Spacer(minLength: Design.space3)
@@ -368,25 +363,85 @@ struct SettingToggle: View {
 /// of decisions rather than one undifferentiated list.
 struct SettingsCard<Content: View>: View {
     private let title: String?
+    private let help: String?
     private let content: Content
 
-    init(_ title: String? = nil, @ViewBuilder content: () -> Content) {
+    /// `help` is how the whole card works, behind a question mark by the title
+    /// (top right when the card has none) rather than a paragraph under it.
+    init(_ title: String? = nil, help: String? = nil, @ViewBuilder content: () -> Content) {
         self.title = title
+        self.help = help
         self.content = content()
     }
 
     var body: some View {
         VStack(alignment: .leading, spacing: Design.space3) {
             if let title {
-                Text(title)
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(.secondary)
+                HStack(spacing: Design.space1) {
+                    Text(title)
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(.secondary)
+                    if let help {
+                        HelpMark(help)
+                    }
+                }
             }
             content
         }
         .padding(Design.space4)
         .frame(maxWidth: .infinity, alignment: .leading)
+        .overlay(alignment: .topTrailing) {
+            if title == nil, let help {
+                HelpMark(help)
+                    .padding(Design.space3)
+            }
+        }
         .glassSurface(radius: Design.radiusPanel)
+    }
+}
+
+/// A question mark that explains a setting when the pointer rests on it (or
+/// when it is clicked), so the explanation is there when wanted without a
+/// line of grey text under every row.
+struct HelpMark: View {
+    private let text: String
+    @State private var hovering = false
+    @State private var shown = false
+
+    init(_ text: String) {
+        self.text = text
+    }
+
+    var body: some View {
+        Image(systemName: "questionmark.circle")
+            .font(.system(size: 11))
+            .foregroundStyle(hovering || shown ? Color.primary.opacity(0.75) : Color.secondary.opacity(0.7))
+            .frame(width: 16, height: 16)
+            .contentShape(Rectangle())
+            .onHover { inside in
+                hovering = inside
+                if inside {
+                    // A beat first, so crossing the mark on the way elsewhere
+                    // doesn't flash a popover.
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
+                        if hovering { shown = true }
+                    }
+                } else {
+                    shown = false
+                }
+            }
+            .onTapGesture { shown.toggle() }
+            .popover(isPresented: $shown, arrowEdge: .bottom) {
+                Text(text)
+                    .font(.system(size: 12))
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(width: 280, alignment: .leading)
+                    .padding(Design.space3)
+            }
+            .accessibilityElement()
+            .accessibilityLabel(L10n.t("More information", "说明"))
+            .accessibilityValue(text)
+            .accessibilityAddTraits(.isButton)
     }
 }
 

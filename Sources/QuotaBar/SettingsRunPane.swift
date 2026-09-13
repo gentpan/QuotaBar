@@ -43,7 +43,12 @@ struct RunRecordsCard: View {
     let now: Date
 
     var body: some View {
-        SettingsCard(L10n.t("Your records", "你的记录")) {
+        SettingsCard(
+            L10n.t("Your records", "你的记录"),
+            help: L10n.t(
+                "Every reading stays on this Mac for 60 days; bests are kept for good. \"Likely verified\" applies Quota Run's rules here — only quota.run decides a result.",
+                "每次读数在本机保留 60 天，个人最佳永久保留。「预计可验证」是按 Quota Run 的规则在本机估算的，最终结果以 quota.run 为准。"))
+        {
             if run.inProgress.isEmpty && run.bests.isEmpty {
                 empty
             } else {
@@ -65,9 +70,6 @@ struct RunRecordsCard: View {
                     }
                 }
             }
-            SettingFootnote(L10n.t(
-                "Every reading stays on this Mac for 60 days; bests are kept for good. \"Likely verified\" applies Quota Run's rules here — only quota.run decides a result.",
-                "每次读数在本机保留 60 天，个人最佳永久保留。「预计可验证」是按 Quota Run 的规则在本机估算的，最终结果以 quota.run 为准。"))
         }
     }
 
@@ -467,15 +469,15 @@ struct RunSignInCard: View {
             }
             .glassAction(prominent: true)
             .disabled(!agreed)
+            HelpMark(L10n.t(
+                "The browser opens quota.run with a code to approve. Already signed in on another Mac? Sign in here with the same account to add this one.",
+                "浏览器会打开 quota.run，显示一个待批准的代码。已在别的 Mac 上登录？在这里用同一个账户登录，就能添加这台 Mac。"))
             if let message = run.signInPhase.message {
                 RunInlineError(message)
                     .lineLimit(3)
             }
             Spacer(minLength: 0)
         }
-        SettingFootnote(L10n.t(
-            "The browser opens quota.run with a code to approve. Already signed in on another Mac? Sign in here with the same account to add this one.",
-            "浏览器会打开 quota.run，显示一个待批准的代码。已在别的 Mac 上登录？在这里用同一个账户登录，就能添加这台 Mac。"))
     }
 }
 
@@ -767,7 +769,12 @@ struct RunProviderAccountsCard: View {
     @State private var confirmUnbind: RunLocalAccount?
 
     var body: some View {
-        SettingsCard(L10n.t("Provider accounts", "服务商账号")) {
+        SettingsCard(
+            L10n.t("Provider accounts", "服务商账号"),
+            help: L10n.t(
+                "Only runs bound to a provider account can rank, and each provider account counts for one Quota account. The email stays on this Mac; quota.run gets a one-way digest.",
+                "只有绑定了服务商账号的成绩才能上榜，每个服务商账号只归属一个 Quota 账户。邮箱只留在这台 Mac 上，quota.run 收到的是单向摘要。"))
+        {
             if accounts.isEmpty {
                 SettingFootnote(L10n.t(
                     "None of your providers has reported which account it is signed in with yet.",
@@ -780,9 +787,6 @@ struct RunProviderAccountsCard: View {
                 }
             }
             RunPhaseLabel(phase: run.accountsPhase)
-            SettingFootnote(L10n.t(
-                "Only runs bound to a provider account can rank, and each provider account counts for one Quota account. The email stays on this Mac; quota.run gets a one-way digest.",
-                "只有绑定了服务商账号的成绩才能上榜，每个服务商账号只归属一个 Quota 账户。邮箱只留在这台 Mac 上，quota.run 收到的是单向摘要。"))
         }
         .onAppear { Task { await run.lookupAccounts() } }
         .alert(
@@ -891,7 +895,7 @@ private struct RunDevicesCard: View {
     }
 
     var body: some View {
-        SettingsCard(L10n.t("Ranked device", "计分设备")) {
+        SettingsCard(L10n.t("Ranked device", "计分设备"), help: cooldownNote) {
             VStack(spacing: Design.space1) {
                 ForEach(devices) { device in
                     row(device)
@@ -911,7 +915,6 @@ private struct RunDevicesCard: View {
                 }
             }
             RunPhaseLabel(phase: run.devicesPhase)
-            SettingFootnote(cooldownNote)
         }
         .alert(
             L10n.t("Remove this Mac from your account?", "从账户中移除这台 Mac？"),
@@ -1023,7 +1026,8 @@ private struct RunProfileCard: View {
                 GlassTextField(placeholder: "", text: $displayName, monospaced: false)
                     .frame(maxWidth: 320)
             }
-            SettingRow(L10n.t("Bio", "简介"), caption: "\(bio.count) / 160") {
+            SettingRow(L10n.t("Bio", "简介")) {
+              VStack(alignment: .trailing, spacing: Design.space1) {
                 TextEditor(text: $bio)
                     .font(.system(size: 13))
                     .scrollContentBackground(.hidden)
@@ -1031,6 +1035,11 @@ private struct RunProfileCard: View {
                     .frame(minHeight: 64)
                     .background(RoundedRectangle(cornerRadius: Design.radiusField, style: .continuous).fill(Design.fieldFill))
                     .overlay(RoundedRectangle(cornerRadius: Design.radiusField, style: .continuous).strokeBorder(Design.glassEdge, lineWidth: 1))
+                Text("\(bio.count) / 160")
+                    .font(.system(size: 11))
+                    .foregroundStyle(bio.count > 160 ? Color.red : Color.secondary)
+                    .monospacedDigit()
+              }
             }
             SettingRow(L10n.t("Region", "地区")) {
                 GlassSegmented(
@@ -1171,14 +1180,21 @@ private struct RunProjectEditor: View {
             SettingRow(L10n.t("Name", "名称")) {
                 GlassTextField(placeholder: "", text: $project.name, monospaced: false)
             }
-            SettingRow(L10n.t("Description", "简介"), caption: "\(project.description.count) / 140") {
-                GlassTextField(placeholder: "", text: $project.description, monospaced: false)
+            SettingRow(L10n.t("Description", "简介")) {
+                HStack(spacing: Design.space2) {
+                    GlassTextField(placeholder: "", text: $project.description, monospaced: false)
+                    Text("\(project.description.count) / 140")
+                        .font(.system(size: 11))
+                        .foregroundStyle(project.description.count > 140 ? Color.red : Color.secondary)
+                        .monospacedDigit()
+                        .fixedSize()
+                }
             }
             SettingRow(L10n.t("Address", "网址")) {
                 GlassTextField(placeholder: "https://", text: $project.url)
             }
-            SettingRow("GitHub", caption: L10n.t("Optional.", "选填。")) {
-                GlassTextField(placeholder: "https://github.com/…", text: github)
+            SettingRow("GitHub") {
+                GlassTextField(placeholder: L10n.t("https://github.com/… (optional)", "https://github.com/…（选填）"), text: github)
             }
             SettingRow(L10n.t("Built with", "使用的工具")) {
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: 128), spacing: Design.space1)], alignment: .leading, spacing: Design.space1) {
@@ -1248,12 +1264,12 @@ private struct RunLeaveCard: View {
                         }
                         .glassAction()
                         .disabled(busy)
+                        HelpMark(L10n.t(
+                            "Takes this Mac off @\(account.username) and forgets its key. The account, your other Macs and the records on this Mac stay; sign in again any time.",
+                            "把这台 Mac 从 @\(account.username) 移除，并清除它的密钥。账户、你的其他 Mac 和本机上的个人记录都会保留，之后随时可以重新登录。"))
                         RunPhaseLabel(phase: run.disconnectPhase)
                         Spacer(minLength: 0)
                     }
-                    SettingFootnote(L10n.t(
-                        "Takes this Mac off @\(account.username) and forgets its key. The account, your other Macs and the records on this Mac stay; sign in again any time.",
-                        "把这台 Mac 从 @\(account.username) 移除，并清除它的密钥。账户、你的其他 Mac 和本机上的个人记录都会保留，之后随时可以重新登录。"))
                 }
                 .alert(L10n.t("Disconnect this Mac?", "断开这台 Mac？"), isPresented: $confirmingDisconnect) {
                     Button(L10n.t("Disconnect", "断开")) { run.disconnectThisMac() }
@@ -1272,12 +1288,12 @@ private struct RunLeaveCard: View {
                         }
                         .glassAction()
                         .disabled(busy)
+                        HelpMark(L10n.t(
+                            "Deletes your profile, projects, runs, Macs, sign-in methods and every reading from quota.run, and forgets this Mac's key. Your records on this Mac stay.",
+                            "从 quota.run 删除你的主页、项目、成绩、设备、登录方式和所有读数，并清除这台 Mac 的密钥。本机上的个人记录会保留。"))
                         RunPhaseLabel(phase: run.deletePhase)
                         Spacer(minLength: 0)
                     }
-                    SettingFootnote(L10n.t(
-                        "Deletes your profile, projects, runs, Macs, sign-in methods and every reading from quota.run, and forgets this Mac's key. Your records on this Mac stay.",
-                        "从 quota.run 删除你的主页、项目、成绩、设备、登录方式和所有读数，并清除这台 Mac 的密钥。本机上的个人记录会保留。"))
                 }
                 .alert(L10n.t("Delete your Quota Run account?", "删除你的 Quota Run 账户？"), isPresented: $confirmingDelete) {
                     Button(L10n.t("Delete Account", "删除账户"), role: .destructive) { run.deleteAccount() }

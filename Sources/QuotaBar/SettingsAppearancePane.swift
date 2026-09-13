@@ -8,8 +8,13 @@ struct AppearancePane: View {
     @ObservedObject var store: UsageStore
 
     var body: some View {
-        SettingsCard(L10n.t("Menu-bar glyph", "菜单栏图标")) {
-            SettingRow(L10n.t("Shows", "显示")) {
+        SettingsCard(
+            L10n.t("Menu-bar glyph", "菜单栏图标"),
+            help: L10n.t(
+                "Used or left applies everywhere; clicking any percentage flips it too.\n\nThe glyph reports whichever provider the panel is focused on. Pick Overview in the panel to have it cover everything enabled.",
+                "已用或剩余在所有界面同步生效，点击任意百分比也能切换。\n\n菜单栏图标显示的是面板中当前选中的服务商。在面板里选「总览」可让它覆盖所有已启用的服务商。"))
+        {
+            SettingRow(L10n.t("Shows", "显示"), caption: modeHelp) {
                 GlassSegmented(
                     options: MenuBarIconMode.allCases.map { (value: $0, label: $0.displayName) },
                     selection: store.menuBarIconMode,
@@ -23,18 +28,8 @@ struct AppearancePane: View {
                     selection: store.menuBarStyle,
                     mode: store.meterMode,
                     onSelect: { store.setMenuBarStyle($0) })
-            case .text:
-                SettingFootnote(L10n.t(
-                    "Each provider's mark and its figure — the focused provider alone, or the first three enabled.",
-                    "每个服务商的 logo 加数字：选中了服务商时只显示它，否则显示前三个已启用的服务商。"))
-            case .logo:
-                SettingFootnote(L10n.t(
-                    "The app's mark, drawn in the menu bar's own ink. Click it for the menu panel.",
-                    "只显示应用标记，按菜单栏自身的颜色绘制。点击打开下拉面板。"))
-            case .hidden:
-                SettingFootnote(L10n.t(
-                    "No menu-bar item. Reach Settings from the dock's or island's right-click menu, or by opening QuotaBar again.",
-                    "菜单栏不显示任何图标。可从停靠条或刘海岛的右键菜单打开设置，或再次打开 QuotaBar。"))
+            case .text, .logo, .hidden:
+                EmptyView()
             }
 
             SettingRow(L10n.t("Fills with", "填充口径")) {
@@ -52,13 +47,6 @@ struct AppearancePane: View {
                     onSelect: { store.setMeterStyle($0) })
                 .frame(maxWidth: 260)
             }
-
-            SettingFootnote(L10n.t(
-                "Used or left applies everywhere; clicking any percentage flips it too.",
-                "已用或剩余在所有界面同步生效，点击任意百分比也能切换。"))
-            SettingFootnote(L10n.t(
-                "The glyph reports whichever provider the panel is focused on. Pick Overview in the panel to have it cover everything enabled.",
-                "菜单栏图标显示的是面板中当前选中的服务商。在面板里选「总览」可让它覆盖所有已启用的服务商。"))
         }
 
         SettingsCard(L10n.t("Figures and bars", "数字与进度条")) {
@@ -95,7 +83,12 @@ struct AppearancePane: View {
                     set: { value in store.updateExperience { $0.reduceMotion = value } }))
         }
 
-        SettingsCard(L10n.t("Menu panel", "下拉面板")) {
+        SettingsCard(
+            L10n.t("Menu panel", "下拉面板"),
+            help: L10n.t(
+                "Click the menu-bar item to open it; Esc closes, ⌘R refreshes, ⌘, opens Settings. Right-click a card to copy it as an image.",
+                "点菜单栏图标打开；Esc 关闭，⌘R 刷新，⌘, 打开设置。右键卡片可复制为图片。"))
+        {
             SettingRow(L10n.t("Density", "密度")) {
                 GlassSegmented(
                     options: PanelDensity.allCases.map { (value: $0, label: $0.displayName) },
@@ -119,9 +112,28 @@ struct AppearancePane: View {
                     store.updateExperience { $0.hotkey = hotkey }
                 }
             }
-            SettingFootnote(L10n.t(
-                "Click the menu-bar item to open it; Esc closes, ⌘R refreshes, ⌘, opens Settings. Right-click a card to copy it as an image.",
-                "点菜单栏图标打开；Esc 关闭，⌘R 刷新，⌘, 打开设置。右键卡片可复制为图片。"))
+        }
+    }
+}
+
+extension AppearancePane {
+    /// What the chosen menu-bar mode shows, for the question mark by "Shows".
+    fileprivate var modeHelp: String? {
+        switch store.menuBarIconMode {
+        case .meter:
+            nil
+        case .text:
+            L10n.t(
+                "Each provider's mark and its figure — the focused provider alone, or the first three enabled.",
+                "每个服务商的 logo 加数字：选中了服务商时只显示它，否则显示前三个已启用的服务商。")
+        case .logo:
+            L10n.t(
+                "The app's mark, drawn in the menu bar's own ink. Click it for the menu panel.",
+                "只显示应用标记，按菜单栏自身的颜色绘制。点击打开下拉面板。")
+        case .hidden:
+            L10n.t(
+                "No menu-bar item. Reach Settings from the dock's or island's right-click menu, or by opening QuotaBar again.",
+                "菜单栏不显示任何图标。可从停靠条或刘海岛的右键菜单打开设置，或再次打开 QuotaBar。")
         }
     }
 }

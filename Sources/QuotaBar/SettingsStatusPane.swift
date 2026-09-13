@@ -16,7 +16,10 @@ struct StatusPane: View {
         // Only the providers with a page. A row saying "none" for the rest
         // was five rows of nothing; the footnote names them once.
         let listed = ProviderID.allCases.filter { StatusPages.page(for: $0) != nil }
-        SettingsCard {
+        SettingsCard(help: L10n.t(
+            "Read from each provider's public status page every five minutes, without signing in. Click a row for the page's own account of what is going on. Providers without a page anyone can read are not listed.",
+            "每五分钟读取各服务商的公开状态页，无需登录。点击一行可看状态页对当前情况的说明。没有可公开读取状态页的服务商不在此列出。"))
+        {
             VStack(alignment: .leading, spacing: 0) {
                 ForEach(listed) { id in
                     row(id)
@@ -26,9 +29,6 @@ struct StatusPane: View {
                 }
             }
         }
-        SettingFootnote(L10n.t(
-            "Read from each provider's public status page every five minutes, without signing in. Click a row for the page's own account of what is going on. Providers without a page anyone can read are not listed.",
-            "每五分钟读取各服务商的公开状态页，无需登录。点击一行可看状态页对当前情况的说明。没有可公开读取状态页的服务商不在此列出。"))
     }
 
     /// One line per provider — name, band, when it was asked — and the

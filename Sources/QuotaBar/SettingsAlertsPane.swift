@@ -10,7 +10,12 @@ struct AlertsPane: View {
     private var enabled: Bool { store.alertSettings.enabled }
 
     var body: some View {
-        SettingsCard(L10n.t("Thresholds", "阈值")) {
+        SettingsCard(
+            L10n.t("Thresholds", "阈值"),
+            help: L10n.t(
+                "Only thresholds at or above the warning level are offered — a critical below it can never be reached.",
+                "紧急阈值只提供不低于警告阈值的档位，否则永远不会触发。"))
+        {
             SettingToggle(
                 L10n.t("Notify when approaching limits", "接近额度上限时通知"),
                 isOn: Binding(
@@ -53,22 +58,25 @@ struct AlertsPane: View {
                 .disabled(!enabled)
                 .opacity(enabled ? 1 : 0.45)
             }
-
-            SettingFootnote(L10n.t(
-                "Only thresholds at or above the warning level are offered — a critical below it can never be reached.",
-                "紧急阈值只提供不低于警告阈值的档位，否则永远不会触发。"))
         }
 
-        SettingsCard(L10n.t("Pace", "节奏提醒")) {
+        SettingsCard(
+            L10n.t("Pace", "节奏提醒"),
+            help: L10n.t(
+                "Each fires once per crossing and once per reset period. What is already true when QuotaBar starts sets the baseline without a notification.",
+                "每次越线只提醒一次，每个重置周期也只提醒一次。QuotaBar 启动时已经成立的情况只作为基线，不会提醒。"))
+        {
             paceToggle(L10n.t("Almost out", "快用完了"), L10n.t("Under 10% left, balances included.", "剩余不到 10%，包括没有重置周期的余额。"), \.almostOut)
             paceToggle(L10n.t("Cutting it close", "余量很紧"), L10n.t("Projected to finish the window with little left.", "按当前速度，重置时所剩无几。"), \.cuttingClose)
             paceToggle(L10n.t("Will run out", "重置前会用完"), L10n.t("Projected to run out before the window resets.", "按当前速度，会在重置前用完。"), \.willRunOut)
-            SettingFootnote(L10n.t(
-                "Each fires once per crossing and once per reset period. What is already true when QuotaBar starts sets the baseline without a notification.",
-                "每次越线只提醒一次，每个重置周期也只提醒一次。QuotaBar 启动时已经成立的情况只作为基线，不会提醒。"))
         }
 
-        SettingsCard(L10n.t("Resets", "额度重置")) {
+        SettingsCard(
+            L10n.t("Resets", "额度重置"),
+            help: L10n.t(
+                "QuotaBar reads a provider again just after its window resets, so this happens on time rather than at the next refresh.",
+                "QuotaBar 会在窗口重置后立刻重新读取该服务商，不用等下一次定时刷新。"))
+        {
             SettingToggle(
                 L10n.t("Mark the moment a window resets", "额度重置时播放提示"),
                 caption: L10n.t(
@@ -84,12 +92,14 @@ struct AlertsPane: View {
                     onSelect: { mode in store.updateExperience { $0.resetNotify = mode } })
                 .frame(maxWidth: 300)
             }
-            SettingFootnote(L10n.t(
-                "QuotaBar reads a provider again just after its window resets, so this happens on time rather than at the next refresh.",
-                "QuotaBar 会在窗口重置后立刻重新读取该服务商，不用等下一次定时刷新。"))
         }
 
-        SettingsCard(L10n.t("Spend", "花费")) {
+        SettingsCard(
+            L10n.t("Spend", "花费"),
+            help: L10n.t(
+                "A budget notifies once at 80% and once when it is passed, per day and per calendar month. Spend is estimated from this Mac's CLI logs at public prices — not a bill. Leave a budget empty to turn it off.",
+                "预算在用到 80% 和超出时各通知一次，按天和按自然月分别计算。花费按本机 CLI 日志和公开价格估算，不是账单。留空即不设预算。"))
+        {
             SettingRow(L10n.t("Daily budget", "每日预算")) {
                 BudgetField(store: store, period: .day)
             }
@@ -102,9 +112,6 @@ struct AlertsPane: View {
                 isOn: Binding(
                     get: { store.experience.weeklyDigest },
                     set: { value in store.updateExperience { $0.weeklyDigest = value } }))
-            SettingFootnote(L10n.t(
-                "A budget notifies once at 80% and once when it is passed, per day and per calendar month. Spend is estimated from this Mac's CLI logs at public prices — not a bill. Leave a budget empty to turn it off.",
-                "预算在用到 80% 和超出时各通知一次，按天和按自然月分别计算。花费按本机 CLI 日志和公开价格估算，不是账单。留空即不设预算。"))
         }
     }
 

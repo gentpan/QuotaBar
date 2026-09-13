@@ -60,9 +60,9 @@ struct FeedbackPane: View {
                         RoundedRectangle(cornerRadius: Design.radiusField, style: .continuous)
                             .strokeBorder(Design.glassEdge, lineWidth: 1))
             }
-            SettingRow(L10n.t("Contact", "联系方式"), caption: L10n.t("Optional.", "选填。")) {
+            SettingRow(L10n.t("Contact", "联系方式")) {
                 GlassTextField(
-                    placeholder: L10n.t("Email, or where to reply", "邮箱，或其他能回复你的方式"),
+                    placeholder: L10n.t("Email, or where to reply (optional)", "邮箱，或其他能回复你的方式（选填）"),
                     text: $contact,
                     monospaced: false)
             }

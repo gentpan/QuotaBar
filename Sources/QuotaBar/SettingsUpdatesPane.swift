@@ -22,7 +22,12 @@ struct UpdatesPane: View {
                 .padding(.top, Design.rowLabelInset)
             }
 
-            SettingRow(L10n.t("Updates", "更新方式")) {
+            SettingRow(
+                L10n.t("Updates", "更新方式"),
+                caption: L10n.t(
+                    "A new version shows what changed first. Nothing is replaced until you click Install and Relaunch; the download is checked for the developer's signature and Apple's notarization.",
+                    "发现新版本时先显示更新内容，点「安装并重启」才会替换并重启；下载的安装包会先验证开发者签名和 Apple 公证。"))
+            {
                 GlassSegmented(
                     options: UpdatePolicy.allCases.map { (value: $0, label: $0.displayName) },
                     selection: store.updatePolicy,
@@ -31,9 +36,6 @@ struct UpdatesPane: View {
                 .disabled(store.updateIsManagedByHomebrew)
                 .opacity(store.updateIsManagedByHomebrew ? 0.45 : 1)
             }
-            SettingFootnote(L10n.t(
-                "A new version shows what changed first. Nothing is replaced until you click Install and Relaunch; the download is checked for the developer's signature and Apple's notarization.",
-                "发现新版本时先显示更新内容，点「安装并重启」才会替换并重启；下载的安装包会先验证开发者签名和 Apple 公证。"))
 
             SettingRow(L10n.t("Check", "检查")) {
                 HStack(spacing: Design.space3) {
