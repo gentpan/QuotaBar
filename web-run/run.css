@@ -2,7 +2,7 @@
  * 更新日志页的顶栏（.logbar）、宽度（.shell）、徽章（.badge）和页脚。
  * 页面由 run.js 画；这里只管样子。 */
 
-.runpage { --card: #0d0f10; --card-hover: #121416; --gold: #f5c451; --silver: #d5dae1; --bronze: #e0a174; }
+.runpage { --card: #0d0f10; --card-hover: #121416; --gold: #f5c451; --silver: #d5dae1; --bronze: #e0a174; --acct: #5aa9ff; }
 
 .sr-only {
   position: absolute !important;
@@ -290,7 +290,7 @@
 
 .run-table .lb-rank { width: 72px; }
 .run-table .lb-value { width: 200px; }
-.run-table .lb-tier { width: 120px; }
+.run-table .lb-tier { width: 148px; }
 .run-table .lb-when { width: 128px; white-space: nowrap; }
 .run-table td.lb-when, .run-table td.rr-when { font-size: 13px; color: var(--body); }
 
@@ -350,6 +350,25 @@
 .run-tier { gap: var(--s-1); }
 .run-tier--verified { --badge: var(--brand); }
 .run-tier--standard { --badge: #a1a7b0; }
+
+/* 「账号已核实」：级别徽章旁边一枚小圆标，蓝色（更新日志里「样式」那枚的蓝），不抢级别的绿 */
+.run-tiercell { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+.run-acct {
+  flex: none;
+  display: inline-grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border-radius: var(--r-full);
+  background: color-mix(in srgb, var(--acct) 14%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--acct) 30%, transparent);
+  color: var(--acct);
+  cursor: help;
+}
+/* 窄屏名字下面那一行里：不要底，跟着文字走 */
+.run-acct--inline { display: inline; width: auto; height: auto; margin-left: 2px; background: none; box-shadow: none; }
+.run-acct--inline svg { vertical-align: -1px; }
+.run-acctbadge { --badge: var(--acct); gap: var(--s-1); }
 
 /* 加载、空、出错 */
 .run-loading { display: grid; gap: var(--s-3); padding: var(--s-6); }
@@ -425,6 +444,8 @@
 
 .run-box .run-tierline { display: grid; justify-items: start; gap: 6px; }
 .run-box .run-tierline + .run-tierline { margin-top: var(--s-4); }
+.run-box .run-tiernote { margin-top: var(--s-4); padding-top: var(--s-4); border-top: 1px solid var(--line); }
+.run-box .run-tiernote + .run-tierline { margin-top: var(--s-4); }
 
 /* ── 怎么算的 ───────────────────────────────────────────────────────── */
 /* 分隔线和内容同宽：.shell 的左右内边距不画线 */

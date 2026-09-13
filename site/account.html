@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>[[Your account · Quota Run||我的账号 · Quota Run]]</title>
-<meta name="description" content="[[Manage your Quota Run profile, projects, Macs and sign-in methods.||管理 Quota Run 的主页、项目、Mac 和登录方式。]]">
+<meta name="description" content="[[Manage your Quota Run profile, projects, Macs, provider accounts and sign-in methods.||管理 Quota Run 的主页、项目、Mac、服务商账号和登录方式。]]">
 <meta name="robots" content="noindex">
 <meta name="theme-color" content="#101112">
 [[<!-- Caddy 把 /account 映射到这个文件。英文在根目录；浏览器语言是中文、或者之前选过中文的，去 /zh/account。 -->
@@ -70,6 +70,7 @@
         <a href="#profile-settings">[[Public profile||公开主页]]</a>
         <a href="#projects">[[Projects||项目]]</a>
         <a href="#macs">[[Macs||Mac]]</a>
+        <a href="#provider-accounts">[[Provider accounts||服务商账号]]</a>
         <a href="#sign-in">[[Sign-in methods||登录方式]]</a>
         <a href="#danger">[[Sign out and delete||退出与删除]]</a>
       </nav>
@@ -148,6 +149,17 @@
           <div class="acc-alert acc-alert--error" id="macsError" role="alert" hidden></div>
           <ul class="acc-list" id="macsList"></ul>
           <p class="acc-foot">[[To add a Mac, open QuotaBar on it, go to Settings → Quota Run and choose “Sign in with quota.run”.||要添加一台 Mac：在那台 Mac 上打开 QuotaBar，进「设置」→「Quota Run」，点「用 quota.run 登录」。]]</p>
+        </section>
+
+        <!-- 服务商账号：读数来自哪个 Codex / Claude / Cursor 账号。服务端只有摘要，没有邮箱，所以这里从不显示邮箱 -->
+        <section class="acc-sec" id="provider-accounts" aria-labelledby="providerAccountsHeading">
+          <header class="acc-sec__head">
+            <h2 id="providerAccountsHeading">[[Provider accounts||服务商账号]]</h2>
+            <p>[[The accounts at Codex, Claude, Cursor and the rest that your readings come from. Only runs bound to one of them rank, and each belongs to one Quota account. quota.run keeps a one-way digest, never the email.||你的读数来自哪些服务商账号（Codex、Claude、Cursor 等）。只有绑定了服务商账号的成绩才上榜，一个服务商账号只归一个 Quota 账号。quota.run 只存单向摘要，不存邮箱。]]</p>
+          </header>
+          <div class="acc-alert acc-alert--error" id="providerAccountsError" role="alert" hidden></div>
+          <ul class="acc-list" id="providerAccountList"></ul>
+          <p class="acc-foot">[[Account verified: the provider account's email matches a verified sign-in on quota.run. Link that email under Sign-in methods to verify or claim an account.||账号已核实：服务商账号的邮箱与 quota.run 上验证过的登录邮箱一致。在「登录方式」里绑定那个邮箱，就能核实或认领这个账号。]]</p>
         </section>
 
         <!-- 登录方式 -->
