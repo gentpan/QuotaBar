@@ -38,6 +38,14 @@ PY
     [ -n "$cid" ] && [ -n "$secret" ] || die "两项都要填"
     payload="$(CID="$cid" SECRET="$secret" python3 -c 'import json, os; print(json.dumps({"QUOTA_RUN_GITHUB_CLIENT_ID": os.environ["CID"], "QUOTA_RUN_GITHUB_CLIENT_SECRET": os.environ["SECRET"]}))')"
     ;;
+  cloudflare)
+    # Cloudflare Email Sending 的 SMTP：smtp.mx.cloudflare.net:465（隐式 TLS），用户名是字面的 api_token，
+    # 密码是带「Email Sending: Edit」权限的 API 令牌；发件域名要先在 Email Service → Email Sending 里接入。
+    read -r -s -p "Cloudflare API 令牌（Email Sending: Edit，不回显）: " token; echo
+    read -r -p "发件人 [Quota Run <noreply@quota.run>]: " from
+    [ -n "$token" ] || die "令牌不能为空"
+    payload="$(T="$token" F="${from:-Quota Run <noreply@quota.run>}" python3 -c 'import json, os; print(json.dumps({"QUOTA_RUN_SMTP_HOST": "smtp.mx.cloudflare.net", "QUOTA_RUN_SMTP_PORT": "465", "QUOTA_RUN_SMTP_USER": "api_token", "QUOTA_RUN_SMTP_PASSWORD": os.environ["T"], "QUOTA_RUN_MAIL_FROM": os.environ["F"]}))')"
+    ;;
   smtp)
     read -r -p "SMTP 主机（如 smtp.resend.com）: " host
     read -r -p "端口（465 = TLS，587 = STARTTLS）[465]: " port
