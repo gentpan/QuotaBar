@@ -99,6 +99,30 @@
     if (openMenu && !openMenu.contains(event.target)) setOpen(null);
   });
 
+  /* 控制中心的外观：浅色、深色或自动（跟随系统），记在本地 */
+  var themeChoices = document.querySelectorAll(".cc-choice");
+  function useTheme(choice) {
+    var root = document.documentElement;
+    if (choice === "light" || choice === "dark") root.setAttribute("data-theme", choice);
+    else root.removeAttribute("data-theme");
+    Array.prototype.forEach.call(themeChoices, function (c) {
+      c.setAttribute("aria-checked", c.getAttribute("data-theme-choice") === choice ? "true" : "false");
+    });
+  }
+  var savedTheme = "auto";
+  try { savedTheme = localStorage.getItem("qb-theme") || "auto"; } catch (e) { /* 用自动 */ }
+  useTheme(savedTheme);
+  Array.prototype.forEach.call(themeChoices, function (c) {
+    c.addEventListener("click", function (event) {
+      event.preventDefault();
+      var choice = c.getAttribute("data-theme-choice");
+      useTheme(choice);
+      try {
+        if (choice === "auto") localStorage.removeItem("qb-theme"); else localStorage.setItem("qb-theme", choice);
+      } catch (e) { /* 忽略 */ }
+    });
+  });
+
   /* 状态栏图标换样式：图是应用渲染的 11 种模板图，选中的记在本地 */
   var glyph = document.getElementById("menubarGlyph");
   var glyphOptions = document.querySelectorAll(".mb-glyph-option");
