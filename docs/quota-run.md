@@ -59,9 +59,9 @@ and this file disagree, this file wins until it is changed on purpose.
   connected while the account has no ranked device becomes ranked. Changing it
   from one device to another has a **7-day cooldown**; making a device ranked
   when there is none is always allowed.
-- **Provider account binding**: the digest of the provider's account (email)
-  can belong to one Quota account only. Seen under two Quota accounts → both
-  runs for that digest are `flagged` ("disputed") until resolved.
+- **Provider account binding**: see *Provider accounts* below. Only readings
+  that carry a provider account digest can rank, and each provider account
+  (digest) is owned by one Quota account.
 - The sign-in email is stored on quota.run to sign the person in; it is never
   shown on a profile, a board or to other users.
 
@@ -70,6 +70,41 @@ and this file disagree, this file wins until it is changed on purpose.
 `^[a-z0-9][a-z0-9_-]{2,19}$`, case-folded, unique. Reserved: `account admin api
 app about auth connect help leaderboard login logout me profile quota quotabar
 register run settings signup support u user users www zh en`.
+
+### Provider accounts
+
+The app reads which account each provider is signed in with (the email, or
+Codex's account id when there is no email) and uploads only its digest
+(*Signing → Account digest*); the server keeps `HMAC(secret, digest)`. The
+email never leaves the Mac.
+
+- **Binding required to rank.** A run whose readings carry no digest is
+  `unranked`: stored, never on a board, a profile best or recent runs. The app
+  does not upload readings without a digest at all.
+- **One owner per provider account.** `account_owners(account_hmac → user, via,
+  claimedAt)`. The first Quota account whose counted readings carry a digest
+  owns it (`via: "first"`). Readings from any other Quota account with that
+  digest are stored but their runs are `flagged` with reason `account_elsewhere`;
+  the owner's runs are unaffected.
+- **Email claim.** The server can check, without any extra upload, whether a
+  provider account's email is one of the Quota account's *verified* sign-in
+  emails: for each verified identity email `e` it computes
+  `HMAC(secret, hex(SHA-256("quota-run-account-v1\n" + provider + "\n" + e)))` and
+  compares. A match makes the claim `via: "email"`, which beats `"first"`: the
+  account moves to that Quota account and the previous owner's runs for it
+  become `flagged` (`account_elsewhere`). An `"email"` claim is never taken over.
+  Claims are re-checked when readings arrive and whenever an identity is
+  signed up, linked or verified.
+- **Account verified badge.** A run is `accountVerified: true` when every
+  reading's account is owned by the run's user `via: "email"`. It is a badge,
+  not a tier requirement: different emails still rank.
+- **Several accounts** per provider can be bound to one Quota account; each has
+  its own runs, and a board still shows one best run per person.
+- **Unbinding** (`DELETE /accounts/<id>`) deletes this user's readings and runs
+  for that provider account and the binding; if the user owned it, ownership
+  passes to the next Quota account that uploaded it (by first upload,
+  `via: "email"` if its emails match), whose runs are recomputed. The app also
+  stops uploading that account (a local exclusion list) until bound again.
 
 ### Connect (device ↔ account)
 
@@ -182,7 +217,7 @@ group key `(user, provider, planNorm, windowKey, resetsAt rounded to 5 minutes)`
 
 A run is **verified** when all of:
 
-1. `accountDigest` present and bound to this user only;
+1. every reading has an `accountDigest` owned by this user (always true for a ranked run: see below);
 2. monotonic: no reading drops more than 2 points below an earlier one in the run;
 3. plausible: no rise of more than 60 points between readings less than 5 minutes apart;
 4. covered: the first reading is at most 50%, and no gap between consecutive
@@ -191,8 +226,11 @@ A run is **verified** when all of:
 5. active: for `codex` and `claude`, at least one activity minute with tokens > 0
    for the matching source between the first reading and completion (or last reading).
 
-Otherwise **standard**, unless rule 2 or 3 fails or the account is disputed →
-**flagged** (kept for review, excluded from boards and profiles).
+Otherwise **standard**, unless rule 2 or 3 fails or a reading's account is owned
+by another Quota account (`account_elsewhere`) → **flagged** (kept for review,
+excluded from boards and profiles). A run with any reading lacking a digest is
+**unranked** (excluded like flagged, unless it is also flagged). `flag_reason`
+lists `drop`, `jump`, `account_elsewhere`, or `no_account` for unranked.
 
 Boards show verified and standard runs with a tier badge; `tier=verified`
 filters. Readings from non-ranked devices are stored but never counted.
@@ -216,8 +254,8 @@ device (burst 5) → 429.
 |---|---|
 | `GET /stats` | `{users, runs, verifiedRuns, providers, updatedAt}` |
 | `GET /boards?region=global` | `{boards: [{provider, plan, planLabel, windowKey, windowSeconds, windowTitle, runners, season}]}` — boards with at least one rankable run in the current season, most runners first |
-| `GET /leaderboard?provider=codex&plan=pro20x&window=604800:&metric=speed&season=current&region=global&tier=all&limit=100` | `{board: {...}, season, metric, entries: [{rank, username, displayName, value, unit, tier, achievedAt, peakPercent}], updatedAt}` — one entry per user (their best run); `unit` is `seconds` or `percent` |
-| `GET /users/<username>` | `{username, displayName, bio, region, joinedAt, links: {website, github, x}, projects: [...], bests: [{provider, plan, planLabel, windowKey, windowSeconds, windowTitle, metric, value, rank, runners, percentile, tier, season}], recent: [run...], stats: {runs, verifiedRuns, providers, activeDays}}` |
+| `GET /leaderboard?provider=codex&plan=pro20x&window=604800:&metric=speed&season=current&region=global&tier=all&limit=100` | `{board: {...}, season, metric, entries: [{rank, username, displayName, value, unit, tier, accountVerified, achievedAt, peakPercent}], updatedAt}` — one entry per user (their best run); `unit` is `seconds` or `percent` |
+| `GET /users/<username>` | `{username, displayName, bio, region, joinedAt, links: {website, github, x}, projects: [...], bests: [{provider, plan, planLabel, windowKey, windowSeconds, windowTitle, metric, value, rank, runners, percentile, tier, accountVerified, season}], recent: [run... (each with accountVerified)], stats: {runs, verifiedRuns, providers, activeDays}}` |
 
 `region` is `global` or `china` (a user attribute, chosen when joining; used as a
 filter). Omit it for everyone.
@@ -243,12 +281,20 @@ session no device is `current`.
 
 | Method & path | Body | Returns |
 |---|---|---|
-| `GET /me` | — | `{user: {username, displayName, bio, region, links, joinedAt}, devices: [{deviceId, name, ranked, lastSeenAt, current, appVersion}], rankedChangeAvailableAt, lastUploadAt, projects, identities: [{id, provider, email, name, linkedAt}]}` |
+| `GET /me` | — | `{user: {username, displayName, bio, region, links, joinedAt}, devices: [{deviceId, name, ranked, lastSeenAt, current, appVersion}], rankedChangeAvailableAt, lastUploadAt, projects, identities: [{id, provider, email, name, linkedAt}], providerAccounts: [providerAccount]}` |
+| `POST /accounts/lookup` | `{digests: [≤20 lower-case hex SHA-256]}` | `{accounts: [{digest, account: providerAccount \| null}]}` — `null` when this user never uploaded it; device signature only (the web has no digests) |
+| `DELETE /accounts/<id>` | — | `{providerAccounts}`; `404 account_not_found` |
 | `PUT /profile` | `{displayName ≤40, bio ≤160, region, links: {website, github, x}}` | `{user}` |
 | `PUT /projects` | `{projects: [≤12 {name ≤40, url, description ≤140, github?, builtWith: [provider…]}]}` | `{projects}` — URLs must be `https://` |
 | `POST /devices/ranked` | `{deviceId}` | `{devices, rankedChangeAvailableAt}`; `409 {error: "cooldown", availableAt}` |
 | `DELETE /devices/<deviceId>` | — | `{devices}`; with a device signature not the current device and not the ranked one; with a session any device |
 | `DELETE /account` | — | `204`; every row for the user, devices, identities and sessions is deleted |
+
+`providerAccount` = `{id, provider, firstSeenAt, lastSeenAt, status, verifiedByEmail, runs}`:
+`id` is the first 16 hex characters of the account HMAC (only ever shown to its
+own user); `status` is `owned` or `elsewhere` (another Quota account owns it, so
+these runs are flagged); `verifiedByEmail` is true when owned `via: "email"`;
+`runs` counts this user's runs for it that are not flagged or unranked.
 
 ### Web session
 
@@ -341,10 +387,15 @@ All on quota.run, English at the root and Chinese under `/zh/`; Caddy serves
   or an email address → 6-digit code; then, for a new identity, choose username
   (checked live), display name and region. Goes to `next` (default `/account`).
 - `/account`: profile, projects, Macs (ranked badge, last seen, make ranked,
-  remove), sign-in methods (link GitHub / Google / email, remove), view profile,
+  remove), provider accounts (provider, first bound, "Account verified" or
+  "Owned by another Quota account", runs, unbind with a note that a Mac still
+  signed in to it binds it again unless it is unbound in the app), sign-in methods (link GitHub / Google / email, remove), view profile,
   sign out, delete account (type the username to confirm). Signed out → `/login?next=/account`.
 - `/connect?code=`: the Mac's name, app version and code to compare, Approve /
   Deny, then "Connected — go back to QuotaBar". Without a code, a field to type it.
+- Boards, profile bests and recent runs show a small **Account verified** mark
+  next to the tier when `accountVerified`; the tiers card on the leaderboard
+  explains that only runs bound to a provider account rank and what the mark means.
 - Every page header shows **Sign in** or **@username** (→ `/account`).
 - A demo mode (`?demo=1`) renders fixture data so the pages can be previewed
   without the API.
@@ -367,6 +418,14 @@ All on quota.run, English at the root and Chinese under `/zh/`; Caddy serves
   "Disconnect this Mac" (`DELETE /devices/current`, forgets the key, keeps local
   records) and "Delete account" (`DELETE /account`). To add another Mac, sign in
   on it with the same account.
+- **Provider accounts** (signed in): for each provider whose latest reading has
+  an account, the masked email (`p***@gmail.com`, shown only on this Mac) with its
+  status from `accounts/lookup`: not uploaded yet, bound, **Account verified**,
+  or **Owned by another Quota account** (runs don't count; sign in to quota.run
+  with that email to claim it). "Unbind" (confirm) → `DELETE /accounts/<id>` and
+  adds the digest to a local exclusion list; "Bind again" removes it from the list.
+  Personal records' "likely verified" estimate requires a digest on every reading.
 - **Upload**: after each refresh, readings not yet sent plus activity minutes
   since the last upload, batched, at most every 60 s, queued on disk while offline,
   retried with backoff. Only when signed in and this Mac is the ranked device.
+  Readings without an account digest, or whose digest is excluded, are not uploaded.
