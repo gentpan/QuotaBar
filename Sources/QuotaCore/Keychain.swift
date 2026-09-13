@@ -10,7 +10,7 @@ import Security
 public enum Keychain {
     public static let service = "bar.quota.QuotaBar"
 
-    public static func read(account: String) -> String? {
+    public static func read(account: String, service: String = Keychain.service) -> String? {
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
@@ -30,7 +30,7 @@ public enum Keychain {
     /// Upserts the item. Returns false when the keychain refuses the write, so
     /// callers can surface a real error instead of silently dropping the secret.
     @discardableResult
-    public static func write(_ value: String, account: String) -> Bool {
+    public static func write(_ value: String, account: String, service: String = Keychain.service) -> Bool {
         let base: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
@@ -54,7 +54,7 @@ public enum Keychain {
     }
 
     @discardableResult
-    public static func delete(account: String) -> Bool {
+    public static func delete(account: String, service: String = Keychain.service) -> Bool {
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,

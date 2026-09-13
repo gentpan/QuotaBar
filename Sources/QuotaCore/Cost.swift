@@ -230,6 +230,71 @@ public struct CostSummary: Sendable, Equatable {
     }
 }
 
+/// One pass over the logs: the archive's days and the recent minutes.
+public struct ArchiveScan: Sendable {
+    public var days: ArchiveDays
+    public var activity: ActivityMinutes
+}
+
+/// Tokens per minute per CLI over the last 48 hours, from the local session
+/// logs. Quota Run's rule 5 asks for these as evidence that a run was real
+/// work; they are counts only — no model, prompt or path.
+public struct ActivityMinutes: Sendable, Equatable {
+    public static let horizon: TimeInterval = 48 * 3_600
+
+    /// When the logs behind these minutes were read. The minute this falls in,
+    /// and anything later, may still be growing.
+    public var scannedAt: Date?
+    /// Minute (Unix seconds, floored) → run source (`claude`, `codex`,
+    /// `opencode`) → tokens.
+    public var minutes: [Int: [String: Int]] = [:]
+
+    public init(scannedAt: Date? = nil, minutes: [Int: [String: Int]] = [:]) {
+        self.scannedAt = scannedAt
+        self.minutes = minutes
+    }
+
+    public static func floor(_ date: Date) -> Int {
+        let seconds = Int(date.timeIntervalSince1970.rounded(.down))
+        return seconds - ((seconds % 60) + 60) % 60
+    }
+
+    public mutating func add(tokens: Int, at date: Date, source: CostSource) {
+        guard tokens > 0 else { return }
+        minutes[Self.floor(date), default: [:]][source.runSource, default: 0] += tokens
+    }
+
+    /// Whole minutes after `minute` and before the one the scan happened in,
+    /// oldest first, as the upload sends them.
+    public func completeEntries(after minute: Int) -> [RunActivityPayload] {
+        guard let scannedAt else { return [] }
+        let open = Self.floor(scannedAt)
+        return minutes.keys.filter { $0 > minute && $0 < open }.sorted().flatMap { key in
+            (minutes[key] ?? [:]).filter { $0.value > 0 }.sorted { $0.key < $1.key }
+                .map { RunActivityPayload(minute: key, source: $0.key, tokens: $0.value) }
+        }
+    }
+
+    /// Whether `source` logged any tokens in a minute touching `from...to`.
+    public func hasTokens(source: String, from: Int, to: Int) -> Bool {
+        let first = from - ((from % 60) + 60) % 60
+        return minutes.contains { key, sources in
+            key >= first && key <= to && (sources[source] ?? 0) > 0
+        }
+    }
+}
+
+extension CostSource {
+    /// The name Quota Run's activity uses for this CLI.
+    public var runSource: String {
+        switch self {
+        case .claudeCode: "claude"
+        case .codexCLI: "codex"
+        case .openCode: "opencode"
+        }
+    }
+}
+
 private struct TokenEvent {
     let timestamp: Date
     let source: CostSource
@@ -511,11 +576,23 @@ public enum CostEstimator {
     /// Every token event since `cutoff`, folded per local day, CLI and model,
     /// for the archive. Shares the parsed-file memo with the other scans.
     public static func archiveRecords(paths: CostPaths = .default, since cutoff: Date) -> ArchiveDays {
+        archiveScan(paths: paths, since: cutoff).days
+    }
+
+    /// The archive's days, plus tokens per minute for the last two days —
+    /// Quota Run's evidence of real work — from the same pass. The events are
+    /// already in hand, deduplicated and timestamped, so the minutes cost one
+    /// comparison per event and a dictionary write for the recent ones; no
+    /// file is read twice. An incremental scan starts two days before the
+    /// last one, so it always covers the whole horizon.
+    public static func archiveScan(paths: CostPaths = .default, since cutoff: Date, now: Date = Date()) -> ArchiveScan {
         var events = scanClaude(root: paths.claudeProjects, cutoff: cutoff)
         events.append(contentsOf: scanCodex(root: paths.codexSessions, cutoff: cutoff))
         events.append(contentsOf: scanOpenCode(database: paths.openCodeDatabase, cutoff: cutoff))
         var seen = Set<String>()
         var out: ArchiveDays = [:]
+        var activity = ActivityMinutes(scannedAt: now)
+        let recent = now.addingTimeInterval(-ActivityMinutes.horizon)
         for event in events {
             if let key = event.dedupeKey {
                 guard seen.insert(key).inserted else { continue }
@@ -529,8 +606,11 @@ public enum CostEstimator {
             entry.cacheRead += event.cacheRead
             entry.cacheWrite += event.cacheWrite5m + event.cacheWrite1h
             out[day, default: [:]][event.source.rawValue, default: [:]][event.model] = entry
+            if event.timestamp >= recent, event.timestamp <= now {
+                activity.add(tokens: tokens(of: event), at: event.timestamp, source: event.source)
+            }
         }
-        return out
+        return ArchiveScan(days: out, activity: activity)
     }
 
     /// How many files the parse memo holds; for the tests.

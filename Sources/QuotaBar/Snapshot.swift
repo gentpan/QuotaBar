@@ -501,6 +501,27 @@ enum Snapshot {
                 dark: false)
         }
 
+        // Quota Run, on sample data and with no key or network: the records
+        // alone, the join form over an empty ledger, a member's page, one
+        // project open for editing, and a best as the copied image.
+        for language in [L10n.Language.zhHans, .en] {
+            L10n.override = language
+            let suffix = language == .en ? "en" : "zh"
+            let records = RunCenter.preview(.records, now: referenceDate)
+            let joining = RunCenter.preview(.join, now: referenceDate)
+            let member = RunCenter.preview(.joined, now: referenceDate)
+            write(runPane(RunRecordsCard(store: store, run: records, now: referenceDate)), to: base, name: "settings-run-records-\(suffix)")
+            write(runPane(RunPane(store: store, run: joining, now: referenceDate)), to: base, name: "settings-run-join-\(suffix)")
+            write(runPane(RunPane(store: store, run: member, now: referenceDate)), to: base, name: "settings-run-joined-\(suffix)")
+            write(runPane(RunPane(store: store, run: member, now: referenceDate)), to: base, name: "settings-run-joined-\(suffix)-dark", dark: true)
+            if let account = member.account {
+                write(runPane(RunProjectsCard(run: member, account: account, editing: 1)), to: base, name: "settings-run-project-editor-\(suffix)")
+            }
+            if let best = records.bests.first {
+                render(RunShare.card(best, store: store), to: base, name: "run-share-card-\(suffix)", backing: .black)
+            }
+        }
+
         for language in [L10n.Language.zhHans, .en] {
             L10n.override = language
             write(
@@ -527,6 +548,14 @@ enum Snapshot {
 
         L10n.override = ConfigStore.shared.language
         FileHandle.standardOutput.write(Data("Wrote settings preview to \(base.path)\n".utf8))
+    }
+
+    /// A settings pane on its own, at the detail column's width.
+    private static func runPane(_ content: some View) -> some View {
+        VStack(alignment: .leading, spacing: Design.space3) { content }
+            .environment(\.glassDisabled, true)
+            .frame(width: 612)
+            .padding(Design.space4)
     }
 
     static func run(directory: String) {

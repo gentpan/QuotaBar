@@ -232,15 +232,25 @@ public final class UsageArchiveStore: @unchecked Sendable {
         return archive
     }
 
+    /// Tokens per minute over the last two days, from the latest scan. Kept in
+    /// memory only: every launch scans at least that far back again.
+    public var recentActivity: ActivityMinutes {
+        lock.lock(); defer { lock.unlock() }
+        return activity
+    }
+
+    private var activity = ActivityMinutes()
+
     /// Reads the logs — everything the first time, the last few days after —
     /// and folds them in. Slow on a large log tree; call it off the main actor.
     @discardableResult
     public func update(paths: CostPaths = .default, now: Date = Date()) -> UsageArchive {
         let snapshot = current
         let cutoff = snapshot.incrementalCutoff() ?? .distantPast
-        let fresh = CostEstimator.archiveRecords(paths: paths, since: cutoff)
+        let scan = CostEstimator.archiveScan(paths: paths, since: cutoff, now: now)
         lock.lock()
-        archive.merge(fresh, scannedAt: now, full: cutoff == .distantPast)
+        archive.merge(scan.days, scannedAt: now, full: cutoff == .distantPast)
+        activity = scan.activity
         let copy = archive
         lock.unlock()
         let encoder = JSONEncoder()

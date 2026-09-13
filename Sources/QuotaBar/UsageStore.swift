@@ -148,6 +148,9 @@ final class UsageStore: ObservableObject {
     var notificationsReady = false
 
     let config = ConfigStore.shared
+    /// Quota Run: the personal records every reading feeds, and the upload
+    /// once the owner has joined.
+    let run: RunCenter
     private var autoRefreshTask: Task<Void, Never>?
     private var clockTask: Task<Void, Never>?
     private var netMonitor: NWPathMonitor?
@@ -174,6 +177,7 @@ final class UsageStore: ObservableObject {
     }
 
     private init(inert: Bool) {
+        self.run = RunCenter.inert()
         self.enabled = []
         self.refreshMinutes = ConfigStore.shared.refreshMinutes
         self.menuBarStyle = ConfigStore.shared.menuBarStyle
@@ -188,6 +192,7 @@ final class UsageStore: ObservableObject {
     }
 
     init() {
+        self.run = RunCenter()
         self.enabled = ConfigStore.shared.enabledProviders
         self.refreshMinutes = ConfigStore.shared.refreshMinutes
         self.menuBarStyle = ConfigStore.shared.menuBarStyle
@@ -224,6 +229,7 @@ final class UsageStore: ObservableObject {
         startSystemObservers()
         startStatusPolling()
         startExperience()
+        run.start()
         refreshAll()
     }
 
@@ -453,6 +459,7 @@ final class UsageStore: ObservableObject {
             }
             if !resets.isEmpty { noteResets(resets, before: before) }
             SnapshotCache.shared.store(snapshot, for: id)
+            run.record(id, snapshot)
             if let percent = snapshot.headlinePercent {
                 UsageHistoryStore.shared.record(id, percent: percent)
                 history[id] = UsageHistoryStore.shared.readings(for: id).map(\.percent)
@@ -486,6 +493,7 @@ final class UsageStore: ObservableObject {
         evaluateAlerts()
         evaluatePaceAlerts()
         scheduleResetCheck()
+        run.afterRefresh()
     }
 
     /// Re-evaluates which providers have usable credentials.
