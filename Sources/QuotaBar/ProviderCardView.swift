@@ -82,11 +82,15 @@ struct ProviderCardView: View {
                 }
             }
             if let account = snapshot?.account, !account.isEmpty, !store.isPrivacyMasked {
-                Text(account)
-                    .font(.system(size: 10, design: .monospaced))
-                    .foregroundStyle(.white.opacity(0.4))
-                    .lineLimit(1)
-                    .truncationMode(.middle)
+                if forExport && store.experience.shareMasksAccount {
+                    AccountMosaic()
+                } else {
+                    Text(account)
+                        .font(.system(size: 10, design: .monospaced))
+                        .foregroundStyle(.white.opacity(0.4))
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                }
             }
         }
     }
@@ -331,6 +335,43 @@ struct ProviderCardView: View {
         if CardImageExporter.copy(card, text: "\(id.displayName) · QuotaBar") {
             store.flashNotice(L10n.t("Copied to clipboard", "已复制到剪贴板"))
         }
+    }
+}
+
+/// The account line of a copied card, as mosaic tiles in the ink the address
+/// is drawn in.
+///
+/// Drawn, not a blurred or pixelated rendering of the address: both of those
+/// start from the real glyphs, and a monospaced address at a known size can be
+/// read back out of either. The tiles are one fixed pattern and one fixed
+/// width, so the image says an account is signed in and nothing about which —
+/// not even how long its address is.
+private struct AccountMosaic: View {
+    private let columns = 30
+    private let rows = 3
+    private let tile: CGFloat = 4
+
+    var body: some View {
+        Canvas { context, _ in
+            for row in 0..<rows {
+                for column in 0..<columns {
+                    // A fixed scatter of five shades around the text's own
+                    // 40% white, so it reads as a line of type gone to tiles.
+                    // Hashed from the position alone; a sum of the two
+                    // indices lined up into diagonal stripes.
+                    var hash = UInt32(column) &* 374_761_393 &+ UInt32(row) &* 668_265_263
+                    hash = (hash ^ (hash >> 13)) &* 1_274_126_177
+                    let shade = Int((hash ^ (hash >> 16)) % 5)
+                    let rect = CGRect(
+                        x: CGFloat(column) * tile, y: CGFloat(row) * tile,
+                        width: tile, height: tile)
+                    context.fill(Path(rect), with: .color(.white.opacity(0.14 + Double(shade) * 0.06)))
+                }
+            }
+        }
+        .frame(width: CGFloat(columns) * tile, height: CGFloat(rows) * tile)
+        .clipShape(RoundedRectangle(cornerRadius: 2, style: .continuous))
+        .accessibilityLabel(L10n.t("Account hidden", "账号已遮挡"))
     }
 }
 

@@ -62,6 +62,14 @@ struct GeneralPane: View {
                 isOn: Binding(
                     get: { store.experience.hideWhenSharing },
                     set: { value in store.updateExperience { $0.hideWhenSharing = value } }))
+            SettingToggle(
+                L10n.t("Hide the account in copied images", "复制图片时遮挡账号"),
+                caption: L10n.t(
+                    "A card copied as an image shows the signed-in address as mosaic tiles. The panel itself still shows it.",
+                    "右键「复制为图片」时，卡片上的登录账号显示为马赛克；下拉面板里仍正常显示。"),
+                isOn: Binding(
+                    get: { store.experience.shareMasksAccount },
+                    set: { value in store.updateExperience { $0.shareMasksAccount = value } }))
         }
 
         SettingsCard(L10n.t("Advanced", "高级")) {

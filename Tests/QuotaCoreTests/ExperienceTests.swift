@@ -61,6 +61,15 @@ final class ExperiencePrefsTests: XCTestCase {
         XCTAssertEqual(prefs.hotkey?.display, "⌥Q")
     }
 
+    func testCopiedImagesHideTheAccountUnlessTurnedOff() throws {
+        let saved = try JSONDecoder().decode(ExperiencePrefs.self, from: Data(#"{"currency":"EUR"}"#.utf8))
+        XCTAssertTrue(saved.shareMasksAccount, "settings saved before the switch existed mask too")
+        let off = try JSONDecoder().decode(ExperiencePrefs.self, from: Data(#"{"shareMasksAccount":false}"#.utf8))
+        XCTAssertFalse(off.shareMasksAccount)
+        let roundTrip = try JSONDecoder().decode(ExperiencePrefs.self, from: JSONEncoder().encode(off))
+        XCTAssertFalse(roundTrip.shareMasksAccount)
+    }
+
     func testABadCurrencyCodeIsDollars() throws {
         let prefs = try JSONDecoder().decode(ExperiencePrefs.self, from: Data(#"{"currency":"¥¥"}"#.utf8))
         XCTAssertEqual(prefs.currency, "USD")

@@ -5,6 +5,12 @@ Server moves, the website, and build or release scripts don't change the app its
 
 ## Unreleased
 
+### 2026-09-15
+
+#### Added
+
+- Copy as Image now shows the signed-in account on a provider card as mosaic tiles, so the email address stays out of the picture. The tiles are one fixed pattern that says nothing about the account, not even its length. Turn it off under Settings → General → Privacy with "Hide the account in copied images"; the panel itself still shows the address.
+
 ### 2026-09-14
 
 #### Added
