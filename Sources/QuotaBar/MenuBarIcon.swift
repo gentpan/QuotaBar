@@ -649,10 +649,14 @@ struct ProviderGlyph: View {
         if let resources = Bundle.main.resourceURL {
             candidates.append(resources.appendingPathComponent("logos/\(fileName)"))
         }
-        candidates.append(
-            Bundle.main.bundleURL
-                .appendingPathComponent("QuotaBar_QuotaBar.bundle")
-                .appendingPathComponent("logos/\(fileName)"))
+        // The dev loop runs the bare binary beside SwiftPM's resource bundle.
+        // Older toolchains lay that bundle out flat; the current one nests it
+        // in Contents/Resources like any macOS bundle, and without that path
+        // every mark fell back to its SF Symbol and the copied-image footer
+        // lost its icon — in dev builds and the renders made from them only.
+        let resourceBundle = Bundle.main.bundleURL.appendingPathComponent("QuotaBar_QuotaBar.bundle")
+        candidates.append(resourceBundle.appendingPathComponent("logos/\(fileName)"))
+        candidates.append(resourceBundle.appendingPathComponent("Contents/Resources/logos/\(fileName)"))
         return candidates.first { fm.fileExists(atPath: $0.path) }
     }
 }
