@@ -15,10 +15,13 @@ Server moves, the website, and build or release scripts don't change the app its
 
 - The open island no longer draws a halo, an orbiting light or a drop shadow round the panel, and its window is no bigger than the panel, so a window screenshot has no blank band at the sides and bottom; the folded island keeps its glow.
 - "Synced N minutes ago" showed twice in the open island, at the top and again at the bottom; it is now bottom right only, with a new Refresh now button beside it that turns into a spinner and "Refreshing…" while it works. The page dots stay centred.
-- The open island is as tall as its chart style needs: in Bar, Stepped, Trend, Numeric and Ring alike the last line sits the same 13.5pt above the footer rule, with no band of black under it. The panel changes height with the style, and grows a little on the overview page to fit the spend bars and the share button.
-- In the island's Ring style the rings sit clear of the provider's title instead of against it.
+- The open island is one height throughout: switching between Bar, Stepped, Trend, Numeric and Ring, or between the Quota, Usage and Overview pages, no longer changes it. The height is set by the tallest content, about 26pt less than before, so there is no band of black under the bars; shorter styles are centred in it, which also moves the rings clear of the provider's title. The overview's spend bars and share button sit a little closer so three tools fit.
 - The island's Trend style drops the "trend · last N refreshes" caption that crowded the reset line, and the line now follows the used-or-remaining switch, reading the same way as the figure and the bars.
 - The QuotaBar wordmark at the top left of the open island has the app's mark before it, in the same white as the text.
+
+#### Fixed
+
+- Quitting now saves the local Quota Run records at once. A change used to be written five seconds later, and quitting within those five seconds lost it.
 
 ## 0.5.5 · 2026-09-15
 

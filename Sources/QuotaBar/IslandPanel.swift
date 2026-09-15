@@ -11,40 +11,17 @@ enum IslandPanelLayout {
     static let columnWidth: CGFloat = 300
     /// Between the columns on a screen with no notch to keep them apart.
     static let columnGap: CGFloat = 24
-    /// A provider's title row and the 8pt gap under it.
-    static let titleHeight: CGFloat = 26
+    /// One height for every chart style and every page, so switching
+    /// either never resizes the panel. The tallest tile, the usage page's and
+    /// the big figure's, sets it (74pt drawn); a shorter one is centred in
+    /// it, the blank shared above and below rather than left under it. The
+    /// overview is laid out to fit the same row.
+    static let tileHeight: CGFloat = 76
+    /// A provider's title row and the 8pt gap under it, then a tile.
+    static let rowHeight: CGFloat = 26 + tileHeight
     static let rowGap: CGFloat = 12
     static let bodyPadding: CGFloat = 12
     static let footerHeight: CGFloat = 44
-
-    /// A tile is as tall as its style draws and no more, so the last line
-    /// sits the same distance above the footer whichever style is on; one
-    /// height for all left the shorter styles floating over a band of black.
-    /// The panel changes height with the style.
-    static func tileHeight(_ style: IslandChartStyle, page: IslandPanel.Page = .quota) -> CGFloat {
-        // Label, the token figure, the estimate.
-        if page == .usage { return 74 }
-        // Measured off the renders (`--island-preview`): each leaves its last
-        // line 13.5pt above the footer's rule.
-        switch style {
-        // Label and figure, the bar, the reset line.
-        case .bar: return 57
-        case .stepped: return 63
-        case .spark: return 69
-        // Label, the 34pt figure, the reset line.
-        case .numeric: return 72
-        // 8 clear of the title, the 58pt ring and the 3pt its stroke
-        // reaches past its frame.
-        case .ring: return 68
-        }
-    }
-
-    static func rowHeight(_ style: IslandChartStyle, page: IslandPanel.Page = .quota) -> CGFloat {
-        titleHeight + tileHeight(style, page: page)
-    }
-    /// The overview page's spend bars and share button, which a single row
-    /// of tiles is too short for.
-    static let overviewHeight: CGFloat = 124
 
     static func headerHeight(notch: CGFloat) -> CGFloat { max(32, notch) }
 
@@ -52,11 +29,11 @@ enum IslandPanelLayout {
         columnWidth * 2 + (notchWidth ?? columnGap) + horizontalInset * 2
     }
 
-    static func height(rows: Int, notch: CGFloat, style: IslandChartStyle, page: IslandPanel.Page = .quota) -> CGFloat {
+    static func height(rows: Int, notch: CGFloat) -> CGFloat {
         let rows = max(1, rows)
-        var body = CGFloat(rows) * rowHeight(style, page: page) + CGFloat(rows - 1) * rowGap
-        if page == .overview { body = max(body, overviewHeight) }
-        return headerHeight(notch: notch) + bodyPadding * 2 + body + footerHeight
+        return headerHeight(notch: notch)
+            + bodyPadding * 2 + CGFloat(rows) * rowHeight + CGFloat(rows - 1) * rowGap
+            + footerHeight
     }
 }
 
@@ -102,6 +79,8 @@ struct IslandPanel: View {
             Group {
                 if page == .overview {
                     IslandOverview(store: store)
+                        // Centred when a second row of tiles leaves it room.
+                        .frame(maxHeight: .infinity)
                         .transition(.chartSwap)
                 } else {
                     HStack(alignment: .top, spacing: 0) {
@@ -160,12 +139,12 @@ struct IslandPanel: View {
                 Text(L10n.t("Enable more providers in Settings.", "在设置里启用更多服务商。"))
                     .font(.system(size: 11))
                     .foregroundStyle(.white.opacity(0.4))
-                    .frame(height: IslandPanelLayout.rowHeight(store.experience.islandChart, page: page), alignment: .center)
+                    .frame(height: IslandPanelLayout.rowHeight, alignment: .center)
                     .frame(maxWidth: .infinity)
             }
             ForEach(ids) { id in
                 IslandProviderBlock(store: store, id: id, page: page)
-                    .frame(height: IslandPanelLayout.rowHeight(store.experience.islandChart, page: page), alignment: .top)
+                    .frame(height: IslandPanelLayout.rowHeight, alignment: .top)
             }
         }
     }
@@ -375,7 +354,7 @@ private struct IslandProviderBlock: View {
                     : L10n.t("Nothing logged locally yet.", "本地还没有记录。"))
                     .font(.system(size: 11))
                     .foregroundStyle(.white.opacity(0.5))
-                    .frame(maxWidth: .infinity, minHeight: IslandPanelLayout.tileHeight(store.experience.islandChart, page: page), alignment: .topLeading)
+                    .frame(maxWidth: .infinity, minHeight: IslandPanelLayout.tileHeight, alignment: .topLeading)
             } else {
                 HStack(alignment: .top, spacing: 18) {
                     ForEach([LedgerPeriod.today, .month]) { period in
@@ -390,7 +369,7 @@ private struct IslandProviderBlock: View {
                                 .foregroundStyle(.white.opacity(0.45))
                         }
                         .frame(maxWidth: .infinity, alignment: .leading)
-                        .frame(height: IslandPanelLayout.tileHeight(store.experience.islandChart, page: .usage), alignment: .top)
+                        .frame(height: IslandPanelLayout.tileHeight, alignment: .center)
                     }
                 }
             }
@@ -401,7 +380,7 @@ private struct IslandProviderBlock: View {
                 .font(.system(size: 11))
                 .foregroundStyle(.white.opacity(0.5))
                 .fixedSize(horizontal: false, vertical: true)
-                .frame(maxWidth: .infinity, minHeight: IslandPanelLayout.tileHeight(store.experience.islandChart, page: page), alignment: .topLeading)
+                .frame(maxWidth: .infinity, minHeight: IslandPanelLayout.tileHeight, alignment: .topLeading)
         }
     }
 
@@ -413,7 +392,7 @@ private struct IslandProviderBlock: View {
                 .lineLimit(3)
                 .fixedSize(horizontal: false, vertical: true)
         }
-        .frame(maxWidth: .infinity, minHeight: IslandPanelLayout.tileHeight(store.experience.islandChart, page: page), alignment: .topLeading)
+        .frame(maxWidth: .infinity, minHeight: IslandPanelLayout.tileHeight, alignment: .topLeading)
     }
 }
 
@@ -474,7 +453,7 @@ private struct IslandTile: View {
                 resetLine
             }
         }
-        .frame(height: IslandPanelLayout.tileHeight(store.experience.islandChart), alignment: .top)
+        .frame(height: IslandPanelLayout.tileHeight, alignment: .center)
         .animation(Motion.animation(Motion.chartSwap), value: store.experience.islandChart)
     }
 
@@ -554,9 +533,6 @@ private struct IslandTile: View {
                 resetLine
             }
         }
-        // The stroke reaches 3pt past the ring's frame; this keeps it clear
-        // of the provider's title.
-        .padding(.top, 8)
         .transition(.chartSwap)
     }
 
@@ -583,10 +559,11 @@ private struct IslandOverview: View {
         HStack(alignment: .top, spacing: 36) {
             figure(.today)
             figure(.window)
-            VStack(alignment: .leading, spacing: 8) {
+            // Three tools and the button in one row of tiles' height.
+            VStack(alignment: .leading, spacing: 5) {
                 ForEach(store.cost.spend(.window).contributions, id: \.source) { item in
                     let total = max(0.000_001, store.cost.spend(.window).usd)
-                    VStack(alignment: .leading, spacing: 3) {
+                    VStack(alignment: .leading, spacing: 2) {
                         HStack {
                             Text(item.source.displayName)
                                 .font(.system(size: 11, weight: .medium))
@@ -610,10 +587,9 @@ private struct IslandOverview: View {
                         .font(.system(size: 11, weight: .semibold))
                         .foregroundStyle(.black)
                         .padding(.horizontal, 12)
-                        .padding(.vertical, 6)
+                        .padding(.vertical, 4)
                         .background(Capsule().fill(Color.white))
                 }
-                .padding(.top, 4)
             }
             .frame(maxWidth: .infinity)
         }

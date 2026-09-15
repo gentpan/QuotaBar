@@ -243,7 +243,7 @@ enum Snapshot {
                 bridge.page = page
                 let size = NSSize(
                     width: IslandPanelLayout.width(notchWidth: notch.notchWidth),
-                    height: IslandPanelLayout.height(rows: rows, notch: notch.height, style: chart, page: page))
+                    height: IslandPanelLayout.height(rows: rows, notch: notch.height))
                 let panel = ZStack(alignment: .top) {
                     shape.fill(Color.black)
                     IslandPanel(store: store, notch: notch, bridge: bridge)

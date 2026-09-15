@@ -176,11 +176,10 @@ final class IslandCoordinator {
         }
     }
 
-    /// Re-places the panel after a setting changed the strip's width, or the
-    /// open panel turned to a page of another height.
-    func relayout(animated: Bool = false) {
+    /// Re-places the panel after a setting changed the strip's width.
+    func relayout() {
         guard panel != nil else { return }
-        layout(expanded: expanded, animated: animated)
+        layout(expanded: expanded, animated: false)
     }
 
     /// Collapsing is delayed so a quick pointer sweep across the strip does
@@ -213,7 +212,7 @@ final class IslandCoordinator {
     /// thread for the whole animation.
     func layout(expanded: Bool, animated: Bool) {
         guard let panel, let screen = Self.hostScreen, let store else { return }
-        let shape = !expanded && bannerShown ? Self.bannerSize(store: store) : Self.size(expanded: expanded, store: store, page: bridge.page)
+        let shape = !expanded && bannerShown ? Self.bannerSize(store: store) : Self.size(expanded: expanded, store: store)
         let margin = Self.margin(expanded: expanded)
         let size = NSSize(width: shape.width + margin * 2, height: shape.height + margin)
         let frame = NSRect(
@@ -250,7 +249,7 @@ final class IslandCoordinator {
             ?? NSScreen.main
     }
 
-    static func size(expanded: Bool, store: UsageStore, page: IslandPanel.Page = .quota) -> NSSize {
+    static func size(expanded: Bool, store: UsageStore) -> NSSize {
         let slots = store.islandSlots
         let notch = notchMetrics()
         if expanded {
@@ -258,7 +257,7 @@ final class IslandCoordinator {
             let rows = min(slots, max(1, store.islandProviders.count))
             return NSSize(
                 width: IslandPanelLayout.width(notchWidth: notch?.notchWidth),
-                height: IslandPanelLayout.height(rows: rows, notch: notch?.height ?? 0, style: store.experience.islandChart, page: page))
+                height: IslandPanelLayout.height(rows: rows, notch: notch?.height ?? 0))
         }
         if let notch {
             return NSSize(width: notch.totalWidth(slots: slots), height: notch.height)
@@ -290,9 +289,6 @@ final class IslandCoordinator {
         }
 
         func totalWidth(slots: Int) -> CGFloat { notchWidth + sideWidth(slots: slots) * 2 }
-
-        var sideWidth: CGFloat { sideWidth(slots: 1) }
-        var totalWidth: CGFloat { totalWidth(slots: 1) }
     }
 
     /// nil on a screen with no notch, which is most external displays. The
@@ -373,13 +369,6 @@ struct IslandView: View {
             content
                 .padding(.horizontal, IslandCoordinator.margin(expanded: expanded))
                 .padding(.bottom, IslandCoordinator.margin(expanded: expanded))
-        }
-        .onChange(of: bridge.page) { _, _ in
-            if expanded { coordinator.relayout(animated: true) }
-        }
-        // Each chart style is its own height.
-        .onChange(of: store.experience.islandChart) { _, _ in
-            if expanded { coordinator.relayout(animated: true) }
         }
         .onChange(of: bridge.peek) { _, _ in
             // A window just crossed its warning: open for four seconds, then
