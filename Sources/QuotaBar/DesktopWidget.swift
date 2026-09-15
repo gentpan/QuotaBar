@@ -259,7 +259,7 @@ struct DesktopWidgetView: View {
                     ProviderRing(
                         id: id,
                         percent: percent(id),
-                        alerts: store.alertSettings,
+                        mode: store.meterMode,
                         diameter: 34,
                         showsLabel: false)
                 }
@@ -271,7 +271,7 @@ struct DesktopWidgetView: View {
                         ProviderRing(
                             id: id,
                             percent: percent(id),
-                            alerts: store.alertSettings,
+                            mode: store.meterMode,
                             diameter: 40)
                         if let resetsAt = store.headlineWindow(for: id)?.resetsAt {
                             Text(QuotaFormat.tick(to: resetsAt))
@@ -307,7 +307,7 @@ struct DesktopWidgetView: View {
             ProviderRing(
                 id: id,
                 percent: percent(id),
-                alerts: store.alertSettings,
+                mode: store.meterMode,
                 diameter: 32,
                 showsLabel: false)
             VStack(alignment: .leading, spacing: 4) {
@@ -316,7 +316,7 @@ struct DesktopWidgetView: View {
                         .font(.system(size: 11, weight: .medium))
                         .foregroundStyle(.white)
                     Spacer()
-                    Text(percent(id).map { QuotaFormat.percent($0) } ?? "—")
+                    Text(percent(id).map { QuotaFormat.percent(store.meterMode.shownPercent(fromUsed: $0)) } ?? "—")
                         .font(.system(size: 11, weight: .semibold))
                         .monospacedDigit()
                         .foregroundStyle(.white)

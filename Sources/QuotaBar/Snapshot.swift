@@ -214,7 +214,7 @@ enum Snapshot {
             .background(Color(hex: "1A1D24"))
         render(callout, to: url, name: "dock-reset-callout", backing: Color(hex: "1A1D24"))
         let sweep = ZStack {
-            ProviderRing(id: .claude, percent: 0, alerts: store.alertSettings, showsLabel: false)
+            ProviderRing(id: .claude, percent: 0, mode: store.meterMode, showsLabel: false)
             ResetSweep(color: ProviderID.claude.accent, diameter: ProviderRing.defaultDiameter)
         }
         .frame(width: 74, height: 74)
@@ -679,11 +679,12 @@ enum Snapshot {
                     ProviderRing(
                         id: id,
                         percent: store.headlinePercent(for: id),
-                        alerts: store.alertSettings,
-                        // Claude marked: a single click in the dock picks which
-                        // provider the menu-bar glyph reports, and the mark is
-                        // the only thing that says which one that is.
-                        selected: id == .claude)
+                        mode: store.meterMode,
+                        // As the dock draws them: no figure, the pick marked
+                        // by the dot under its ring.
+                        showsLabel: false,
+                        selected: id == .claude,
+                        selectionDot: true)
                 }
             }
             .padding(.vertical, Design.space4)

@@ -56,7 +56,7 @@ enum SettingsSection: String, CaseIterable, Identifiable {
                    "token 用在了哪个项目：每个仓库、每个工具、每种编程方式，以及哪些项目公开到 quota.run。")
         case .run:
             L10n.t("Personal records from every reading, and the opt-in leaderboard.",
-                   "每次读数都记成个人纪录；排行榜需要自愿加入。")
+                   "每次读数都记成个人记录；排行榜需要自愿加入。")
         case .status:
             L10n.t("What each provider's public status page says right now.",
                    "各服务商公开状态页此刻的读数，以及正在发生的事件。")

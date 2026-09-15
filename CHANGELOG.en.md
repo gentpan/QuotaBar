@@ -14,6 +14,13 @@ Server moves, the website, and build or release scripts don't change the app its
 - In the open island the quota tiles and the usage page's figures sit about 2pt lower, a little further from the provider's title and closer to the footer rule, so the blank above and below them is about even; the panel keeps its height.
 - Usage and spend split by tool now say "Codex" rather than "Codex CLI", OpenAI's own name for it.
 - The website, GitHub, X and email links in Settings → About drop their names and arrows: the icon and the address, nothing more.
+- The Quota Run settings page's subtitle uses the same word for records as the rest of the page (Chinese only).
+
+#### Fixed
+
+- The medium Ring gauge desktop card ran its account row about 23pt past the card's bottom edge; its ring and gaps are a little smaller at that size and everything fits.
+- In the Provider grid desktop card a balance tile such as DeepSeek's was shorter than the quota tiles beside it; the balance now takes the percentage's size and the tiles match.
+- The classic desktop widget and the edge dock's rings always showed used, against the remaining reading of the bars beside them and the menu bar; they now follow Fill basis in Appearance.
 
 ### 2026-09-15
 

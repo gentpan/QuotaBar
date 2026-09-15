@@ -9,8 +9,11 @@ import QuotaCore
 /// possible at all.
 struct ProviderRing: View {
     let id: ProviderID
+    /// Used percentage: the colour is judged on it, whichever way it is shown.
     let percent: Double?
-    let alerts: AlertSettings
+    /// Used or remaining, for the arc and the figure — as the menu-bar glyph,
+    /// the handle and the bars beside the ring read.
+    let mode: MeterMode
     static let defaultDiameter: CGFloat = 46
     var diameter: CGFloat = Self.defaultDiameter
     var showsLabel: Bool = true
@@ -40,10 +43,6 @@ struct ProviderRing: View {
         selectionDot ? diameter + markSpacing + markSize : diameter
     }
 
-    private var level: AlertLevel {
-        alerts.level(for: percent ?? 0)
-    }
-
     /// Only hover lifts the disc. Selection is marked by the strip — a short
     /// bar against the docked edge — not by the ring itself; a halo round the
     /// disc was tried and read as a second, decorative ring.
@@ -70,7 +69,7 @@ struct ProviderRing: View {
                     .stroke(Color.white.opacity(0.14), lineWidth: 3)
                 if let percent {
                     Circle()
-                        .trim(from: 0, to: max(0.012, min(percent, 100) / 100))
+                        .trim(from: 0, to: max(0.012, min(mode.shownPercent(fromUsed: percent), 100) / 100))
                         .stroke(tint, style: StrokeStyle(lineWidth: 3, lineCap: .round))
                         .rotationEffect(.degrees(-90))
                 }
@@ -95,14 +94,14 @@ struct ProviderRing: View {
                 // Small and grey: the figure is a caption to the ring, not
                 // a second reading of it. At 12pt bold white it competed
                 // with the marks; selection lifts it a step, not to white.
-                Text(percent.map { "\(Int($0.rounded()))%" } ?? "—")
+                Text(percent.map { "\(Int(mode.shownPercent(fromUsed: $0).rounded()))%" } ?? "—")
                     .font(.system(size: 10, weight: selected ? .semibold : .medium))
                     .monospacedDigit()
                     .foregroundStyle(.white.opacity(selected ? 0.85 : 0.55))
             }
         }
         .accessibilityLabel(percent.map {
-            "\(id.displayName) \(QuotaFormat.percent($0))"
+            "\(id.displayName) \(QuotaFormat.percent(mode.shownPercent(fromUsed: $0)))"
         } ?? id.displayName)
         .accessibilityAddTraits(selected ? [.isSelected] : [])
     }

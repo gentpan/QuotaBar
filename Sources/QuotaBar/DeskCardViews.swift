@@ -342,7 +342,10 @@ private struct DeskGauge: View {
                 Text(windows.lead.map { ($0.scope ?? $0.title) + ($0.resetsAt.map { " · " + QuotaFormat.tick(to: $0) } ?? "") } ?? "—")
                     .font(.system(size: 10)).foregroundStyle(.white.opacity(0.5)).lineLimit(1).frame(maxWidth: .infinity)
             } else {
-                Spacer(minLength: 8)
+                // Medium is 224pt tall: at the large card's ring and gaps its
+                // footer ran 23pt past the bottom edge.
+                let medium = card.size == .medium
+                Spacer(minLength: medium ? 6 : 8)
                 HStack(alignment: .center) {
                     VStack(alignment: .leading, spacing: 2) {
                         Text(windows.lead?.scope ?? windows.lead?.title ?? "—").font(.system(size: 12)).foregroundStyle(.white.opacity(0.55)).lineLimit(1)
@@ -354,14 +357,14 @@ private struct DeskGauge: View {
                         }
                     }
                     Spacer()
-                    gauge(id: id, used: windows.lead?.usedPercent, diameter: 84, figure: false)
+                    gauge(id: id, used: windows.lead?.usedPercent, diameter: medium ? 70 : 84, figure: false)
                 }
-                Spacer(minLength: 8)
+                Spacer(minLength: medium ? 6 : 8)
                 HStack(spacing: 6) {
-                    tile("clock", windows.lead?.resetsAt.map { QuotaFormat.tick(to: $0) } ?? "—", L10n.t("to reset", "后重置"))
+                    tile("clock", windows.lead?.resetsAt.map { QuotaFormat.tick(to: $0) } ?? "—", L10n.t("to reset", "后重置"), padding: medium ? 6 : 8)
                     tile("flame", pace.map { $0.runOutSeconds.map { QuotaFormat.tick(to: Date().addingTimeInterval($0)) } ?? L10n.t("OK", "够用") } ?? "—",
-                         L10n.t("runs out", "预计用完"), tint: pace?.verdict == .over || pace?.verdict == .spent ? Palette.red : Desk.green)
-                    tile("calendar", windows.other?.usedPercent.map { "\(Int(store.deskShown($0).rounded()))%" } ?? "—", windows.other?.scope ?? windows.other?.title ?? "—")
+                         L10n.t("runs out", "预计用完"), tint: pace?.verdict == .over || pace?.verdict == .spent ? Palette.red : Desk.green, padding: medium ? 6 : 8)
+                    tile("calendar", windows.other?.usedPercent.map { "\(Int(store.deskShown($0).rounded()))%" } ?? "—", windows.other?.scope ?? windows.other?.title ?? "—", padding: medium ? 6 : 8)
                 }
                 if card.size == .large {
                     Spacer(minLength: 12)
@@ -371,7 +374,7 @@ private struct DeskGauge: View {
                         }
                     }
                 }
-                Spacer(minLength: 8)
+                Spacer(minLength: medium ? 6 : 8)
                 DeskFooter(symbol: "person.crop.circle", text: store.isPrivacyMasked ? id.displayName : (snapshot?.account ?? id.displayName), time: store.deskUpdated([id]))
             }
         }
@@ -396,7 +399,7 @@ private struct DeskGauge: View {
         .frame(width: diameter, height: diameter)
     }
 
-    private func tile(_ symbol: String, _ value: String, _ label: String, tint: Color = Desk.green) -> some View {
+    private func tile(_ symbol: String, _ value: String, _ label: String, tint: Color = Desk.green, padding: CGFloat = 8) -> some View {
         VStack(spacing: 3) {
             HStack(spacing: 4) {
                 Image(systemName: symbol).font(.system(size: 11, weight: .semibold)).foregroundStyle(tint)
@@ -404,7 +407,7 @@ private struct DeskGauge: View {
             }
             Text(label).font(.system(size: 10)).foregroundStyle(.white.opacity(0.5)).lineLimit(1)
         }
-        .frame(maxWidth: .infinity).padding(.vertical, 8)
+        .frame(maxWidth: .infinity).padding(.vertical, padding)
         .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(Desk.tile))
     }
 }
@@ -623,10 +626,13 @@ private struct DeskGrid: View {
                 Spacer(minLength: 0)
             }
             if window == nil, let balance = store.balanceFigure(for: id) {
-                // A balance has no percentage and no bar to fill.
+                // A balance has no percentage and no bar to fill; the figure
+                // takes the percentage's size and the bar's row stays empty,
+                // so the tile is as tall as its neighbours.
                 Text(balance)
-                    .font(.system(size: big ? 26 : 20, weight: .semibold, design: .monospaced)).foregroundStyle(.white)
+                    .font(.system(size: big ? 30 : 22, weight: .semibold, design: .monospaced)).foregroundStyle(.white)
                     .lineLimit(1).minimumScaleFactor(0.6)
+                Color.clear.frame(height: big ? 8 : 7)
                 Text(L10n.t("Balance", "余额")).font(.system(size: 10)).foregroundStyle(.white.opacity(0.45)).lineLimit(1)
             } else {
                 HStack(alignment: .firstTextBaseline, spacing: 1) {

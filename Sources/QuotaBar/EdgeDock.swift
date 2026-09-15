@@ -833,7 +833,7 @@ struct EdgeDockView: View {
                 ProviderRing(
                     id: id,
                     percent: ringOverride[id] ?? store.headlinePercent(for: id),
-                    alerts: store.alertSettings,
+                    mode: store.meterMode,
                     showsLabel: false,
                     selected: store.selected == id,
                     hovered: hovered == id,
