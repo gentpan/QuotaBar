@@ -120,7 +120,9 @@ struct ProviderCardView: View {
                 if let error = phase?.errorMessage {
                     staleNote(error, age: snapshot.fetchedAt)
                 }
-                if snapshot.windows.isEmpty {
+                if let sheet = snapshot.balance {
+                    BalanceSheetView(store: store, id: id, sheet: sheet, compact: compact, expanded: expanded, forExport: forExport)
+                } else if snapshot.windows.isEmpty {
                     Text(L10n.t("No quota windows reported.", "服务商未返回额度窗口。"))
                         .font(.system(size: 11))
                         .foregroundStyle(.white.opacity(0.5))
@@ -141,17 +143,27 @@ struct ProviderCardView: View {
 
     /// What the card shows before it is expanded; see `upFrontWindows`.
     private func primary(_ snapshot: UsageSnapshot) -> [UsageWindow] {
-        snapshot.upFrontWindows(
+        drawn(snapshot).upFrontWindows(
             for: id, picked: store.pickedHeadlineWindow(for: id), shown: store.experience.cardWindows[id.rawValue])
     }
 
     private func rest(_ snapshot: UsageSnapshot) -> [UsageWindow] {
         let shown = Set(primary(snapshot).map(\.id))
-        return snapshot.windows.filter { !shown.contains($0.id) }
+        return drawn(snapshot).windows.filter { !shown.contains($0.id) }
+    }
+
+    /// The windows the card draws as rows: a balance sheet draws its own
+    /// figures, so the figure-only windows it stands for are left out.
+    private func drawn(_ snapshot: UsageSnapshot) -> UsageSnapshot {
+        guard let represented = snapshot.balance?.representedWindowIDs, !represented.isEmpty else { return snapshot }
+        var copy = snapshot
+        copy.windows.removeAll { represented.contains($0.id) }
+        return copy
     }
 
     private func hasMore(_ snapshot: UsageSnapshot) -> Bool {
         !rest(snapshot).isEmpty || snapshot.resetCredits?.isShown == true || id.costSource != nil
+            || snapshot.balance.map(BalanceSheetView.hasMore) == true
             || StatusPages.page(for: id) != nil || id.dashboardURL != nil
     }
 

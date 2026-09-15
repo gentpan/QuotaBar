@@ -222,7 +222,9 @@ private struct DeskFocus: View {
     let card: DeskCard
 
     var body: some View {
-        if let id = store.deskProvider(card) {
+        if let id = store.deskProvider(card), let sheet = store.deskBalance(id) {
+            DeskBalanceCard(store: store, id: id, sheet: sheet, size: card.size)
+        } else if let id = store.deskProvider(card) {
             content(id)
         } else {
             DeskEmpty(size: card.size, text: L10n.t("Turn on a provider in Settings.", "请先在设置里开启服务商。"))
@@ -312,7 +314,9 @@ private struct DeskGauge: View {
     let card: DeskCard
 
     var body: some View {
-        if let id = store.deskProvider(card) {
+        if let id = store.deskProvider(card), let sheet = store.deskBalance(id) {
+            DeskBalanceCard(store: store, id: id, sheet: sheet, size: card.size)
+        } else if let id = store.deskProvider(card) {
             content(id)
         } else {
             DeskEmpty(size: card.size, text: L10n.t("Turn on a provider in Settings.", "请先在设置里开启服务商。"))
@@ -618,15 +622,23 @@ private struct DeskGrid: View {
                 }
                 Spacer(minLength: 0)
             }
-            HStack(alignment: .firstTextBaseline, spacing: 1) {
-                Text(window == nil ? "—" : "\(Int(store.deskShown(used).rounded()))")
-                    .font(.system(size: big ? 30 : 22, weight: .semibold, design: .monospaced)).foregroundStyle(Desk.figureColor(used))
+            if window == nil, let balance = store.balanceFigure(for: id) {
+                // A balance has no percentage and no bar to fill.
+                Text(balance)
+                    .font(.system(size: big ? 26 : 20, weight: .semibold, design: .monospaced)).foregroundStyle(.white)
                     .lineLimit(1).minimumScaleFactor(0.6)
-                    .contentTransition(.numericText(value: used))
-                Text("%").font(.system(size: big ? 13 : 10, weight: .medium)).foregroundStyle(.white.opacity(0.5))
+                Text(L10n.t("Balance", "余额")).font(.system(size: 10)).foregroundStyle(.white.opacity(0.45)).lineLimit(1)
+            } else {
+                HStack(alignment: .firstTextBaseline, spacing: 1) {
+                    Text(window == nil ? "—" : "\(Int(store.deskShown(used).rounded()))")
+                        .font(.system(size: big ? 30 : 22, weight: .semibold, design: .monospaced)).foregroundStyle(Desk.figureColor(used))
+                        .lineLimit(1).minimumScaleFactor(0.6)
+                        .contentTransition(.numericText(value: used))
+                    Text("%").font(.system(size: big ? 13 : 10, weight: .medium)).foregroundStyle(.white.opacity(0.5))
+                }
+                Meter(percent: store.deskFill(window?.usedPercent), tint: Color(hex: UsageRamp.hex(used: used)), style: .stepped, height: big ? 5 : 4, track: .white.opacity(0.1))
+                Text(window?.resetsAt.map { QuotaFormat.tick(to: $0) } ?? " ").font(.system(size: 10, design: .monospaced)).foregroundStyle(.white.opacity(0.45)).lineLimit(1)
             }
-            Meter(percent: store.deskFill(window?.usedPercent), tint: Color(hex: UsageRamp.hex(used: used)), style: .stepped, height: big ? 5 : 4, track: .white.opacity(0.1))
-            Text(window?.resetsAt.map { QuotaFormat.tick(to: $0) } ?? " ").font(.system(size: 10, design: .monospaced)).foregroundStyle(.white.opacity(0.45)).lineLimit(1)
         }
         .padding(big ? 11 : 9)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -641,9 +653,11 @@ private struct DeskGrid: View {
                 ProviderGlyph(id: id, size: 13, tint: .white)
                 Text(id.displayName).font(.system(size: 11, weight: .medium)).foregroundStyle(.white.opacity(0.85)).lineLimit(1)
                 Spacer(minLength: 2)
-                Text(reading == nil ? "—" : "\(Int(store.deskShown(used).rounded()))%").font(.system(size: 13, weight: .semibold, design: .monospaced)).foregroundStyle(Desk.figureColor(used))
+                Text(reading == nil ? store.balanceFigure(for: id) ?? "—" : "\(Int(store.deskShown(used).rounded()))%").font(.system(size: 13, weight: .semibold, design: .monospaced)).foregroundStyle(Desk.figureColor(used))
             }
-            Meter(percent: store.deskFill(reading), tint: Color(hex: UsageRamp.hex(used: used)), style: .stepped, height: 4, track: .white.opacity(0.1))
+            if reading != nil || store.balanceFigure(for: id) == nil {
+                Meter(percent: store.deskFill(reading), tint: Color(hex: UsageRamp.hex(used: used)), style: .stepped, height: 4, track: .white.opacity(0.1))
+            }
         }
     }
 }
@@ -690,12 +704,15 @@ private struct DeskRanking: View {
                     if !compact {
                         Text(window?.resetsAt.map { QuotaFormat.tick(to: $0) } ?? "").font(.system(size: 10, design: .monospaced)).foregroundStyle(.white.opacity(0.45))
                     }
-                    Text(window == nil ? "—" : "\(Int(store.deskShown(used).rounded()))%")
+                    Text(window == nil ? store.balanceFigure(for: id) ?? "—" : "\(Int(store.deskShown(used).rounded()))%")
                         .font(.system(size: compact ? 12 : 13, weight: .semibold, design: .monospaced)).foregroundStyle(Desk.figureColor(used))
+                        .lineLimit(1).minimumScaleFactor(0.7)
                         .frame(width: compact ? 34 : 42, alignment: .trailing)
                 }
-                Meter(percent: store.deskFill(window?.usedPercent), tint: Color(hex: UsageRamp.hex(used: used)), style: .continuous, height: compact ? 4 : 5, track: .white.opacity(0.1))
-                    .paceTick(window ?? UsageWindow(title: ""), mode: store.meterMode, always: false)
+                if window != nil || store.balanceFigure(for: id) == nil {
+                    Meter(percent: store.deskFill(window?.usedPercent), tint: Color(hex: UsageRamp.hex(used: used)), style: .continuous, height: compact ? 4 : 5, track: .white.opacity(0.1))
+                        .paceTick(window ?? UsageWindow(title: ""), mode: store.meterMode, always: false)
+                }
             }
         }
     }

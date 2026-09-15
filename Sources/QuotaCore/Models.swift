@@ -450,8 +450,8 @@ public enum ProviderID: String, CaseIterable, Codable, Sendable, Identifiable {
             return L10n.t("Session token (Bearer) from manus.im.", "manus.im 的会话 token（Bearer）。")
         case .deepseek:
             return L10n.t(
-                "API key (platform.deepseek.com → API Keys).",
-                "API Key（platform.deepseek.com → API Keys）。")
+                "An API key shows the balance. For this month's spend and each key's and model's usage, paste the console's sign-in token instead: open platform.deepseek.com signed in, DevTools → Application → Local Storage → userToken, copy its value.",
+                "填 API Key 只显示余额。想看本月消费和每个 Key、每个模型的用量，改填控制台登录令牌：登录 platform.deepseek.com 后打开开发者工具 → 应用 → 本地存储 → userToken，复制它的值。")
         case .alibaba:
             return L10n.t(
                 "Full Cookie header from bailian.console.aliyun.com (or the international Model Studio console), signed in.",
@@ -465,7 +465,9 @@ public enum ProviderID: String, CaseIterable, Codable, Sendable, Identifiable {
                 "Optional; otherwise the GitHub CLI's sign-in is used (`gh auth login`).",
                 "可选；留空则使用 GitHub CLI 的登录（`gh auth login`）。")
         case .openrouter:
-            return L10n.t("API key (openrouter.ai → Keys).", "API Key（openrouter.ai → Keys）。")
+            return L10n.t(
+                "API key (openrouter.ai → Keys) for the credits and that key's spend, or a provisioning key (Settings → Provisioning Keys) for every key's spend.",
+                "API Key（openrouter.ai → Keys）显示余额和这个 Key 的花费；填管理密钥（Settings → Provisioning Keys）可以看到所有 Key 的花费。")
         case .mimo:
             return L10n.t(
                 "Full Cookie header from platform.xiaomimimo.com, signed in (needs api-platform_serviceToken and userId).",
@@ -772,19 +774,23 @@ public struct UsageSnapshot: Sendable {
     public var fetchedAt: Date
     /// Early-reset credits, when the provider reports them.
     public var resetCredits: ResetCredits?
+    /// A prepaid account's balance, spend and keys; see `BalanceSheet`.
+    public var balance: BalanceSheet?
 
     public init(
         planName: String? = nil,
         account: String? = nil,
         windows: [UsageWindow] = [],
         fetchedAt: Date = .now,
-        resetCredits: ResetCredits? = nil)
+        resetCredits: ResetCredits? = nil,
+        balance: BalanceSheet? = nil)
     {
         self.planName = planName
         self.account = account
         self.windows = UsageSnapshot.uniquingIDs(windows)
         self.fetchedAt = fetchedAt
         self.resetCredits = resetCredits
+        self.balance = balance
     }
 
     /// `ForEach` needs stable unique ids; two providers legitimately report two

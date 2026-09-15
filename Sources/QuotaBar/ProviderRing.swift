@@ -237,14 +237,19 @@ struct ProviderCallout: View {
                 .fixedSize(horizontal: false, vertical: true)
         case let .loaded(snapshot), let .stale(snapshot, _):
             VStack(alignment: .leading, spacing: Design.space3) {
-                if snapshot.windows.isEmpty {
+                // A prepaid account draws its balance and spend; the
+                // figure-only windows standing for it would be empty bars.
+                let represented = snapshot.balance?.representedWindowIDs ?? []
+                let windows = snapshot.windows.filter { !represented.contains($0.id) }
+                if let sheet = snapshot.balance {
+                    BalanceSheetView(store: store, id: id, sheet: sheet, compact: true, expanded: detail)
+                } else if windows.isEmpty {
                     Text(L10n.t("No quota windows reported.", "服务商未返回额度窗口。"))
                         .font(.caption)
                         .foregroundStyle(.white.opacity(0.6))
-                } else {
-                    ForEach(snapshot.windows) { window in
-                        row(window)
-                    }
+                }
+                ForEach(windows) { window in
+                    row(window)
                 }
                 if detail {
                     detailExtras(snapshot)

@@ -469,6 +469,7 @@ final class UsageStore: ObservableObject {
             let previousReading = reported[id]
             reported[id] = snapshot
             noteResetCredits(id, previous: previousReading, current: snapshot.resetCredits)
+            if snapshot.balance != nil || previousReading?.balance != nil { evaluateBalanceNotices() }
             let visible = shown(snapshot, for: id)
             let resets = ResetDetector.events(provider: id, previous: states[id]?.snapshot, current: visible)
             states[id] = .loaded(visible)

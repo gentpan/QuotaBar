@@ -63,15 +63,309 @@ public struct DeepSeekProvider: QuotaProvider {
     }
 
     public func fetch(config: ConfigStore) async throws -> UsageSnapshot {
-        guard let key = config.credential(for: .deepseek) else {
+        guard let raw = config.credential(for: .deepseek) else {
             throw ProviderError.notConfigured(hint: ProviderID.deepseek.setupHint)
         }
-        let url = URL(string: "https://api.deepseek.com/user/balance")!
-        let response = try await HTTP.get(url, headers: [
-            "Authorization": "Bearer \(key.trimmingCharacters(in: .whitespacesAndNewlines))",
+        switch Self.credential(raw) {
+        case let .apiKey(key):
+            let url = URL(string: "https://api.deepseek.com/user/balance")!
+            let response = try await HTTP.get(url, headers: [
+                "Authorization": "Bearer \(key)",
+                "Accept": "application/json",
+            ]).requireOK()
+            return try Self.parse(response.data)
+        case let .consoleToken(token):
+            return try await Self.fetchConsole(token: token)
+        }
+    }
+
+    enum Credential: Equatable {
+        case apiKey(String)
+        case consoleToken(String)
+    }
+
+    /// One field takes either. An API key (`sk-…`) can only ask for the
+    /// balance; each key's usage is behind the platform console's own sign-in,
+    /// the `userToken` it keeps in local storage. That value is sometimes
+    /// copied as the JSON it is stored in, or with its `Bearer` prefix.
+    static func credential(_ raw: String) -> Credential {
+        var value = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        if value.lowercased().hasPrefix("bearer ") { value = String(value.dropFirst(7)).trimmingCharacters(in: .whitespaces) }
+        if value.hasPrefix("{"), let object = ProviderJSON.object(Data(value.utf8)) as? [String: Any],
+           let inner = ProviderJSON.string(object["value"])
+        {
+            value = inner
+        }
+        value = value.trimmingCharacters(in: CharacterSet(charactersIn: "\"'"))
+        return value.hasPrefix("sk-") ? .apiKey(value) : .consoleToken(value)
+    }
+
+    // MARK: Console
+
+    static let console = "https://platform.deepseek.com/api/v0"
+
+    /// The console's own reads, as its usage page makes them: the wallets and
+    /// this month's spend, the keys, then cost and tokens per key per day.
+    /// One range covers the month and the week — whichever starts earlier, at
+    /// most 31 days, which is as long a range as the console accepts — so the
+    /// three periods come from two requests.
+    static func fetchConsole(token: String, now: Date = .now, calendar: Calendar = .current) async throws -> UsageSnapshot {
+        let headers = [
+            "Authorization": "Bearer \(token)",
             "Accept": "application/json",
-        ]).requireOK()
-        return try Self.parse(response.data)
+            "Origin": "https://platform.deepseek.com",
+            "Referer": "https://platform.deepseek.com/usage",
+            "User-Agent": QwenProvider.browserAgent,
+        ]
+        let summary = try await HTTP.get(URL(string: "\(console)/users/get_user_summary")!, headers: headers).requireOK()
+        let range = ConsoleRange(now: now, calendar: calendar)
+        let query = "start=\(Int(range.start.timeIntervalSince1970))&end=\(Int(range.end.timeIntervalSince1970))&tz=\(calendar.timeZone.secondsFromGMT(for: now))"
+        let keys = try? await HTTP.get(URL(string: "\(console)/users/get_api_keys")!, headers: headers).requireOK()
+        let cost = try? await HTTP.get(URL(string: "\(console)/usage/by_api_key/cost?\(query)")!, headers: headers).requireOK()
+        let amount = try? await HTTP.get(URL(string: "\(console)/usage/by_api_key/amount?\(query)")!, headers: headers).requireOK()
+        return try parseConsole(summary: summary.data, keys: keys?.data, cost: cost?.data, amount: amount?.data, range: range)
+    }
+
+    struct ConsoleRange {
+        let today: Date
+        let week: Date
+        let month: Date
+        let start: Date
+        let end: Date
+
+        /// The start of every day in the range, oldest first.
+        let days: [Date]
+
+        init(now: Date, calendar: Calendar) {
+            today = calendar.startOfDay(for: now)
+            week = calendar.dateInterval(of: .weekOfYear, for: now)?.start ?? today
+            month = calendar.dateInterval(of: .month, for: now)?.start ?? today
+            start = min(week, month)
+            end = calendar.date(byAdding: .day, value: 1, to: today) ?? today.addingTimeInterval(86_400)
+            var days: [Date] = []
+            var day = start
+            while day < end, days.count < 32 {
+                days.append(day)
+                guard let next = calendar.date(byAdding: .day, value: 1, to: day) else { break }
+                day = next
+            }
+            self.days = days
+        }
+
+        func periods(containing time: Date) -> [KeyUsagePeriod] {
+            var periods: [KeyUsagePeriod] = []
+            if time >= today { periods.append(.today) }
+            if time >= week { periods.append(.week) }
+            if time >= month { periods.append(.month) }
+            return periods
+        }
+    }
+
+    /// `{"code":0,"msg":"","data":{"biz_code":0,"biz_msg":"","biz_data":{…}}}`
+    /// — two envelopes. A missing or expired token is an outer code
+    /// (40002 "Missing Token"), a bad query an inner one.
+    static func consoleData(_ data: Data) throws -> [String: Any] {
+        guard let body = ProviderJSON.object(data) as? [String: Any] else { throw ProviderError.badResponse }
+        let code = QwenProvider.number(body["code"]) ?? 0
+        if code != 0 {
+            if (40_000..<41_000).contains(code) { throw ProviderError.unauthorized }
+            throw ProviderError.badResponse
+        }
+        guard let inner = body["data"] as? [String: Any], (QwenProvider.number(inner["biz_code"]) ?? 0) == 0,
+              let payload = inner["biz_data"] as? [String: Any]
+        else { throw ProviderError.badResponse }
+        return payload
+    }
+
+    static func parseConsole(summary: Data, keys: Data?, cost: Data?, amount: Data?, range: ConsoleRange) throws -> UsageSnapshot {
+        let wallets = try consoleData(summary)
+        func amounts(_ list: Any?, _ field: String) -> [(currency: String, value: Double)] {
+            (list as? [[String: Any]] ?? []).compactMap { entry in
+                guard let currency = ProviderJSON.string(entry["currency"]), let value = QwenProvider.number(entry[field]) else { return nil }
+                return (currency.uppercased(), value)
+            }
+        }
+        let normal = amounts(wallets["normal_wallets"], "balance")
+        let bonus = amounts(wallets["bonus_wallets"], "balance")
+        var currencies: [String] = []
+        for entry in normal + bonus where !currencies.contains(entry.currency) { currencies.append(entry.currency) }
+        var balances = currencies.map { currency -> AccountBalance in
+            let paid = normal.filter { $0.currency == currency }.reduce(0) { $0 + $1.value }
+            let granted = bonus.filter { $0.currency == currency }.reduce(0) { $0 + $1.value }
+            return AccountBalance(currency: currency, total: paid + granted, paid: paid, granted: granted > 0 ? granted : nil)
+        }
+        // A wallet the account has never used is listed at zero; show it only
+        // when it is all there is.
+        if balances.contains(where: { $0.total > 0 }) { balances.removeAll { $0.total <= 0 } }
+        if balances.isEmpty { balances = [AccountBalance(currency: "CNY", total: 0)] }
+
+        var spend: [KeyUsagePeriod: [Money]] = [:]
+        var models: [KeyUsagePeriod: [ModelCost]] = [:]
+        let month = amounts(wallets["total_costs"], "amount").filter { $0.value > 0 }
+        if !month.isEmpty { spend[.month] = month.map { Money(currency: $0.currency, amount: $0.value) } }
+
+        var keyList: [APIKeyUsage]?
+        var note: String?
+        if let listed = keys.flatMap({ try? consoleData($0) }), let entries = listed["api_keys"] as? [[String: Any]] {
+            keyList = entries.compactMap { entry in
+                guard let id = ProviderJSON.string(entry["tracking_id"]) else { return nil }
+                return APIKeyUsage(
+                    id: id,
+                    name: ProviderJSON.string(entry["name"]) ?? L10n.t("Unnamed key", "未命名 Key"),
+                    maskedKey: ProviderJSON.string(entry["sensitive_id"]),
+                    lastUsed: (QwenProvider.number(entry["last_use"]) ?? 0) > 0 ? QwenProvider.date(entry["last_use"]) : nil)
+            }
+        }
+        let costs = cost.flatMap { try? consoleData($0) }
+        let counts = amount.flatMap { try? consoleData($0) }
+        if costs == nil && counts == nil {
+            note = L10n.t("Couldn't read each key's usage this time.", "这次没能读到各个 Key 的用量。")
+        } else {
+            var byID: [String: APIKeyUsage] = [:]
+            var order: [String] = []
+            for key in keyList ?? [] {
+                byID[key.id] = key
+                order.append(key.id)
+            }
+            // A deleted key keeps its history in the usage replies and nowhere else.
+            func key(_ raw: Any?) -> String? {
+                guard let info = raw as? [String: Any], let id = ProviderJSON.string(info["tracking_id"]) else { return nil }
+                if byID[id] == nil {
+                    byID[id] = APIKeyUsage(
+                        id: id,
+                        name: ProviderJSON.string(info["name"]) ?? L10n.t("Deleted key", "已删除的 Key"),
+                        maskedKey: ProviderJSON.string(info["sensitive_id"]),
+                        isDisabled: (info["valid"] as? Bool) == false)
+                    order.append(id)
+                }
+                return id
+            }
+            var money: [String: [KeyUsagePeriod: MoneyTally]] = [:]
+            var modelMoney: [String: [KeyUsagePeriod: [String: MoneyTally]]] = [:]
+            var dayMoney: [String: [Double: MoneyTally]] = [:]
+            for block in costs?["data"] as? [[String: Any]] ?? [] {
+                let currency = (ProviderJSON.string(block["currency"]) ?? "CNY").uppercased()
+                for series in block["series"] as? [[String: Any]] ?? [] {
+                    guard let id = key(series["api_key"]) else { continue }
+                    let model = ProviderJSON.string(series["model"]) ?? "—"
+                    for bucket in series["buckets"] as? [[String: Any]] ?? [] {
+                        guard let time = QwenProvider.number(bucket["time"]), let value = QwenProvider.number(bucket["cost"]), value > 0 else { continue }
+                        dayMoney[id, default: [:]][time, default: MoneyTally()].add(currency, value)
+                        for period in range.periods(containing: Date(timeIntervalSince1970: time)) {
+                            money[id, default: [:]][period, default: MoneyTally()].add(currency, value)
+                            modelMoney[id, default: [:]][period, default: [:]][model, default: MoneyTally()].add(currency, value)
+                        }
+                    }
+                }
+            }
+            // Requests and tokens come from the other reply, also per key and
+            // per model; the model names are the same strings in both.
+            var requests: [String: [KeyUsagePeriod: [String: Int]]] = [:]
+            var tokens: [String: [KeyUsagePeriod: [String: Int]]] = [:]
+            var dayCounts: [String: [Double: (requests: Int, tokens: Int)]] = [:]
+            for series in counts?["series"] as? [[String: Any]] ?? [] {
+                guard let id = key(series["api_key"]) else { continue }
+                let model = ProviderJSON.string(series["model"]) ?? "—"
+                for bucket in series["buckets"] as? [[String: Any]] ?? [] {
+                    guard let time = QwenProvider.number(bucket["time"]), let usage = bucket["usage"] as? [String: Any] else { continue }
+                    let asked = Int(QwenProvider.number(usage["REQUEST"]) ?? 0)
+                    let used = ["RESPONSE_TOKEN", "PROMPT_CACHE_HIT_TOKEN", "PROMPT_CACHE_MISS_TOKEN"]
+                        .reduce(0) { $0 + Int(QwenProvider.number(usage[$1]) ?? 0) }
+                    guard asked > 0 || used > 0 else { continue }
+                    dayCounts[id, default: [:]][time, default: (0, 0)].requests += asked
+                    dayCounts[id, default: [:]][time, default: (0, 0)].tokens += used
+                    for period in range.periods(containing: Date(timeIntervalSince1970: time)) {
+                        requests[id, default: [:]][period, default: [:]][model, default: 0] += asked
+                        tokens[id, default: [:]][period, default: [:]][model, default: 0] += used
+                    }
+                }
+            }
+            let known = counts != nil
+            var totals: [KeyUsagePeriod: MoneyTally] = [:]
+            var accountModels: [KeyUsagePeriod: [String: (money: MoneyTally, requests: Int, tokens: Int)]] = [:]
+            keyList = order.compactMap { id in
+                guard var entry = byID[id] else { return nil }
+                for period in KeyUsagePeriod.allCases {
+                    let costs = money[id]?[period]?.money ?? []
+                    for cost in costs { totals[period, default: MoneyTally()].add(cost.currency, cost.amount) }
+                    let spent = modelMoney[id]?[period] ?? [:]
+                    let asked = requests[id]?[period] ?? [:]
+                    let used = tokens[id]?[period] ?? [:]
+                    let names = Set(spent.keys).union(asked.keys).union(used.keys)
+                    let models = names.map { name -> ModelCost in
+                        var row = accountModels[period, default: [:]][name] ?? (MoneyTally(), 0, 0)
+                        for cost in spent[name]?.money ?? [] { row.money.add(cost.currency, cost.amount) }
+                        row.requests += asked[name] ?? 0
+                        row.tokens += used[name] ?? 0
+                        accountModels[period, default: [:]][name] = row
+                        return ModelCost(
+                            model: name, costs: spent[name]?.money ?? [],
+                            requests: known ? asked[name] ?? 0 : nil, tokens: known ? used[name] ?? 0 : nil)
+                    }
+                    .sorted(by: ModelCost.busiestFirst)
+                    let figures = KeyUsageFigures(
+                        costs: costs,
+                        requests: known ? asked.values.reduce(0, +) : nil,
+                        tokens: known ? used.values.reduce(0, +) : nil,
+                        models: models)
+                    if !figures.isEmpty { entry.usage[period] = figures }
+                }
+                if !entry.usage.isEmpty {
+                    entry.daily = range.days.map { day in
+                        let time = day.timeIntervalSince1970
+                        return DailyUsage(
+                            day: day,
+                            costs: dayMoney[id]?[time]?.money ?? [],
+                            requests: known ? dayCounts[id]?[time]?.requests ?? 0 : nil,
+                            tokens: known ? dayCounts[id]?[time]?.tokens ?? 0 : nil)
+                    }
+                }
+                // A deleted key with nothing in range is not worth a row.
+                return entry.isDisabled && entry.usage.isEmpty ? nil : entry
+            }
+            for period in [KeyUsagePeriod.today, .week] {
+                if let tally = totals[period] { spend[period] = tally.money }
+            }
+            if spend[.month] == nil, let tally = totals[.month] { spend[.month] = tally.money }
+            for (period, rows) in accountModels {
+                models[period] = rows
+                    .map { ModelCost(model: $0.key, costs: $0.value.money.money, requests: known ? $0.value.requests : nil, tokens: known ? $0.value.tokens : nil) }
+                    .sorted(by: ModelCost.busiestFirst)
+            }
+        }
+
+        let windows = balanceWindows(balances, canCallAPI: nil)
+        return UsageSnapshot(
+            planName: L10n.t("Pay as you go", "按量付费"),
+            windows: windows,
+            balance: BalanceSheet(
+                balances: balances,
+                spend: spend,
+                models: models,
+                keys: keyList,
+                keysNote: note,
+                representedWindowIDs: windows.map(\.id)))
+    }
+
+    /// The figure-only windows a balance is also reported as, for the local
+    /// API and the surfaces that only read windows.
+    static func balanceWindows(_ balances: [AccountBalance], canCallAPI: Bool?) -> [UsageWindow] {
+        balances.map { entry in
+            var detail = L10n.t(
+                "Balance \(QuotaFormat.amount(entry.total, code: entry.currency))",
+                "余额 \(QuotaFormat.amount(entry.total, code: entry.currency))")
+            if let granted = entry.granted, granted > 0 {
+                let paid = QuotaFormat.amount(entry.paid ?? entry.total - granted, code: entry.currency)
+                let gift = QuotaFormat.amount(granted, code: entry.currency)
+                detail += L10n.t(" · \(paid) paid + \(gift) granted", " · 充值 \(paid) + 赠送 \(gift)")
+            }
+            if canCallAPI == false {
+                detail += L10n.t(" · not enough for API calls", " · 余额不足，无法调用 API")
+            }
+            // `UsageWindow.id` is the title, so a second currency needs its own.
+            let title = balances.count > 1 ? "\(L10n.t("Balance", "余额")) · \(entry.currency)" : L10n.t("Balance", "余额")
+            return UsageWindow(title: title, detail: detail)
+        }
     }
 
     /// `{"is_available":true,"balance_infos":[{"currency":"CNY","total_balance":"110.00",
@@ -84,40 +378,30 @@ public struct DeepSeekProvider: QuotaProvider {
               let infos = body["balance_infos"] as? [[String: Any]]
         else { throw ProviderError.badResponse }
 
-        func money(_ value: Double, _ currency: String) -> String {
-            let symbol = switch currency { case "CNY": "¥"; case "USD": "$"; default: "\(currency) " }
-            return "\(symbol)\(String(format: "%.2f", value))"
-        }
-
-        let entries = infos.compactMap { info -> (currency: String, total: Double, granted: Double, topped: Double)? in
+        let canCall = body["is_available"] as? Bool
+        var balances = infos.compactMap { info -> AccountBalance? in
             guard let total = QwenProvider.number(info["total_balance"]) else { return nil }
-            return ((info["currency"] as? String) ?? "CNY",
-                    total,
-                    QwenProvider.number(info["granted_balance"]) ?? 0,
-                    QwenProvider.number(info["topped_up_balance"]) ?? 0)
+            let granted = QwenProvider.number(info["granted_balance"]) ?? 0
+            return AccountBalance(
+                currency: ((info["currency"] as? String) ?? "CNY").uppercased(),
+                total: total,
+                paid: QwenProvider.number(info["topped_up_balance"]),
+                granted: granted > 0 ? granted : nil)
         }
-        guard !infos.isEmpty else {
-            return UsageSnapshot(
-                planName: L10n.t("Pay as you go", "按量付费"),
-                windows: [UsageWindow(title: L10n.t("Balance", "余额"), detail: L10n.t("Balance ¥0.00", "余额 ¥0.00"))])
-        }
-        guard !entries.isEmpty else { throw ProviderError.badResponse }
+        if !infos.isEmpty, balances.isEmpty { throw ProviderError.badResponse }
+        if balances.isEmpty { balances = [AccountBalance(currency: "CNY", total: 0)] }
 
-        let windows = entries.map { entry in
-            var detail = L10n.t("Balance \(money(entry.total, entry.currency))", "余额 \(money(entry.total, entry.currency))")
-            if entry.granted > 0 {
-                detail += L10n.t(
-                    " · \(money(entry.topped, entry.currency)) paid + \(money(entry.granted, entry.currency)) granted",
-                    " · 充值 \(money(entry.topped, entry.currency)) + 赠送 \(money(entry.granted, entry.currency))")
-            }
-            if body["is_available"] as? Bool == false {
-                detail += L10n.t(" · not enough for API calls", " · 余额不足，无法调用 API")
-            }
-            // `UsageWindow.id` is the title, so a second currency needs its own.
-            let title = entries.count > 1 ? "\(L10n.t("Balance", "余额")) · \(entry.currency)" : L10n.t("Balance", "余额")
-            return UsageWindow(title: title, detail: detail)
-        }
-        return UsageSnapshot(planName: L10n.t("Pay as you go", "按量付费"), windows: windows)
+        let windows = balanceWindows(balances, canCallAPI: canCall)
+        return UsageSnapshot(
+            planName: L10n.t("Pay as you go", "按量付费"),
+            windows: windows,
+            balance: BalanceSheet(
+                balances: balances,
+                keysNote: L10n.t(
+                    "An API key only shows the balance. Paste the console's sign-in token in Settings to see this month's spend and each key's usage.",
+                    "API Key 只能读到余额。在设置里改为粘贴控制台的登录令牌，可以看到本月消费和每个 Key 的用量。"),
+                canCallAPI: canCall,
+                representedWindowIDs: windows.map(\.id)))
     }
 }
 

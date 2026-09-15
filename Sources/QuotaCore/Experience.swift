@@ -260,6 +260,10 @@ public struct ExperiencePrefs: Codable, Equatable, Sendable {
     /// Spend limits per day and per month, and the crossings already notified.
     public var spendBudget: SpendBudget = SpendBudget()
     public var budgetNotified: [String] = []
+    /// A prepaid balance below this notifies once per dip.
+    public var balanceFloor: BalanceFloor = BalanceFloor()
+    /// The providers already notified as low, until they are topped up.
+    public var balanceFloorNotified: [String] = []
     /// A notification each Monday morning with last week's spend.
     public var weeklyDigest: Bool = true
     /// The week (`2026-W37`) whose digest was last sent.
@@ -289,7 +293,7 @@ public struct ExperiencePrefs: Codable, Equatable, Sendable {
         case deskCards, deskCardsMigrated
         case hideWhenSharing, hotkey, paceAlerts, localAPI, proxy, betaUpdates
         case resetEffects, resetNotify, resetCreditNotify, resetCreditNotified, hiddenProviders, cardWindows, hiddenWindows
-        case spendBudget, budgetNotified, weeklyDigest, weeklyDigestSent
+        case spendBudget, budgetNotified, balanceFloor, balanceFloorNotified, weeklyDigest, weeklyDigestSent
         case shareSignature, shareShowsSignature, shareMasksAccount, shareCardShownForVersion
     }
 
@@ -338,6 +342,8 @@ public struct ExperiencePrefs: Codable, Equatable, Sendable {
         hiddenWindows = value(.hiddenWindows, d.hiddenWindows)
         spendBudget = value(.spendBudget, d.spendBudget)
         budgetNotified = value(.budgetNotified, d.budgetNotified)
+        balanceFloor = value(.balanceFloor, d.balanceFloor)
+        balanceFloorNotified = value(.balanceFloorNotified, d.balanceFloorNotified)
         weeklyDigest = value(.weeklyDigest, d.weeklyDigest)
         weeklyDigestSent = value(.weeklyDigestSent, d.weeklyDigestSent)
         localAPI = value(.localAPI, d.localAPI)

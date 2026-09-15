@@ -438,6 +438,13 @@ struct IslandView: View {
                             .font(.system(size: 11, weight: .semibold, design: .monospaced))
                     }
                     .foregroundStyle(.white)
+                } else if let balance = store.balanceFigure(for: id) {
+                    HStack(spacing: Design.space1) {
+                        ProviderGlyph(id: id, size: 13, tint: .white)
+                        Text(balance)
+                            .font(.system(size: 11, weight: .semibold, design: .monospaced))
+                    }
+                    .foregroundStyle(.white)
                 }
             }
             Spacer(minLength: 0)
@@ -581,6 +588,12 @@ struct NotchMiniSlot: View {
             if let used = store.headlinePercent(for: id) {
                 let shown = store.meterMode.shownPercent(fromUsed: used)
                 Text("\(Int(shown.rounded()))%")
+                    .font(.system(size: 11, weight: .semibold))
+                    .monospacedDigit()
+                    .foregroundStyle(Color(hex: id.accentHex))
+            } else if let balance = store.balanceFigure(for: id) {
+                // A balance has no percentage; its amount is the reading.
+                Text(balance)
                     .font(.system(size: 11, weight: .semibold))
                     .monospacedDigit()
                     .foregroundStyle(Color(hex: id.accentHex))

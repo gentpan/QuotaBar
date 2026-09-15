@@ -285,6 +285,22 @@ enum Diagnostics {
                 let reset = window.resetsAt.map { " · " + QuotaFormat.resetLabel(to: $0) } ?? ""
                 out += "  \(window.title): \(used)\(window.detail.map { " · " + $0 } ?? "")\(reset)\n"
             }
+            if let sheet = snapshot.balance {
+                out += "  balance: \(sheet.balanceLine.isEmpty ? "—" : sheet.balanceLine)\(sheet.canCallAPI == false ? " · not enough for API calls" : "")\n"
+                for period in KeyUsagePeriod.allCases {
+                    let spent = (sheet.spend[period] ?? []).map { QuotaFormat.amount($0.amount, code: $0.currency) }.joined(separator: " · ")
+                    let models = (sheet.models[period] ?? []).prefix(3).map { "\($0.model) \(KeyUsageFigures(costs: $0.costs).costLine)" }.joined(separator: ", ")
+                    out += "  \(period.rawValue): \(spent.isEmpty ? "—" : spent)\(models.isEmpty ? "" : " · " + models)\n"
+                }
+                if let keys = sheet.keys {
+                    out += "  keys: \(keys.count), active this month: \(sheet.activeKeys(in: .month).count)\n"
+                    for key in sheet.activeKeys(in: .month) {
+                        let month = key.usage[.month]
+                        out += "    \(key.name) \(key.maskedKey ?? "")\(key.isDisabled ? " (deleted)" : ""): \(month?.costLine ?? "—") · \(month?.requests ?? 0) requests · \(key.daily.count) days\n"
+                    }
+                }
+                if let note = sheet.keysNote { out += "  note: \(note)\n" }
+            }
         }
         if let error = item.2 { out += "  error: \(error)\n" }
         FileHandle.standardOutput.write(Data(out.utf8))

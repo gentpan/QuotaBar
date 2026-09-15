@@ -114,6 +114,14 @@ struct AlertsPane: View {
             SettingRow(L10n.t("Monthly budget", "每月预算")) {
                 BudgetField(store: store, period: .month)
             }
+            SettingRow(
+                L10n.t("Balance below", "余额低于"),
+                caption: L10n.t(
+                    "For prepaid accounts such as DeepSeek: notifies once when the balance drops below this, or can no longer pay for calls, and again after a top-up and the next dip.",
+                    "适用于 DeepSeek 等充值型账户：余额低于这个金额、或已不足以调用 API 时通知一次；充值后再次跌破会重新提醒。"))
+            {
+                BalanceFloorField(store: store)
+            }
             SettingToggle(
                 L10n.t("Weekly digest", "每周用量周报"),
                 caption: L10n.t("Monday morning: last week's spend, tokens and the busiest CLI.", "每周一上午推送上周的花费、token 和用得最多的 CLI。"),

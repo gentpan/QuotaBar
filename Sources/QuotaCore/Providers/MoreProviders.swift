@@ -326,9 +326,16 @@ public struct MoonshotBalanceProvider: QuotaProvider {
         var detail = L10n.t("Balance \(symbol)\(String(format: "%.2f", available))", "余额 \(symbol)\(String(format: "%.2f", available))")
         if voucher > 0 { detail += L10n.t(" · vouchers \(symbol)\(String(format: "%.2f", voucher))", " · 代金券 \(symbol)\(String(format: "%.2f", voucher))") }
         if cash < 0 { detail += L10n.t(" · owing \(symbol)\(String(format: "%.2f", -cash))", " · 欠费 \(symbol)\(String(format: "%.2f", -cash))") }
+        let window = UsageWindow(title: L10n.t("Account balance", "账户余额"), detail: detail)
+        // The open platform answers for the account's balance only; it has no
+        // endpoint for what each key spent.
         return UsageSnapshot(
             planName: L10n.t("Pay as you go", "按量付费"),
-            windows: [UsageWindow(title: L10n.t("Account balance", "账户余额"), detail: detail)])
+            windows: [window],
+            balance: BalanceSheet(
+                balances: [AccountBalance(currency: currency, total: available, paid: cash, granted: voucher > 0 ? voucher : nil)],
+                canCallAPI: available > 0,
+                representedWindowIDs: [window.id]))
     }
 }
 
@@ -439,21 +446,46 @@ public struct OpenRouterProvider: QuotaProvider {
             throw ProviderError.notConfigured(hint: id.setupHint)
         }
         let headers = ["Authorization": "Bearer \(key)", "Accept": "application/json", "X-Title": "QuotaBar", "HTTP-Referer": "https://quota.bar"]
-        let credits = try await HTTP.get(URL(string: "https://openrouter.ai/api/v1/credits")!, headers: headers).requireOK()
-        let keyInfo = try? await HTTP.get(URL(string: "https://openrouter.ai/api/v1/key")!, headers: headers).requireOK()
-        return try Self.parse(credits: credits.data, key: keyInfo?.data)
+        // A provisioning key lists every key with its spend but may not be
+        // let read the credits, and an ordinary key reads the credits but not
+        // the list: ask for all three and keep what answers.
+        var failure: Error = ProviderError.badResponse
+        func read(_ path: String) async -> Data? {
+            do {
+                return try await HTTP.get(URL(string: "https://openrouter.ai/api/v1/\(path)")!, headers: headers).requireOK().data
+            } catch {
+                failure = error
+                return nil
+            }
+        }
+        let credits = await read("credits")
+        let creditsFailure = failure
+        let keyInfo = await read("key")
+        let keyList = await read("keys")
+        guard credits != nil || keyList != nil else { throw credits == nil ? creditsFailure : failure }
+        return try Self.parse(credits: credits, key: keyInfo, keys: keyList)
     }
 
-    public static func parse(credits: Data, key: Data?) throws -> UsageSnapshot {
-        guard let body = ProviderJSON.object(credits) as? [String: Any], let data = body["data"] as? [String: Any],
-              let total = QwenProvider.number(data["total_credits"]), let used = QwenProvider.number(data["total_usage"])
-        else { throw ProviderError.badResponse }
-        var windows = [UsageWindow(
-            title: L10n.t("Credits", "额度"),
-            usedPercent: ProviderJSON.percent(used: used, total: total),
-            detail: L10n.t("$\(String(format: "%.2f", max(0, total - used))) left of $\(String(format: "%.2f", total))",
-                           "剩余 $\(String(format: "%.2f", max(0, total - used))) / 共 $\(String(format: "%.2f", total))"))]
+    public static func parse(credits: Data?, key: Data?, keys: Data? = nil) throws -> UsageSnapshot {
+        var windows: [UsageWindow] = []
+        var balances: [AccountBalance] = []
+        var represented: [String] = []
+        if let credits {
+            guard let body = ProviderJSON.object(credits) as? [String: Any], let data = body["data"] as? [String: Any],
+                  let total = QwenProvider.number(data["total_credits"]), let used = QwenProvider.number(data["total_usage"])
+            else { throw ProviderError.badResponse }
+            let credit = UsageWindow(
+                title: L10n.t("Credits", "额度"),
+                usedPercent: ProviderJSON.percent(used: used, total: total),
+                detail: L10n.t("$\(String(format: "%.2f", max(0, total - used))) left of $\(String(format: "%.2f", total))",
+                               "剩余 $\(String(format: "%.2f", max(0, total - used))) / 共 $\(String(format: "%.2f", total))"))
+            windows.append(credit)
+            represented.append(credit.id)
+            balances.append(AccountBalance(currency: "USD", total: max(0, total - used), paid: total))
+        }
+        var current: APIKeyUsage?
         if let keyBody = key.flatMap(ProviderJSON.object) as? [String: Any], let info = keyBody["data"] as? [String: Any] {
+            current = keyUsage(info, id: "current")
             if let limit = QwenProvider.number(info["limit"]), limit > 0 {
                 let remaining = QwenProvider.number(info["limit_remaining"]) ?? limit
                 windows.append(UsageWindow(
@@ -466,13 +498,60 @@ public struct OpenRouterProvider: QuotaProvider {
             let daily = QwenProvider.number(info["usage_daily"]), weekly = QwenProvider.number(info["usage_weekly"]), monthly = QwenProvider.number(info["usage_monthly"])
             if daily != nil || weekly != nil || monthly != nil {
                 func money(_ value: Double?) -> String { value.map { "$" + String(format: "%.2f", $0) } ?? "—" }
-                windows.append(UsageWindow(
+                let spent = UsageWindow(
                     title: L10n.t("Spend", "花费"),
                     detail: L10n.t("Today \(money(daily)) · week \(money(weekly)) · month \(money(monthly))",
-                                   "今日 \(money(daily)) · 本周 \(money(weekly)) · 本月 \(money(monthly))")))
+                                   "今日 \(money(daily)) · 本周 \(money(weekly)) · 本月 \(money(monthly))"))
+                windows.append(spent)
+                represented.append(spent.id)
             }
         }
-        return UsageSnapshot(windows: windows)
+
+        // `GET /keys` answers a provisioning key only: every key the account
+        // has, with its spend today, this week and this month (UTC).
+        var listed: [APIKeyUsage]?
+        if let body = keys.flatMap(ProviderJSON.object) as? [String: Any], let entries = body["data"] as? [[String: Any]] {
+            listed = entries.enumerated().map { index, entry in
+                keyUsage(entry, id: ProviderJSON.string(entry["hash"]) ?? "key-\(index)")
+            }
+        }
+        guard !windows.isEmpty || listed != nil else { throw ProviderError.badResponse }
+
+        let shown = listed ?? current.map { [$0] }
+        var spend: [KeyUsagePeriod: [Money]] = [:]
+        for period in KeyUsagePeriod.allCases {
+            let total = (shown ?? []).compactMap { $0.usage[period]?.costs.first?.amount }.reduce(0, +)
+            if total > 0 { spend[period] = [Money(currency: "USD", amount: total)] }
+        }
+        return UsageSnapshot(
+            windows: windows,
+            balance: BalanceSheet(
+                balances: balances,
+                spend: spend,
+                keys: shown,
+                keysNote: listed == nil
+                    ? L10n.t(
+                        "This is the key in Settings. Paste a provisioning key (openrouter.ai → Settings → Provisioning Keys) to see every key.",
+                        "这里只有设置里填的这个 Key。改填管理密钥（openrouter.ai → Settings → Provisioning Keys）可以看到所有 Key。")
+                    : nil,
+                representedWindowIDs: represented))
+    }
+
+    /// One key from `/key` or `/keys`: name or label, and dollars spent per
+    /// period. OpenRouter counts dollars, not requests.
+    static func keyUsage(_ info: [String: Any], id: String) -> APIKeyUsage {
+        var usage: [KeyUsagePeriod: KeyUsageFigures] = [:]
+        for (period, field) in [(KeyUsagePeriod.today, "usage_daily"), (.week, "usage_weekly"), (.month, "usage_monthly")] {
+            if let value = QwenProvider.number(info[field]), value > 0 {
+                usage[period] = KeyUsageFigures(costs: [Money(currency: "USD", amount: value)])
+            }
+        }
+        return APIKeyUsage(
+            id: id,
+            name: ProviderJSON.string(info["name"]) ?? ProviderJSON.string(info["label"]) ?? L10n.t("This key", "当前 Key"),
+            maskedKey: ProviderJSON.string(info["name"]) != nil ? ProviderJSON.string(info["label"]) : nil,
+            isDisabled: (info["disabled"] as? Bool) == true,
+            usage: usage)
     }
 }
 
@@ -527,10 +606,23 @@ public struct MiMoProvider: QuotaProvider {
                 detail: "\(QuotaFormat.compact(Int(used))) / \(QuotaFormat.compact(Int(limit)))",
                 windowSeconds: 2_592_000))
         }
-        windows.append(UsageWindow(
+        let balanceWindow = UsageWindow(
             title: L10n.t("Account balance", "账户余额"),
-            detail: L10n.t("Balance \(currency)\(String(format: "%.2f", amount))", "余额 \(currency)\(String(format: "%.2f", amount))")))
-        return UsageSnapshot(planName: plan, windows: windows)
+            detail: L10n.t("Balance \(currency)\(String(format: "%.2f", amount))", "余额 \(currency)\(String(format: "%.2f", amount))"))
+        windows.append(balanceWindow)
+        // The Token Plan above is a real monthly allowance and keeps its bar;
+        // only the balance becomes a sheet.
+        let gift = QwenProvider.number(data["giftBalance"]) ?? 0
+        return UsageSnapshot(
+            planName: plan,
+            windows: windows,
+            balance: BalanceSheet(
+                balances: [AccountBalance(
+                    currency: currency == "$" ? "USD" : "CNY",
+                    total: amount,
+                    paid: QwenProvider.number(data["cashBalance"]),
+                    granted: gift > 0 ? gift : nil)],
+                representedWindowIDs: [balanceWindow.id]))
     }
 }
 

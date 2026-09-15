@@ -287,9 +287,12 @@ final class StatusItemCoordinator: NSObject {
         return menu
     }
 
-    /// "81% left" or "19% used", as the icon counts; a dash before a reading.
+    /// "81% left" or "19% used", as the icon counts; a prepaid account's
+    /// balance; a dash before a reading.
     private func reading(for id: ProviderID, store: UsageStore) -> String {
-        guard let used = store.headlinePercent(for: id) else { return "—" }
+        guard let used = store.headlinePercent(for: id) else {
+            return store.balanceFigure(for: id).map { L10n.t("\($0) balance", "余额 \($0)") } ?? "—"
+        }
         let figure = QuotaFormat.percent(store.meterMode.shownPercent(fromUsed: used))
         return store.meterMode == .remaining
             ? L10n.t("\(figure) left", "剩余 \(figure)")
