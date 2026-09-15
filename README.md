@@ -50,26 +50,33 @@ English and Simplified Chinese and follows the system language unless you pick o
 <!-- changelog:start -->
 <!-- Generated from CHANGELOG.en.md by Scripts/sync_changelog.py. Do not edit by hand. -->
 
-Latest release **0.5.3** (2026-09-13) · **25** changes in development · [full changelog](CHANGELOG.en.md)
+Latest release **0.5.4** (2026-09-15) · [full changelog](CHANGELOG.en.md)
 
 <details open>
-<summary><b>2026-09-15</b> · Unreleased · 3 added · 2 fixed</summary>
+<summary><b>2026-09-15</b> · 0.5.4 · 8 added · 4 fixed</summary>
 
 **Added**
 
 - Copy as Image now shows the signed-in account on a provider card as mosaic tiles, so the email address stays out of the picture. The tiles are one fixed pattern that says nothing about the account, not even its length. Turn it off under Settings → General → Privacy with "Hide the account in copied images"; the panel itself still shows the address.
 - A provider card's right-click menu has Hide Limits, for a limit you never use, such as Codex's GPT-5.3-Codex-Spark. A hidden limit is gone from the card and from under its arrow; the ring, the notch island, desktop cards and the menu bar stop following it, and it sends no almost-out alerts. Each provider remembers its own, a language switch keeps them, and Show All brings them back; the last limit cannot be hidden. The dock ring's right-click menu has it too. The local `/v1/limits` endpoint still returns every limit. ([#2](https://github.com/gentpan/QuotaBar/issues/2))
 - Codex's Early resets row has an Expires line under it: when each banked reset runs out, soonest first, such as "5d 18h · 18d 23h · 19d 22h", with the rest counted past three. Like the limit rows, a click switches between countdown and clock time, and hovering shows the other. Resets that never expire are not listed. The dock ring's detail shows the line too. ([#3](https://github.com/gentpan/QuotaBar/issues/3))
+- Early resets Codex gives out are read in full. The row shows how many the account has been given in all, and stays once the last one is spent; hovering lists each one's name, such as "Full reset (Weekly + 5 hr)", and when it runs out. A notification says when a new one arrives, with how many are available and when the soonest expires, and another comes once for each one still unspent a day before it runs out. Turn them off under Settings → Alerts → Resets with "Early resets given". The list is read at most once an hour, and again at once when the count changes or one of them expires.
+- Prepaid providers no longer show an empty bar. DeepSeek, Moonshot API, OpenRouter and Xiaomi MiMo cards show each currency's balance in large figures, split into paid and granted when there is a grant and in red when it is too low for API calls. Below it is recent usage for Today, 7 days, 30 days or All: the spend and a chart of bars or a line — hours for today, days for 7 and 30 days, months for all — with the style switched at the top right and remembered, and each bar's figures on hover. Where the provider gives the detail (OpenRouter with a provisioning key, for one), usage by API key or by model sits under the chart, the top three listed and a key opening to its own figures. The dock's hover card shows the same. A Big figure or Gauge desktop card on a prepaid provider becomes a balance card — the balance in large figures, spend today, over 7 and over 30 days, and on the large card the 30-day chart — and the Provider grid and Closest first cards show the balance without a bar. The notch island and the menu bar's right-click menu show the balance instead of a dash. A copied image shows 30 days of spend and the chart, without key names. MiMo's monthly Token Plan keeps its bar.
+- Recent usage with nothing but an API key: DeepSeek's, Moonshot API's and Xiaomi MiMo's APIs answer with the balance only, so QuotaBar keeps each balance it reads and works out the spend today, over 7 and 30 days and in all from how it fell, charted like the rest; the card says "about" and since when it has been keeping count. A rise is taken as a top-up and not counted.
+- Low balance alerts: Settings → Alerts → Spend has "Balance below", an amount in the currency it is set in (empty for none). A DeepSeek, Moonshot API, OpenRouter or Xiaomi MiMo account that drops below it, or can no longer pay for API calls, sends one notification; balances in several currencies are added up at the day's rates, and after a top-up the next dip notifies again.
+- OpenRouter with a provisioning key lists every key on the account with its spend; with an ordinary API key it shows the credits and that key's own spend. OpenRouter counts by its own calendar day, week and month, so its 7 and 30 days are this week and this month.
 
 **Fixed**
 
+- Alibaba Coding Plan kept saying the session had expired when it had not. The Bailian console now writes its sec_token differently, so QuotaBar never found the token its request needs; an API key saved in place of the Cookie header read the same way, and so did any reply with "login" in it. The token is found in the new page, the request uses the console's current API name, an account without a Coding Plan is told so (Alibaba Cloud now sells Token Plan, which can't be read yet), and an API key in the field is called out with Sign in in a browser… or the Cookie header as the fix — for Qwen Cloud, Xiaomi MiMo and Qoder too. After trying the China and international sites, the reason given is the one that says most.
 - DeepSeek said "Provider response could not be parsed" on every API key and never showed a balance. The account balance now shows, split into paid and granted when there is a grant; an account holding both CNY and USD gets a row for each, and a balance too low for API calls says so. ([#1](https://github.com/gentpan/QuotaBar/issues/1))
 - Grok showed Weekly credits and Grok Build as two identical bars. When the week's credits all went to one product, that product's bar had the same figure and reset as the total; it is no longer shown twice. Credits spread over several products are still listed one by one. ([#2](https://github.com/gentpan/QuotaBar/issues/2))
+- ⌘V did nothing in Settings' text fields, so pasting an API key looked like the field refused input. ⌘V, ⌘C, ⌘X, ⌘A and ⌘Z now work in Settings and the app's other windows, and ⌘W closes the window.
 
 </details>
 
 <details>
-<summary><b>2026-09-14</b> · Unreleased · 2 added</summary>
+<summary><b>2026-09-14</b> · 0.5.4 · 2 added</summary>
 
 **Added**
 
@@ -79,7 +86,7 @@ Latest release **0.5.3** (2026-09-13) · **25** changes in development · [full 
 </details>
 
 <details>
-<summary><b>2026-09-13</b> · Unreleased · 9 added · 6 style · 3 fixed</summary>
+<summary><b>2026-09-13</b> · 0.5.4 · 9 added · 6 style · 3 fixed</summary>
 
 **Added**
 
