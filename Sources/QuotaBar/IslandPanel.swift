@@ -11,11 +11,18 @@ enum IslandPanelLayout {
     static let columnWidth: CGFloat = 300
     /// Between the columns on a screen with no notch to keep them apart.
     static let columnGap: CGFloat = 24
-    static let rowHeight: CGFloat = 128
+    /// The title row and its 8pt gap, then a tile.
+    static let rowHeight: CGFloat = 102
     static let rowGap: CGFloat = 12
     static let bodyPadding: CGFloat = 12
     static let footerHeight: CGFloat = 44
-    static let tileHeight: CGFloat = 96
+    /// Fits the tallest tile, the big-figure style's and the usage page's
+    /// (73pt drawn); the stepped bars draw 64. At 96 every style had a band of
+    /// black under it.
+    static let tileHeight: CGFloat = 76
+    /// The overview page's spend bars and share button, which a single row
+    /// of tiles is too short for.
+    static let overviewHeight: CGFloat = 124
 
     static func headerHeight(notch: CGFloat) -> CGFloat { max(32, notch) }
 
@@ -23,19 +30,19 @@ enum IslandPanelLayout {
         columnWidth * 2 + (notchWidth ?? columnGap) + horizontalInset * 2
     }
 
-    static func height(rows: Int, notch: CGFloat) -> CGFloat {
+    static func height(rows: Int, notch: CGFloat, page: IslandPanel.Page = .quota) -> CGFloat {
         let rows = max(1, rows)
-        return headerHeight(notch: notch)
-            + bodyPadding * 2 + CGFloat(rows) * rowHeight + CGFloat(rows - 1) * rowGap
-            + footerHeight
+        var body = CGFloat(rows) * rowHeight + CGFloat(rows - 1) * rowGap
+        if page == .overview { body = max(body, overviewHeight) }
+        return headerHeight(notch: notch) + bodyPadding * 2 + body + footerHeight
     }
 }
 
 /// Two columns either side of the notch, one provider per row: its name and
 /// plan, then a tile per horizon — label, the figure in the alert colour, a
 /// stepped bar in the brand colour, the reset under it. The header carries
-/// the wordmark and the sync state; the footer the settings gear, the
-/// bar-style chip and the same sync state, as in the reference.
+/// the wordmark; the footer the settings gear, the chart and meter chips, the
+/// page dots, and the sync state with a refresh button.
 struct IslandPanel: View {
     @ObservedObject var store: UsageStore
     let notch: IslandCoordinator.NotchMetrics?
@@ -109,9 +116,7 @@ struct IslandPanel: View {
                 .font(Design.wordmark(size: 12, weight: .bold))
                 .foregroundStyle(.white.opacity(0.7))
                 .frame(width: IslandPanelLayout.columnWidth, alignment: .leading)
-            Color.clear.frame(width: notch?.notchWidth ?? IslandPanelLayout.columnGap)
-            IslandSyncStatus(store: store)
-                .frame(width: IslandPanelLayout.columnWidth, alignment: .trailing)
+            Spacer(minLength: 0)
         }
     }
 
@@ -142,8 +147,8 @@ struct IslandPanel: View {
                 colors: [.clear, .white.opacity(0.06), .white.opacity(0.06), .clear],
                 startPoint: .leading, endPoint: .trailing)
                 .frame(height: 1)
-            // The sync status lives in the header only; the dots stay centred
-            // with an empty side balancing the switches.
+            // Both sides take equal room, so the dots stay centred whatever
+            // the switches and the sync note measure.
             HStack(spacing: 10) {
                 HStack(spacing: 10) {
                     CalloutButton(symbol: "gearshape", help: L10n.t("Settings", "设置")) {
@@ -163,7 +168,11 @@ struct IslandPanel: View {
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 pageDots
-                Color.clear.frame(maxWidth: .infinity)
+                HStack(spacing: 6) {
+                    IslandSyncStatus(store: store)
+                    refreshButton
+                }
+                .frame(maxWidth: .infinity, alignment: .trailing)
             }
             .frame(maxHeight: .infinity)
         }
@@ -171,6 +180,22 @@ struct IslandPanel: View {
 }
 
 private extension IslandPanel {
+    /// Every provider, the status pages and the logs, as the menu panel's
+    /// button does; a spinner in its place until all of it is back.
+    @ViewBuilder
+    var refreshButton: some View {
+        if store.isForceRefreshing {
+            ProgressView()
+                .controlSize(.mini)
+                .frame(width: 22, height: 22)
+                .help(L10n.t("Refreshing everything…", "正在全部刷新…"))
+        } else {
+            CalloutButton(symbol: "arrow.clockwise", help: L10n.t("Refresh now", "立即刷新")) {
+                store.forceRefreshAll()
+            }
+        }
+    }
+
     var pageDots: some View {
         HStack(spacing: 5) {
             ForEach(Page.allCases, id: \.self) { option in
@@ -225,6 +250,7 @@ private struct IslandSyncStatus: View {
     }
 
     private func label(failing: Int) -> String {
+        if store.isForceRefreshing { return L10n.t("Refreshing…", "正在刷新…") }
         if failing > 0 {
             return L10n.t("\(failing) not updating", "\(failing) 个未能更新")
         }

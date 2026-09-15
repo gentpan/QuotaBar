@@ -19,6 +19,21 @@ final class IslandCoordinator {
     /// shape it lets clicks through.
     static let glowMargin: CGFloat = 22
 
+    /// Open, the panel draws no glow, so the window is the panel and nothing
+    /// more: a margin there was an empty band round it, and a window
+    /// screenshot came out with it.
+    static func margin(expanded: Bool) -> CGFloat {
+        expanded ? 0 : glowMargin
+    }
+
+    /// The window's frame animation, which the view's margin follows so the
+    /// silhouette tracks the frame instead of jumping at the start.
+    static func frameCurve(expanded: Bool) -> Animation {
+        expanded
+            ? .timingCurve(0.2, 0.9, 0.3, 1.04, duration: 0.34)
+            : .timingCurve(0.5, 0, 0.2, 1, duration: 0.3)
+    }
+
     /// What the view observes that the coordinator decides: a peek request
     /// when a window crosses its warning, whether the island can be seen.
     final class Bridge: ObservableObject {
@@ -134,7 +149,7 @@ final class IslandCoordinator {
     func silhouetteContains(screenPoint point: NSPoint) -> Bool {
         guard let panel else { return false }
         let frame = panel.frame
-        let margin = Self.glowMargin
+        let margin = Self.margin(expanded: expanded)
         let shape = NSRect(x: frame.minX + margin, y: frame.minY + margin, width: frame.width - margin * 2, height: frame.height - margin)
         return shape.contains(point)
     }
@@ -161,10 +176,11 @@ final class IslandCoordinator {
         }
     }
 
-    /// Re-places the panel after a setting changed the strip's width.
-    func relayout() {
+    /// Re-places the panel after a setting changed the strip's width, or the
+    /// open panel turned to a page of another height.
+    func relayout(animated: Bool = false) {
         guard panel != nil else { return }
-        layout(expanded: expanded, animated: false)
+        layout(expanded: expanded, animated: animated)
     }
 
     /// Collapsing is delayed so a quick pointer sweep across the strip does
@@ -197,8 +213,8 @@ final class IslandCoordinator {
     /// thread for the whole animation.
     func layout(expanded: Bool, animated: Bool) {
         guard let panel, let screen = Self.hostScreen, let store else { return }
-        let shape = !expanded && bannerShown ? Self.bannerSize(store: store) : Self.size(expanded: expanded, store: store)
-        let margin = Self.glowMargin
+        let shape = !expanded && bannerShown ? Self.bannerSize(store: store) : Self.size(expanded: expanded, store: store, page: bridge.page)
+        let margin = Self.margin(expanded: expanded)
         let size = NSSize(width: shape.width + margin * 2, height: shape.height + margin)
         let frame = NSRect(
             x: screen.frame.midX - size.width / 2,
@@ -234,7 +250,7 @@ final class IslandCoordinator {
             ?? NSScreen.main
     }
 
-    static func size(expanded: Bool, store: UsageStore) -> NSSize {
+    static func size(expanded: Bool, store: UsageStore, page: IslandPanel.Page = .quota) -> NSSize {
         let slots = store.islandSlots
         let notch = notchMetrics()
         if expanded {
@@ -242,7 +258,7 @@ final class IslandCoordinator {
             let rows = min(slots, max(1, store.islandProviders.count))
             return NSSize(
                 width: IslandPanelLayout.width(notchWidth: notch?.notchWidth),
-                height: IslandPanelLayout.height(rows: rows, notch: notch?.height ?? 0))
+                height: IslandPanelLayout.height(rows: rows, notch: notch?.height ?? 0, page: page))
         }
         if let notch {
             return NSSize(width: notch.totalWidth(slots: slots), height: notch.height)
@@ -353,8 +369,14 @@ struct IslandView: View {
             peekTask?.cancel()
             setExpanded(inside)
         }
-        .padding(.horizontal, IslandCoordinator.glowMargin)
-        .padding(.bottom, IslandCoordinator.glowMargin)
+        .animation(Motion.animation(IslandCoordinator.frameCurve(expanded: expanded))) { content in
+            content
+                .padding(.horizontal, IslandCoordinator.margin(expanded: expanded))
+                .padding(.bottom, IslandCoordinator.margin(expanded: expanded))
+        }
+        .onChange(of: bridge.page) { _, _ in
+            if expanded { coordinator.relayout(animated: true) }
+        }
         .onChange(of: bridge.peek) { _, _ in
             // A window just crossed its warning: open for four seconds, then
             // close again unless the pointer has arrived meanwhile.

@@ -234,20 +234,21 @@ enum Snapshot {
         }
 
         let bridge = IslandCoordinator.Bridge()
+        // Open, the window is the panel with no margin round it. Rows follow
+        // the owner's slots setting, which is read here, never written.
+        let rows = min(store.islandSlots, max(1, store.islandProviders.count))
         for page in IslandPanel.Page.allCases {
             for chart in page == .quota ? IslandChartStyle.allCases : [IslandChartStyle.stepped] {
                 store.experience.islandChart = chart
                 bridge.page = page
                 let size = NSSize(
                     width: IslandPanelLayout.width(notchWidth: notch.notchWidth),
-                    height: IslandPanelLayout.height(rows: 2, notch: notch.height))
+                    height: IslandPanelLayout.height(rows: rows, notch: notch.height, page: page))
                 let panel = ZStack(alignment: .top) {
                     shape.fill(Color.black)
                     IslandPanel(store: store, notch: notch, bridge: bridge)
                 }
                 .frame(width: size.width, height: size.height)
-                .padding(.horizontal, 22)
-                .padding(.bottom, 22)
                 .environment(\.colorScheme, .dark)
                 render(panel, to: url, name: "island-\(page)-\(chart.rawValue)", backing: Color(hex: "D8D8D8"))
             }

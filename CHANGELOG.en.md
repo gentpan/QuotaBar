@@ -13,8 +13,9 @@ Server moves, the website, and build or release scripts don't change the app its
 
 #### Style
 
-- The open island no longer draws a halo, an orbiting light or a drop shadow round the panel, just the black panel itself; the folded island keeps its glow.
-- "Synced N minutes ago" showed twice in the open island, at the top and again at the bottom; only the top one is left, and the page dots stay centred at the bottom.
+- The open island no longer draws a halo, an orbiting light or a drop shadow round the panel, and its window is no bigger than the panel, so a window screenshot has no blank band at the sides and bottom; the folded island keeps its glow.
+- "Synced N minutes ago" showed twice in the open island, at the top and again at the bottom; it is now bottom right only, with a new Refresh now button beside it that turns into a spinner and "Refreshing…" while it works. The page dots stay centred.
+- The open island has less black under its bars, about 26pt shorter; on the overview page it grows a little to fit the spend bars and the share button.
 
 ## 0.5.5 · 2026-09-15
 
