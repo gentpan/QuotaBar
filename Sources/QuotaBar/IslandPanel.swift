@@ -142,25 +142,28 @@ struct IslandPanel: View {
                 colors: [.clear, .white.opacity(0.06), .white.opacity(0.06), .clear],
                 startPoint: .leading, endPoint: .trailing)
                 .frame(height: 1)
+            // The sync status lives in the header only; the dots stay centred
+            // with an empty side balancing the switches.
             HStack(spacing: 10) {
-                CalloutButton(symbol: "gearshape", help: L10n.t("Settings", "设置")) {
-                    SettingsWindow.open()
-                }
-                // Quick switches, each a chip that names its current state:
-                // chart style (⌘-click the panel cycles it too), used or
-                // remaining; then the page dots.
-                chip(store.experience.islandChart.displayName, help: L10n.t("Chart style (⌘-click the panel)", "图表样式（也可在面板上 ⌘ 点击切换）")) {
-                    withAnimation(Motion.animation(Motion.chartSwap)) {
-                        store.updateExperience { $0.islandChart = $0.islandChart.next }
+                HStack(spacing: 10) {
+                    CalloutButton(symbol: "gearshape", help: L10n.t("Settings", "设置")) {
+                        SettingsWindow.open()
+                    }
+                    // Quick switches, each a chip that names its current state:
+                    // chart style (⌘-click the panel cycles it too), used or
+                    // remaining; then the page dots.
+                    chip(store.experience.islandChart.displayName, help: L10n.t("Chart style (⌘-click the panel)", "图表样式（也可在面板上 ⌘ 点击切换）")) {
+                        withAnimation(Motion.animation(Motion.chartSwap)) {
+                            store.updateExperience { $0.islandChart = $0.islandChart.next }
+                        }
+                    }
+                    chip(store.meterMode.displayName, help: L10n.t("Show used or remaining", "显示已用还是剩余")) {
+                        store.setMeterMode(store.meterMode == .used ? .remaining : .used)
                     }
                 }
-                chip(store.meterMode.displayName, help: L10n.t("Show used or remaining", "显示已用还是剩余")) {
-                    store.setMeterMode(store.meterMode == .used ? .remaining : .used)
-                }
-                Spacer(minLength: 0)
+                .frame(maxWidth: .infinity, alignment: .leading)
                 pageDots
-                Spacer(minLength: 0)
-                IslandSyncStatus(store: store)
+                Color.clear.frame(maxWidth: .infinity)
             }
             .frame(maxHeight: .infinity)
         }

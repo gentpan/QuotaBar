@@ -89,6 +89,15 @@ enum Palette {
     /// codex-island's figure colours.
     static let figureAmber = Color(hex: "E8A85A")
     static let figureRed = Color(hex: "E65F5F")
+
+    /// Amber for a warning, red past it; cobalt when there is nothing to say.
+    static func alert(_ level: AlertLevel) -> Color {
+        switch level {
+        case .none: cobalt
+        case .warning: amber
+        case .critical: red
+        }
+    }
 }
 
 // MARK: - Quota row

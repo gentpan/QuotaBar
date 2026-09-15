@@ -546,6 +546,14 @@ struct EdgeDockView: View {
                 // window: from the handle's 18x92 it widens out of the edge,
                 // then stretches to the strip's height. It stays against the
                 // edge the whole way — nothing about the window moves.
+                // Folded to the handle with a quota nearly out, its outline
+                // flashes, as the island's does.
+                if !isWide, lowQuota != .none {
+                    LowQuotaFlash(shape: Self.dockShape(onLeft: onLeft), color: Palette.alert(lowQuota))
+                        .frame(width: EdgeDockCoordinator.handleWidth, height: EdgeDockCoordinator.handleHeight)
+                        .offset(y: geometry.handleOffset)
+                        .transition(.opacity)
+                }
                 Self.dockShape(onLeft: onLeft)
                     .fill(Color.black)
                     .frame(
@@ -669,6 +677,11 @@ struct EdgeDockView: View {
     private var handleFraction: CGFloat {
         guard let used = store.headlinePercent else { return 0 }
         return CGFloat(store.meterMode.shownPercent(fromUsed: used) / 100)
+    }
+
+    /// The handle carries the worst reading overall, so it flashes on that.
+    private var lowQuota: AlertLevel {
+        LowQuota.level(used: store.headlinePercent)
     }
 
     private var handleTint: Color {

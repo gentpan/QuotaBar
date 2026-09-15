@@ -161,9 +161,12 @@ enum Snapshot {
         store.experience.islandGlow = true
         let notch = IslandCoordinator.NotchMetrics(notchWidth: 200, height: 38)
         let shape = UnevenRoundedRectangle(topLeadingRadius: 0, bottomLeadingRadius: 14, bottomTrailingRadius: 14, topTrailingRadius: 0, style: .continuous)
-        for (name, colour) in [("rest", Palette.cobalt), ("alert", Palette.red)] {
+        for (name, colour, low) in [("rest", Palette.cobalt, AlertLevel.none), ("alert", Palette.red, .none), ("low-warning", Palette.amber, .warning), ("low-critical", Palette.red, .critical)] {
             let strip = ZStack(alignment: .top) {
-                IslandGlow(shape: shape, color: colour, ambient: true, sweeping: false, expanded: false)
+                IslandGlow(shape: shape, color: colour, ambient: true, sweeping: false)
+                if low != .none {
+                    LowQuotaFlash(shape: shape, color: Palette.alert(low), animating: false)
+                }
                 shape.fill(Color.black)
                 NotchStrip(store: store, metrics: notch, slots: 2)
             }
@@ -184,7 +187,7 @@ enum Snapshot {
         let banner = ResetBanner(provider: .claude, name: L10n.t("5-hour", "5 小时"), others: 1, usedBefore: 96, usedNow: 0)
         let bannerWidth = max(notch.totalWidth(slots: 2), 400)
         let resetStrip = ZStack(alignment: .top) {
-            IslandGlow(shape: shape, color: banner.provider.accent, ambient: true, sweeping: false, expanded: false)
+            IslandGlow(shape: shape, color: banner.provider.accent, ambient: true, sweeping: false)
             shape.fill(Color.black)
             VStack(spacing: 0) {
                 NotchStrip(store: store, metrics: notch, slots: 2)
@@ -217,6 +220,18 @@ enum Snapshot {
         .frame(width: 74, height: 74)
         .background(Color.black)
         render(sweep, to: url, name: "dock-reset-ring", backing: .black)
+        for (name, used) in [("low-warning", 88.0), ("low-critical", 97.0)] {
+            let dockShape = EdgeDockView.dockShape(onLeft: false)
+            let handle = ZStack {
+                LowQuotaFlash(shape: dockShape, color: Palette.alert(LowQuota.level(used: used)), animating: false)
+                dockShape.fill(Color.black)
+                DockHandle(fraction: CGFloat(store.meterMode.shownPercent(fromUsed: used) / 100), tint: Color(hex: UsageRamp.hex(used: used)), onLeft: false)
+            }
+            .frame(width: EdgeDockCoordinator.handleWidth, height: EdgeDockCoordinator.handleHeight)
+            .padding(22)
+            .environment(\.colorScheme, .dark)
+            render(handle, to: url, name: "dock-handle-\(name)", backing: Color(hex: "D8D8D8"))
+        }
 
         let bridge = IslandCoordinator.Bridge()
         for page in IslandPanel.Page.allCases {
@@ -227,7 +242,6 @@ enum Snapshot {
                     width: IslandPanelLayout.width(notchWidth: notch.notchWidth),
                     height: IslandPanelLayout.height(rows: 2, notch: notch.height))
                 let panel = ZStack(alignment: .top) {
-                    IslandGlow(shape: shape, color: Palette.cobalt, ambient: true, sweeping: false, expanded: true)
                     shape.fill(Color.black)
                     IslandPanel(store: store, notch: notch, bridge: bridge)
                 }

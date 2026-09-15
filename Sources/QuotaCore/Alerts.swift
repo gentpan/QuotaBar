@@ -58,3 +58,31 @@ public struct AlertSettings: Codable, Equatable, Sendable {
         return .none
     }
 }
+
+// MARK: - Low quota
+
+/// A quota down to its last 15%: the island and the dock handle flash round
+/// their outline until it refills, codex-island's cue. A fixed line rather
+/// than AlertSettings — it answers "nearly out", the same on every machine,
+/// and switching notifications off should not switch it off.
+public enum LowQuota {
+    /// Remaining, in whole percent, at or under which a quota counts as low.
+    public static let remainingLine = 15
+    /// And past which the flash turns from amber to red.
+    public static let emptyingLine = 5
+
+    /// Judged on the figure as shown, rounded, so "15% left" on screen always
+    /// flashes and "16%" never does.
+    public static func level(used: Double?) -> AlertLevel {
+        guard let used else { return .none }
+        let remaining = Int((100 - min(max(used, 0), 100)).rounded())
+        if remaining <= emptyingLine { return .critical }
+        if remaining <= remainingLine { return .warning }
+        return .none
+    }
+
+    /// The most urgent of several readings.
+    public static func level(used readings: [Double?]) -> AlertLevel {
+        readings.map { level(used: $0) }.max() ?? .none
+    }
+}

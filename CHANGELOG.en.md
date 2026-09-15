@@ -3,6 +3,19 @@
 New features, style changes and fixes in the QuotaBar app, newest first by version and day.
 Server moves, the website, and build or release scripts don't change the app itself and aren't recorded here.
 
+## Unreleased
+
+### 2026-09-15
+
+#### Added
+
+- With the island or the edge dock folded, a quota down to its last 15% makes the outline flash, brightening and dimming, as codex-island does: amber within 15%, red within 5%, and it stops once the quota refills. It goes by the whole percentage shown on screen and ignores the alert thresholds and the notification switch; with Reduce Animations on, the outline stays lit instead of flashing.
+
+#### Style
+
+- The open island no longer draws a halo, an orbiting light or a drop shadow round the panel, just the black panel itself; the folded island keeps its glow.
+- "Synced N minutes ago" showed twice in the open island, at the top and again at the bottom; only the top one is left, and the page dots stay centred at the bottom.
+
 ## 0.5.5 · 2026-09-15
 
 ### 2026-09-15

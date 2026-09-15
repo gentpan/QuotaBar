@@ -311,13 +311,18 @@ struct IslandView: View {
 
     var body: some View {
         ZStack(alignment: .top) {
+            // Round the collapsed island only: open, the panel is the whole
+            // story and a ring of light round it was just noise.
             if store.experience.islandGlow {
                 IslandGlow(
                     shape: silhouette,
                     color: glowColor,
-                    ambient: !store.experience.lowPowerGlow || glowEvent,
-                    sweeping: !bridge.occluded && (!store.experience.lowPowerGlow || glowEvent) && !Motion.reduced,
-                    expanded: expanded)
+                    ambient: !expanded && (!store.experience.lowPowerGlow || glowEvent),
+                    sweeping: !expanded && !bridge.occluded && (!store.experience.lowPowerGlow || glowEvent) && !Motion.reduced)
+            }
+            if lowQuota != .none, !expanded {
+                LowQuotaFlash(shape: silhouette, color: Palette.alert(lowQuota), animating: !bridge.occluded)
+                    .transition(.opacity)
             }
             silhouette.fill(Color.black)
             if expanded {
@@ -378,7 +383,12 @@ struct IslandView: View {
 
     /// Under low power the glow shows only while something is happening.
     private var glowEvent: Bool {
-        hovering || bridge.banner != nil || store.enabled.contains { store.isLoading($0) } || store.isComputingCost || severity != .none
+        hovering || bridge.banner != nil || store.enabled.contains { store.isLoading($0) } || store.isComputingCost || severity != .none || lowQuota != .none
+    }
+
+    /// A quota on the island down to its last 15%.
+    private var lowQuota: AlertLevel {
+        LowQuota.level(used: store.islandProviders.map { store.headlinePercent(for: $0) })
     }
 
     private var severity: AlertLevel {
@@ -391,9 +401,8 @@ struct IslandView: View {
     private var glowColor: Color {
         if let banner = bridge.banner { return banner.provider.accent }
         switch severity {
-        case .none: return Palette.cobalt
-        case .warning: return Palette.amber
-        case .critical: return Palette.red
+        case .none: return lowQuota == .none ? Palette.cobalt : Palette.alert(lowQuota)
+        case .warning, .critical: return Palette.alert(max(severity, lowQuota))
         }
     }
 
@@ -706,7 +715,6 @@ struct IslandGlow: View {
     let ambient: Bool
     /// Orbiting light on.
     let sweeping: Bool
-    let expanded: Bool
 
     var body: some View {
         ZStack {
@@ -728,14 +736,40 @@ struct IslandGlow: View {
                             lineWidth: 4)
                         .blur(radius: 3)
                 }
+                .transition(.opacity)
             }
             shape
                 .fill(Color.black)
                 .shadow(color: color.opacity(ambient ? 0.35 : 0), radius: 14)
-                .shadow(color: expanded ? .black.opacity(0.5) : .clear, radius: 20, y: 10)
         }
         .animation(.easeInOut(duration: 0.45), value: color)
         .animation(.easeInOut(duration: 0.25), value: ambient)
+        .animation(.easeInOut(duration: 0.25), value: sweeping)
+        .allowsHitTesting(false)
+    }
+}
+
+/// A quota nearly out: the outline brightens and dims about once a second,
+/// amber for the last 15%, red for the last 5%. Drawn under the black like
+/// the glow, so only the outer half of the line and its bloom show. Held
+/// steady under Reduce Animations and when nobody can see it.
+struct LowQuotaFlash<S: Shape>: View {
+    let shape: S
+    let color: Color
+    var animating = true
+
+    /// Seconds from bright to dim and back.
+    static var period: Double { 1.2 }
+
+    var body: some View {
+        let live = animating && !Motion.reduced
+        TimelineView(.animation(minimumInterval: 1 / 30, paused: !live)) { context in
+            let wave = live ? (1 - cos(context.date.timeIntervalSinceReferenceDate * 2 * .pi / Self.period)) / 2 : 1
+            shape
+                .stroke(color, lineWidth: 4)
+                .shadow(color: color.opacity(0.9), radius: 3 + 7 * wave)
+                .opacity(0.25 + 0.75 * wave)
+        }
         .allowsHitTesting(false)
     }
 }
