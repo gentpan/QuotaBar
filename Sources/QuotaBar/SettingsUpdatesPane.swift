@@ -32,15 +32,17 @@ struct UpdatesPane: View {
                     options: UpdatePolicy.allCases.map { (value: $0, label: $0.displayName) },
                     selection: store.updatePolicy,
                     onSelect: { store.setUpdatePolicy($0) })
-                .frame(maxWidth: 320)
                 .disabled(store.updateIsManagedByHomebrew)
                 .opacity(store.updateIsManagedByHomebrew ? 0.45 : 1)
             }
 
             SettingRow(L10n.t("Check", "检查")) {
                 HStack(spacing: Design.space3) {
+                    // A routine check, drawn like Refresh now in General; the
+                    // filled style is kept for the step that changes
+                    // something — installing, saving, signing in.
                     Button(L10n.t("Check now", "立即检查")) { store.checkForUpdate(manual: true) }
-                        .glassAction(prominent: true)
+                        .glassAction()
                         .disabled(checking)
                     stage
                     Spacer(minLength: 0)

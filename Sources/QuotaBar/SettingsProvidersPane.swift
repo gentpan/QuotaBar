@@ -57,7 +57,6 @@ struct ProvidersPane: View {
                     options: Filter.allCases.map { (value: $0, label: $0.label) },
                     selection: filter,
                     onSelect: { filter = $0 })
-                .frame(width: 300)
                 Spacer(minLength: Design.space3)
                 Text(summary)
                     .font(.system(size: 11))

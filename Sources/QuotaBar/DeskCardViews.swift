@@ -682,7 +682,10 @@ private struct DeskRanking: View {
         DeskFrame(size: card.size) {
             DeskHeader(title: card.size == .small ? L10n.t("Running out", "快用完") : L10n.t("Closest to the limit", "快用完的排前面"),
                        symbol: "flame.fill", pill: (L10n.t("Live", "实时"), Desk.green), compact: card.size == .small)
-            Spacer(minLength: card.size == .small ? 8 : 12)
+            // The list starts under the title, not centred in the card: with
+            // fewer providers than rows a centred list left a band of empty
+            // card over it.
+            Color.clear.frame(height: card.size == .small ? 8 : 14)
             VStack(spacing: card.size == .small ? 9 : 13) {
                 ForEach(Array(ranked.prefix(limit).enumerated()), id: \.element) { index, id in
                     row(index: index, id: id, compact: card.size == .small)

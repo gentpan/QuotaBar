@@ -14,7 +14,6 @@ struct GeneralPane: View {
                     options: L10n.Language.allCases.map { (value: $0, label: $0.displayName) },
                     selection: store.language,
                     onSelect: { store.setLanguage($0) })
-                .frame(maxWidth: 340)
             }
         }
 
@@ -29,7 +28,6 @@ struct GeneralPane: View {
                         },
                         selection: store.refreshMinutes,
                         onSelect: { store.setRefreshMinutes($0) })
-                    .frame(width: 220)
                     Button(L10n.t("Refresh now", "立即刷新")) { store.refreshAll() }
                         .glassAction()
                     Spacer(minLength: 0)
@@ -52,7 +50,6 @@ struct GeneralPane: View {
                     options: TokenCounting.allCases.map { (value: $0, label: $0.displayName) },
                     selection: store.experience.tokenCounting,
                     onSelect: { value in store.updateExperience { $0.tokenCounting = value } })
-                .frame(maxWidth: 300)
             }
         }
 

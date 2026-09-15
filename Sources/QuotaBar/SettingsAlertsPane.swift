@@ -38,7 +38,6 @@ struct AlertsPane: View {
                         settings.critical = max(settings.critical, value)
                         store.setAlertSettings(settings)
                     })
-                .frame(maxWidth: 300)
                 .disabled(!enabled)
                 .opacity(enabled ? 1 : 0.45)
             }
@@ -49,12 +48,12 @@ struct AlertsPane: View {
                         .filter { $0 >= store.alertSettings.warning }
                         .map { (value: $0, label: "\($0)%") },
                     selection: store.alertSettings.critical,
+                    slots: 5,
                     onSelect: { value in
                         var settings = store.alertSettings
                         settings.critical = value
                         store.setAlertSettings(settings)
                     })
-                .frame(maxWidth: 340)
                 .disabled(!enabled)
                 .opacity(enabled ? 1 : 0.45)
             }
@@ -90,7 +89,6 @@ struct AlertsPane: View {
                     options: ResetNotifyMode.allCases.map { (value: $0, label: $0.displayName) },
                     selection: store.experience.resetNotify,
                     onSelect: { mode in store.updateExperience { $0.resetNotify = mode } })
-                .frame(maxWidth: 300)
             }
             SettingToggle(
                 L10n.t("Early resets given", "赠送的限额重置"),

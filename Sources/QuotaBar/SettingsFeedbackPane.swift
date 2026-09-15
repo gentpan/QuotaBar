@@ -45,7 +45,6 @@ struct FeedbackPane: View {
                     options: FeedbackKind.allCases.map { (value: $0, label: $0.displayName) },
                     selection: kind,
                     onSelect: { kind = $0 })
-                .frame(maxWidth: 300)
             }
             SettingRow(L10n.t("Message", "内容")) {
                 TextEditor(text: $message)

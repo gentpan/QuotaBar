@@ -23,6 +23,17 @@ enum Design {
     // Settings window metrics. A form only reads as a form when every control
     // in it is the same height and starts at the same x.
     static let fieldHeight: CGFloat = 30
+    /// A segmented switch in a settings row: 100pt an option, so a card's
+    /// switches line up by how many choices they hold rather than by
+    /// whatever width each was once given. An option whose label needs more
+    /// — "Download in background" — widens every option to fit it; the row
+    /// never takes more than 450.
+    static func segmentWidth(labels: [String], slots: Int? = nil) -> CGFloat {
+        let font = NSFont.systemFont(ofSize: 12, weight: .semibold)
+        let widest = labels.map { ($0 as NSString).size(withAttributes: [.font: font]).width }.max() ?? 0
+        let option = max(100, (widest + 24).rounded(.up))
+        return min(CGFloat(max(slots ?? labels.count, 2)) * option, 450)
+    }
     /// The gap between a control's edge and what sits inside it — the
     /// selection block in a segmented control. Inner corners are the outer
     /// radius less this, so the two curves stay concentric.

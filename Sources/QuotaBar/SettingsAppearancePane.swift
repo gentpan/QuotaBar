@@ -19,7 +19,6 @@ struct AppearancePane: View {
                     options: MenuBarIconMode.allCases.map { (value: $0, label: $0.displayName) },
                     selection: store.menuBarIconMode,
                     onSelect: { store.setMenuBarIconMode($0) })
-                .frame(maxWidth: 420)
             }
 
             switch store.menuBarIconMode {
@@ -37,7 +36,6 @@ struct AppearancePane: View {
                     options: MeterMode.allCases.map { (value: $0, label: $0.displayName) },
                     selection: store.meterMode,
                     onSelect: { store.setMeterMode($0) })
-                .frame(maxWidth: 260)
             }
 
             SettingRow(L10n.t("Bars", "进度条")) {
@@ -45,7 +43,6 @@ struct AppearancePane: View {
                     options: MeterStyle.allCases.map { (value: $0, label: $0.displayName) },
                     selection: store.meterStyle,
                     onSelect: { store.setMeterStyle($0) })
-                .frame(maxWidth: 260)
             }
         }
 
@@ -55,21 +52,18 @@ struct AppearancePane: View {
                     options: UrgencyStyle.allCases.map { (value: $0, label: $0.displayName) },
                     selection: store.experience.urgencyStyle,
                     onSelect: { value in store.updateExperience { $0.urgencyStyle = value } })
-                .frame(maxWidth: 360)
             }
             SettingRow(L10n.t("Reset times", "重置时间"), caption: L10n.t("Click any reset label to flip it too.", "点击任意重置时间也能切换。")) {
                 GlassSegmented(
                     options: ResetTimeFormat.allCases.map { (value: $0, label: $0.displayName) },
                     selection: store.experience.resetTimeFormat,
                     onSelect: { value in store.updateExperience { $0.resetTimeFormat = value } })
-                .frame(maxWidth: 240)
             }
             SettingRow(L10n.t("Clock", "时钟")) {
                 GlassSegmented(
                     options: ClockStyle.allCases.map { (value: $0, label: $0.displayName) },
                     selection: store.experience.clockStyle,
                     onSelect: { value in store.updateExperience { $0.clockStyle = value } })
-                .frame(maxWidth: 300)
             }
             SettingToggle(
                 L10n.t("Always show pacing", "始终显示节奏"), caption: L10n.t("The even-pace tick and a projection on every bar, not only close ones.", "每条进度条都显示匀速刻度和重置时的预计，而不只是余量紧张的。"),
@@ -94,7 +88,6 @@ struct AppearancePane: View {
                     options: PanelDensity.allCases.map { (value: $0, label: $0.displayName) },
                     selection: store.experience.panelDensity,
                     onSelect: { value in store.updateExperience { $0.panelDensity = value } })
-                .frame(maxWidth: 220)
             }
             SettingToggle(
                 L10n.t("Translucent", "面板半透明"),

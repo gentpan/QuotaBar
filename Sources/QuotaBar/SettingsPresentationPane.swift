@@ -17,7 +17,6 @@ struct PresentationPane: View {
                     options: Presentation.allCases.map { (value: $0, label: $0.displayName) },
                     selection: store.presentation,
                     onSelect: { store.setPresentation($0) })
-                .frame(maxWidth: 320)
             }
 
             // Only a question on a Mac with more than one display.
@@ -32,7 +31,6 @@ struct PresentationPane: View {
                         options: ScreenChoice.options,
                         selection: ScreenChoice.selection,
                         onSelect: { store.setDisplayScreen($0) })
-                    .frame(maxWidth: 440)
                 }
             }
 
@@ -47,7 +45,6 @@ struct PresentationPane: View {
                         options: [1, 2, 3].map { (value: $0, label: L10n.t("\($0)", "\($0) 个")) },
                         selection: store.islandSlots,
                         onSelect: { store.setIslandSlots($0) })
-                    .frame(maxWidth: 200)
                 }
             SettingToggle(
                 L10n.t("Glow", "光晕"), caption: L10n.t("A halo that turns amber or red near the limit, and a light that orbits the outline.", "轮廓外的柔光，接近上限时变琥珀或红色，另有一道光沿轮廓环绕。"),
@@ -71,7 +68,6 @@ struct PresentationPane: View {
                     options: IslandChartStyle.allCases.map { (value: $0, label: $0.displayName) },
                     selection: store.experience.islandChart,
                     onSelect: { value in store.updateExperience { $0.islandChart = value } })
-                .frame(maxWidth: 380)
             }
             }
 
@@ -86,7 +82,6 @@ struct PresentationPane: View {
                         options: DockEdge.allCases.map { (value: $0, label: $0.displayName) },
                         selection: store.dockEdge,
                         onSelect: { store.setDockEdge($0) })
-                    .frame(maxWidth: 200)
                 }
                 SettingToggle(
                     L10n.t("Keep the dock visible", "常驻显示（不自动隐藏）"),

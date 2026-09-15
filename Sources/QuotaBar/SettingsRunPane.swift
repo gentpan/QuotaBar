@@ -1051,7 +1051,6 @@ private struct RunProfileCard: View {
                     options: RunRegion.allCases.map { (value: $0, label: $0.displayName) },
                     selection: region,
                     onSelect: { region = $0 })
-                .frame(maxWidth: 220)
             }
             SettingRow(L10n.t("Website", "网站")) {
                 GlassTextField(placeholder: "https://", text: $website)

@@ -15,6 +15,10 @@ Server moves, the website, and build or release scripts don't change the app its
 - Usage and spend split by tool now say "Codex" rather than "Codex CLI", OpenAI's own name for it.
 - The website, GitHub, X and email links in Settings → About drop their names and arrows: the icon and the address, nothing more.
 - The Quota Run settings page's subtitle uses the same word for records as the rest of the page (Chinese only).
+- Every segmented switch in Settings is sized by how many options it holds, 100pt each, so the switches in a card line up; a longer label, as in English, widens its switch to fit instead of being cut off.
+- Check now in Settings → Updates is an outlined button like Refresh now; the filled style is kept for steps that change something, such as installing, saving or signing in.
+- The acknowledgements list in Settings → About drops its arrows, like the links above it.
+- The Closest to the limit desktop card lists from just under its title, rather than centring the list and leaving a gap above it.
 
 #### Fixed
 

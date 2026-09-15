@@ -473,6 +473,10 @@ struct SettingFootnote: View {
 struct GlassSegmented<Value: Hashable>: View {
     let options: [(value: Value, label: String)]
     let selection: Value
+    /// How many options the width is for, when the list can shrink — the
+    /// critical threshold drops the values under the warning one, and should
+    /// not narrow as it does.
+    var slots: Int? = nil
     let onSelect: (Value) -> Void
 
     @Namespace private var namespace
@@ -507,6 +511,7 @@ struct GlassSegmented<Value: Hashable>: View {
         }
         .padding(Design.controlInset)
         .controlChrome()
+        .frame(maxWidth: Design.segmentWidth(labels: options.map(\.label), slots: slots))
         .animation(.snappy(duration: 0.22), value: selection)
     }
 }

@@ -249,10 +249,9 @@ private struct CreditRow: View {
                         .font(.system(size: 11))
                         .foregroundStyle(.secondary)
                 }
+                // No arrow, as the links above have none; hovering shows
+                // where it goes.
                 Spacer(minLength: 0)
-                Image(systemName: "arrow.up.right")
-                    .font(.system(size: 9, weight: .semibold))
-                    .foregroundStyle(.tertiary)
             }
             .padding(.horizontal, Design.space3)
             .padding(.vertical, Design.space2)
