@@ -128,6 +128,8 @@ struct UsageShareCard: View {
     let range: ShareRange
     let format: ShareFormat
     let signature: String?
+    /// The signed-in Quota Run account, whose profile the card points to.
+    var runUsername: String? = nil
 
     private var value: Double { metric == .apiValue ? summary.usd : Double(summary.tokens) }
     private var tier: ShareTier { ShareTier.earned(value, metric: metric) }
@@ -190,10 +192,13 @@ struct UsageShareCard: View {
                     .lineLimit(1)
                     .minimumScaleFactor(0.8)
                 Spacer(minLength: 12)
-                // The signature reads as a profile address, quota.bar/name — the
-                // shape it keeps once accounts exist.
-                (Text("quota.bar").foregroundStyle(fg.opacity(0.6))
-                    + Text(handle.map { "/\($0)" } ?? "").foregroundStyle(fg))
+                // Where the card leads: the Quota Run profile, quota.run/@name,
+                // when there is an account to lead to. Without one the site
+                // alone, with the signature as a name beside it — a path made
+                // from free text would be a link to a page that is not there.
+                (Text(runUsername == nil ? (handle.map { "\($0) · " } ?? "") : "").foregroundStyle(fg.opacity(0.85))
+                    + Text("quota.run").foregroundStyle(fg.opacity(0.6))
+                    + Text(profilePath).foregroundStyle(fg))
                     .font(.system(size: 12, weight: .semibold, design: .monospaced))
                     .lineLimit(1)
             }
@@ -206,13 +211,18 @@ struct UsageShareCard: View {
         .environment(\.colorScheme, tier == .white ? .light : .dark)
     }
 
-    /// The signature as the last path segment: trimmed, no leading "@" or "/", spaces as dashes.
+    /// The signature as written: trimmed, no leading "@" or "/".
     private var handle: String? {
         guard let signature else { return nil }
         let trimmed = signature.trimmingCharacters(in: .whitespacesAndNewlines)
             .trimmingCharacters(in: CharacterSet(charactersIn: "@/"))
-            .replacingOccurrences(of: " ", with: "-")
         return trimmed.isEmpty ? nil : trimmed
+    }
+
+    /// "/@gentpan" when signed in to Quota Run and the card is signed.
+    private var profilePath: String {
+        guard let runUsername, signature != nil else { return "" }
+        return "/@\(runUsername)"
     }
 
     private var heroText: String {
@@ -289,7 +299,14 @@ struct ShareStudioView: View {
     }
 
     private var card: UsageShareCard {
-        UsageShareCard(summary: summary, metric: metric, range: range, format: format, signature: showsSignature ? signature : nil)
+        UsageShareCard(
+            summary: summary, metric: metric, range: range, format: format,
+            signature: showsSignature ? (runUsername ?? signature) : nil,
+            runUsername: runUsername)
+    }
+
+    private var runUsername: String? {
+        store.run.account?.username
     }
 
     var body: some View {
@@ -347,12 +364,29 @@ struct ShareStudioView: View {
 
             VStack(alignment: .leading, spacing: 6) {
                 switchRow(L10n.t("Sign it", "署名"), isOn: $showsSignature)
-                GlassTextField(
-                    placeholder: L10n.t("Your name or @handle", "你的名字或 @账号"),
-                    text: $signature,
-                    monospaced: false)
-                    .disabled(!showsSignature)
-                    .opacity(showsSignature ? 1 : 0.45)
+                if let runUsername {
+                    // Signed in: the card points to the profile that exists.
+                    Text(L10n.t(
+                        "Shows your Quota Run profile, quota.run/@\(runUsername).",
+                        "显示你的 Quota Run 主页 quota.run/@\(runUsername)。"))
+                        .font(.system(size: 11))
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .opacity(showsSignature ? 1 : 0.45)
+                } else {
+                    GlassTextField(
+                        placeholder: L10n.t("Your name or @handle", "你的名字或 @账号"),
+                        text: $signature,
+                        monospaced: false)
+                        .disabled(!showsSignature)
+                        .opacity(showsSignature ? 1 : 0.45)
+                    Text(L10n.t(
+                        "Sign in to Quota Run in Settings and the card shows your profile, quota.run/@name.",
+                        "在设置里登录 Quota Run 后，卡片会显示你的主页 quota.run/@用户名。"))
+                        .font(.system(size: 10))
+                        .foregroundStyle(.tertiary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
             }
 
             let tier = ShareTier.earned(metric == .apiValue ? summary.usd : Double(summary.tokens), metric: metric)

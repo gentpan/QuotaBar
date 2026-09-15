@@ -545,6 +545,13 @@
       </div>
       <div class="log">
         <article class="log__day">
+          <header class="log__head"><time datetime="2026-09-15">2026-09-15</time><span class="log__tag">Unreleased</span></header>
+          <p class="log__counts">1 style</p>
+          <ul class="log__list">
+            <li><span class="badge badge--style">Style</span>The usage share card's address, bottom right, is Quota Run's: signed in to Quota Run with Sign it on, it is your profile, quota.run/@username; signed out it is quota.run alone with the signature before it, rather than a quota.bar/name address that leads nowhere. Signed in, the share window says which profile the card shows in place of the signature field.</li>
+          </ul>
+        </article>
+        <article class="log__day">
           <header class="log__head"><time datetime="2026-09-15">2026-09-15</time><span class="log__tag">0.5.4</span></header>
           <p class="log__counts">8 added · 4 fixed</p>
           <ul class="log__list">
@@ -563,18 +570,6 @@
             <li><span class="badge badge--add">Added</span>A new Projects page in Settings works out which project each token from this Mac's Claude Code, Codex and OpenCode session logs went to. A project is a Git repository, recognised by its remote, so every checkout and worktree of it counts together; work outside a repository is grouped by folder, and a folder with a repository's name is folded into it. For 7, 30, 90 or 365 days it shows an overview (projects, estimated cost, tokens, sessions, ways of working) and the projects ranked by cost with a bar split by CLI. Opening a project shows cost per day as bars (hover for the day), the split by CLI and by way of working (terminal, desktop app, editor, SDK), its top models, and a weekday-by-hour activity grid. Folder paths never leave the Mac.</li>
             <li><span class="badge badge--add">Added</span>Projects on Quota Run: signed in, each project has a Public on quota.run switch, off for every project until turned on, a public name, and a button to open its page once it is up. This Mac uploads tokens per day by project, CLI, way of working and model: public projects with their name and repository, all others folded together as other projects without a name; paths and session content are never uploaded. quota.run prices the tokens itself at list rates. Changing a switch or a name sends every day again, so a project turned off comes down from the site right away. The consent sheet lists this upload too.</li>
           </ul>
-        </article>
-        <article class="log__day">
-          <header class="log__head"><time datetime="2026-09-13">2026-09-13</time><span class="log__tag">0.5.4</span></header>
-          <p class="log__counts">9 added · 6 style · 3 fixed</p>
-          <ul class="log__list">
-            <li><span class="badge badge--add">Added</span>The menu bar icon's right-click menu and the panel's More menu gain a Quota Run item: Sign In to Quota Run… when this Mac isn't signed in, opening Settings scrolled straight to the sign-in card, or Quota Run · @username… once it is, opening the Quota Run page.</li>
-            <li><span class="badge badge--add">Added</span>The right-click menu on a provider card in the panel gains three groups of quick settings. "Limits on the Card" ticks which limits show and which fold under the disclosure arrow, remembered per provider, with Restore Default, and the last one cannot be unticked. "Ring Follows" picks the window the dock ring, notch island and menu bar follow, the same choice as double-clicking a window. "Show In" ticks whether the provider appears in the panel, the dock, the notch island and desktop cards, plus "Menu Bar Shows Only" this provider and "Add a Desktop Card" for it. "Hide from Panel" and "Ring follows the fullest window" fold into these groups.</li>
-            <li><span class="badge badge--add">Added</span>Updates come as an update card: when a new version is found, a card shows its number, the version you have, the release date and what changed (in the interface's language, grouped into added, style and fixed, with Show all and a link to the full changelog). Install and Relaunch downloads it, checks the developer's signature and Apple's notarization, then replaces the app and relaunches; the app no longer relaunches without asking. The Updates setting becomes "Download in background" (downloaded and verified as soon as it is found, so installing is instant) or "Download when I install". If replacing the app fails, for example without write access to Applications, the card says why and offers Try Again and Download Installer. The menu bar's right-click menu, the panel's banner and the Updates page all open the card, which opens by itself once per version per launch.</li>
-            <li><span class="badge badge--add">Added</span>Spend budgets: Settings → Alerts has a new Spend card with a daily and a monthly budget (in the currency chosen when set; empty means none). A notification comes once at 80% and once when a budget is passed, per day and per calendar month.</li>
-            <li><span class="badge badge--add">Added</span>Weekly digest: after 9 on Monday morning, a notification with last week's spend, token count and the busiest CLI's share; nothing is sent for a week without usage. It can be turned off under Settings → Alerts → Spend.</li>
-          </ul>
-          <a class="log__more" href="changelog.html#d-2026-09-13">13 more →</a>
         </article>
       </div>
       <p class="log__all"><a href="changelog.html">Full changelog →</a></p>

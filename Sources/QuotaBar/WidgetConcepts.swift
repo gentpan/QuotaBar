@@ -25,6 +25,14 @@ enum WidgetConceptBoard {
 
         renderBalanceCards(into: url)
 
+        // The share card's footer, signed in to Quota Run and not.
+        let (weekStart, weekEnd) = ShareRange.week.interval(firstDay: store.archive.firstDay)
+        let week = store.archive.summary(from: weekStart, to: weekEnd, counting: store.experience.tokenCounting)
+        write(UsageShareCard(summary: week, metric: .apiValue, range: .week, format: .feed, signature: "gentpan", runUsername: "gentpan"),
+              to: url.appendingPathComponent("share-card-run.png"))
+        write(UsageShareCard(summary: week, metric: .apiValue, range: .week, format: .feed, signature: "Peter"),
+              to: url.appendingPathComponent("share-card-signed.png"))
+
         for size in DeskCardSize.allCases {
             let board = VStack(alignment: .leading, spacing: 30) {
                 Text(L10n.t("Desktop cards · \(size.displayName)", "桌面卡片 · \(size.displayName)号"))

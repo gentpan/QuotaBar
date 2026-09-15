@@ -542,6 +542,13 @@
       </div>
       <div class="log">
         <article class="log__day">
+          <header class="log__head"><time datetime="2026-09-15">2026-09-15</time><span class="log__tag">未发布</span></header>
+          <p class="log__counts">样式 1</p>
+          <ul class="log__list">
+            <li><span class="badge badge--style">样式</span>分享用量卡片右下角的网址改为 Quota Run：登录了 Quota Run 并打开「署名」时显示你的主页 quota.run/@用户名；没有登录时只显示 quota.run，署名写在网址前面，不再拼成 quota.bar/名字 这样并不存在的地址。分享窗口里登录后署名框换成说明，写明会显示哪个主页。</li>
+          </ul>
+        </article>
+        <article class="log__day">
           <header class="log__head"><time datetime="2026-09-15">2026-09-15</time><span class="log__tag">0.5.4</span></header>
           <p class="log__counts">新增 8 · 修复 4</p>
           <ul class="log__list">
@@ -560,18 +567,6 @@
             <li><span class="badge badge--add">新增</span>设置新增「项目」页：从本机 Claude Code、Codex、OpenCode 的会话日志里认出每次用量属于哪个项目。按 Git 仓库的远端地址识别，同一个仓库的不同目录和 worktree 算一个项目，没有仓库的按文件夹分；同名文件夹会并进对应的仓库。可以按 7、30、90、365 天查看概览（项目数、等价花费、token、会话数、编程方式数），以及按花费排序的项目排行（按工具分色的占比条）。点开一个项目，能看到每天的花费柱状图（悬停看当天数字）、按工具和编程方式（命令行、桌面版、编辑器插件、SDK）的占比、用得最多的模型，以及按星期和小时的活跃热力图。文件夹路径只留在本机。</li>
             <li><span class="badge badge--add">新增</span>项目公开到 Quota Run：登录 Quota Run 后，每个项目有「公开到 quota.run」开关，默认全部不公开，还可以改公开名称，公开后可以一键打开项目页。这台 Mac 会按天上传各项目、各工具、各编程方式、各模型的 token 数：公开的项目带名称和仓库地址，不公开的合并成「其他项目」、不带名字；路径和会话内容永远不上传。花费由 quota.run 按公开价目统一计算。改动开关或名称后会把全部日子重传一遍，关掉的项目立刻从网站上撤下。上传同意说明里也补上了这一项。</li>
           </ul>
-        </article>
-        <article class="log__day">
-          <header class="log__head"><time datetime="2026-09-13">2026-09-13</time><span class="log__tag">0.5.4</span></header>
-          <p class="log__counts">新增 9 · 样式 6 · 修复 3</p>
-          <ul class="log__list">
-            <li><span class="badge badge--add">新增</span>菜单栏图标的右键菜单和下拉面板的「更多」菜单新增 Quota Run 入口：未登录时显示「登录 Quota Run…」，点击打开设置并直接滚动到登录卡片；已登录时显示「Quota Run · @用户名…」，点击打开 Quota Run 设置页。</li>
-            <li><span class="badge badge--add">新增</span>下拉面板服务商卡片的右键菜单新增三组快捷设置：「卡片上显示的额度」逐项勾选哪些额度显示在外面、哪些收进展开箭头（每个服务商分别记住，可恢复默认，最后一项不能取消）；「圆环跟随的额度」选择停靠条圆环、刘海岛和菜单栏跟随的窗口，与双击窗口是同一个设置；「显示位置」勾选这个服务商是否出现在下拉面板、停靠条、刘海岛和桌面卡片，另有「菜单栏只显示此服务商」和「添加一张此服务商的桌面卡片」。原来的「在下拉面板中隐藏」和「圆环改回按最满的窗口显示」并入这几组。</li>
-            <li><span class="badge badge--add">新增</span>在线更新改为更新卡片：发现新版本时弹出一张卡片，显示新版本号、当前版本、发布日期和这一版的更新内容（按界面语言显示中文或英文，分新增、样式、修复，可展开全部并打开完整更新日志），点「安装并重启」后下载、验证开发者签名和 Apple 公证，完成后自动替换并重启；不会再不打招呼就重启。「更新方式」改为「后台下载」（发现后先在后台下载验证好，点安装即刻完成）和「安装时再下载」。原地替换失败（例如没有「应用程序」文件夹的写入权限）时，卡片说明原因并提供「重试」和「下载安装包」。菜单栏右键菜单、面板顶部横幅和设置里的更新页都打开这张卡片；同一版本每次启动只自动弹出一次。</li>
-            <li><span class="badge badge--add">新增</span>花费预算提醒：设置 → 提醒新增「花费」卡片，可设每日预算和每月预算（按设置时选的货币，留空即不设），花费用到 80% 和超出时各发一次通知，按天和按自然月分别计算。</li>
-            <li><span class="badge badge--add">新增</span>每周用量周报：每周一上午 9 点后推送一条通知，写明上周的花费、token 数和用得最多的 CLI 所占比例；上周没有用量时不发。可在设置 → 提醒 →「花费」里关闭。</li>
-          </ul>
-          <a class="log__more" href="changelog.html#d-2026-09-13">还有 13 项 →</a>
         </article>
       </div>
       <p class="log__all"><a href="changelog.html">查看完整更新日志 →</a></p>
