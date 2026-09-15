@@ -5,6 +5,18 @@ import QuotaCore
 // MARK: - Low balance
 
 extension UsageStore {
+    /// Records a prepaid balance as it is read, and, where the credential can
+    /// only ask for the balance, fills in usage from how it has fallen.
+    func withBalanceEstimate(_ id: ProviderID, _ snapshot: UsageSnapshot) -> UsageSnapshot {
+        guard var sheet = snapshot.balance else { return snapshot }
+        BalanceHistoryStore.shared.record(id, balances: sheet.balances, at: snapshot.fetchedAt)
+        guard !sheet.hasUsage else { return snapshot }
+        BalanceEstimate.apply(to: &sheet, readings: BalanceHistoryStore.shared.readings(for: id))
+        var estimated = snapshot
+        estimated.balance = sheet
+        return estimated
+    }
+
     /// After each reading: a prepaid account that has dipped below the floor
     /// set in Settings → Alerts, or can no longer pay for a call. Once per dip;
     /// a top-up clears it.

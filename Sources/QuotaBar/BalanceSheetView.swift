@@ -4,11 +4,12 @@ import QuotaCore
 // MARK: - A prepaid account on its card
 
 /// What a pay-as-you-go provider's card shows in place of meters: the
-/// balance in each currency, what was spent in the chosen period, and where
-/// it went — by API key or by model.
+/// balance in each currency, then usage over today, seven days, thirty days
+/// or all of it — a figure, a chart of bars or a line, and where it went, by
+/// API key or by model, when the provider says.
 ///
-/// No bar anywhere. A balance has no ceiling, so a meter of it only ever sat
-/// empty; the figures are the reading.
+/// No meter anywhere. A balance has no ceiling, so a meter of it only ever
+/// sat empty; the figures and the chart are the reading.
 struct BalanceSheetView: View {
     @ObservedObject var store: UsageStore
     let id: ProviderID
@@ -16,30 +17,38 @@ struct BalanceSheetView: View {
     var compact = false
     /// The card's own disclosure: every key and model instead of the top few.
     var expanded = false
-    /// The copied image: this month, by model — key names stay on this Mac.
+    /// The copied image: thirty days, the chart and the models — key names
+    /// stay on this Mac.
     var forExport = false
 
-    @State private var period: KeyUsagePeriod = .month
+    /// A style for off-screen renders, which must not write the owner's
+    /// preference to show both.
+    var chartStyle: BalanceChartStyle?
+
+    @State private var period: KeyUsagePeriod
     @State private var breakdown: Breakdown = .keys
     /// The key opened from the list, by the provider's id for it.
     @State private var focusedKey: String?
 
+    enum Breakdown: Hashable {
+        case keys
+        case models
+    }
+
     init(
         store: UsageStore, id: ProviderID, sheet: BalanceSheet,
-        compact: Bool = false, expanded: Bool = false, forExport: Bool = false, focusedKey: String? = nil)
+        compact: Bool = false, expanded: Bool = false, forExport: Bool = false,
+        period: KeyUsagePeriod = .last7, focusedKey: String? = nil, chartStyle: BalanceChartStyle? = nil)
     {
+        self.chartStyle = chartStyle
         self.store = store
         self.id = id
         self.sheet = sheet
         self.compact = compact
         self.expanded = expanded
         self.forExport = forExport
+        _period = State(initialValue: period)
         _focusedKey = State(initialValue: focusedKey)
-    }
-
-    enum Breakdown: Hashable {
-        case keys
-        case models
     }
 
     /// Rows shown before the card is expanded.
@@ -48,17 +57,24 @@ struct BalanceSheetView: View {
     /// Whether the card's disclosure has anything of this sheet's to reveal.
     static func hasMore(_ sheet: BalanceSheet) -> Bool {
         KeyUsagePeriod.allCases.contains { period in
-            sheet.activeKeys(in: period).count > upFront || (sheet.models[period]?.count ?? 0) > upFront
+            sheet.activeKeys(in: period).count > upFront || (sheet.usage[period]?.models.count ?? 0) > upFront
         }
     }
 
-    private var shownPeriod: KeyUsagePeriod { forExport ? .month : period }
-    private var shownBreakdown: Breakdown {
-        if forExport || sheet.keys == nil { return .models }
-        if sheet.models.isEmpty { return .keys }
-        return breakdown
+    private var accent: Color { Color(hex: id.accentHex) }
+    private var shownPeriod: KeyUsagePeriod { forExport ? .last30 : period }
+    private var style: BalanceChartStyle { forExport ? .bars : chartStyle ?? store.experience.balanceChart }
+    private var figures: KeyUsageFigures? { sheet.usage[shownPeriod] }
+    private var models: [ModelCost] { figures?.models ?? [] }
+    private var keysInPeriod: [APIKeyUsage] { sheet.activeKeys(in: shownPeriod) }
+    private var shownBreakdown: Breakdown? {
+        let hasKeys = sheet.keys != nil && !keysInPeriod.isEmpty
+        if forExport { return models.isEmpty ? nil : .models }
+        if hasKeys && !models.isEmpty { return breakdown }
+        if hasKeys { return .keys }
+        if !models.isEmpty { return .models }
+        return sheet.keys != nil && shownPeriod != .all ? .keys : nil
     }
-    private var hasUsage: Bool { sheet.keys != nil || !sheet.models.isEmpty || !sheet.spend.isEmpty }
 
     var body: some View {
         VStack(alignment: .leading, spacing: compact ? 8 : 10) {
@@ -70,16 +86,32 @@ struct BalanceSheetView: View {
                     .font(.system(size: 10, weight: .medium))
                     .foregroundStyle(Palette.red)
             }
-            if hasUsage {
+            if sheet.hasUsage {
                 usage
             }
-            if let note = sheet.keysNote, !forExport, sheet.keys == nil || expanded {
+            if !forExport, let note {
                 Text(note)
                     .font(.system(size: 10))
                     .foregroundStyle(.white.opacity(0.4))
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
+    }
+
+    /// Says an estimate is one and since when, then whatever the provider
+    /// says about keys it cannot see.
+    private var note: String? {
+        var parts: [String] = []
+        if sheet.estimated {
+            let since = sheet.estimatedSince.map { $0.formatted(.dateTime.month(.abbreviated).day().hour().minute()) } ?? ""
+            parts.append(L10n.t(
+                "Usage estimated from the balance's falls since \(since); top-ups aren't counted.",
+                "用量按余额的减少估算，自 \(since) 开始记录，充值不计入。"))
+        }
+        if let keysNote = sheet.keysNote, sheet.keys == nil || expanded || sheet.estimated {
+            parts.append(keysNote)
+        }
+        return parts.isEmpty ? nil : parts.joined(separator: " ")
     }
 
     // MARK: Balances
@@ -119,46 +151,92 @@ struct BalanceSheetView: View {
     private var usage: some View {
         VStack(alignment: .leading, spacing: compact ? 6 : 8) {
             HStack(spacing: 8) {
-                Text(spendLine)
-                    .font(.system(size: 11, weight: .medium))
-                    .monospacedDigit()
-                    .foregroundStyle(.white.opacity(0.8))
-                    .lineLimit(1)
-                Spacer(minLength: 6)
-                if !forExport {
+                if forExport {
+                    Text(shownPeriod.displayName)
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(.white.opacity(0.8))
+                } else {
                     chips(KeyUsagePeriod.allCases.map { ($0, $0.displayName) }, selection: period) { period = $0 }
                 }
-            }
-            if !forExport, sheet.keys != nil, !sheet.models.isEmpty {
-                chips([(Breakdown.keys, "API Key"), (.models, L10n.t("Models", "模型"))], selection: breakdown) { breakdown = $0 }
-            }
-            switch shownBreakdown {
-            case .keys:
-                if let focused = focusedKey, let key = sheet.keys?.first(where: { $0.id == focused }) {
-                    KeyDetailView(key: key, period: shownPeriod, accent: Color(hex: id.accentHex)) {
-                        withAnimation(Motion.animation(Motion.spring)) { focusedKey = nil }
-                    }
-                    .transition(.opacity)
-                } else {
-                    keyRows
+                Spacer(minLength: 6)
+                if !forExport, hasAnyChart {
+                    styleToggle
                 }
-            case .models: modelRows
+            }
+            Text(summaryLine)
+                .font(.system(size: 11, weight: .medium))
+                .monospacedDigit()
+                .foregroundStyle(.white.opacity(0.8))
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
+            // An opened key draws its own days; the account's would repeat them.
+            if focusedKey == nil, let buckets = sheet.chart[shownPeriod], !buckets.isEmpty {
+                UsageChart(buckets: buckets, span: shownPeriod.bucket, style: style, accent: accent, height: compact ? 44 : 54)
+            }
+            if let shown = shownBreakdown {
+                if !forExport, sheet.keys != nil, !keysInPeriod.isEmpty, !models.isEmpty, focusedKey == nil {
+                    chips([(Breakdown.keys, "API Key"), (.models, L10n.t("Models", "模型"))], selection: breakdown) { breakdown = $0 }
+                }
+                switch shown {
+                case .keys:
+                    if let focused = focusedKey, let key = sheet.keys?.first(where: { $0.id == focused }) {
+                        KeyDetailView(key: key, period: shownPeriod, style: style, accent: accent) {
+                            withAnimation(Motion.animation(Motion.spring)) { focusedKey = nil }
+                        }
+                        .transition(.opacity)
+                    } else {
+                        keyRows
+                    }
+                case .models:
+                    modelRows
+                }
             }
         }
     }
 
-    private var spendLine: String {
-        let name = shownPeriod.displayName
-        guard let spent = sheet.spend[shownPeriod]?.filter({ $0.amount > 0 }), !spent.isEmpty else {
-            return L10n.t("\(name): nothing spent", "\(name)没有消费")
+    private var hasAnyChart: Bool { sheet.chart.values.contains { !$0.isEmpty } }
+
+    /// "Spent ¥36.79 · 4,210 requests · 61.0M tokens", "about" for an
+    /// estimate, or that nothing was spent.
+    private var summaryLine: String {
+        guard let figures, !figures.isEmpty else {
+            return L10n.t("Nothing spent \(shownPeriod.displayName.lowercased())", "\(shownPeriod.displayName)没有消费")
         }
-        let amounts = spent.map { QuotaFormat.amount($0.amount, code: $0.currency) }.joined(separator: " · ")
-        return L10n.t("\(name) \(amounts)", "\(name)消费 \(amounts)")
+        var parts = [figures.costLine]
+        if let counts = Self.counts(requests: figures.requests, tokens: figures.tokens) { parts.append(counts) }
+        let line = parts.joined(separator: " · ")
+        return sheet.estimated
+            ? L10n.t("Spent about \(line)", "约消费 \(line)")
+            : L10n.t("Spent \(line)", "消费 \(line)")
+    }
+
+    private var styleToggle: some View {
+        HStack(spacing: 2) {
+            ForEach(BalanceChartStyle.allCases) { option in
+                let selected = option == style
+                Image(systemName: option == .bars ? "chart.bar.fill" : "chart.xyaxis.line")
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundStyle(selected ? .white : .white.opacity(0.45))
+                    .frame(width: 24, height: 18)
+                    .background(
+                        RoundedRectangle(cornerRadius: 5, style: .continuous)
+                            .fill(Color.white.opacity(selected ? 0.13 : 0)))
+                    .contentShape(Rectangle())
+                    .onTapGesture {
+                        withAnimation(Motion.animation(Motion.spring)) {
+                            store.updateExperience { $0.balanceChart = option }
+                        }
+                    }
+                    .help(option == .bars ? L10n.t("Bars", "柱状图") : L10n.t("Line", "折线图"))
+            }
+        }
+        .padding(2)
+        .background(RoundedRectangle(cornerRadius: 7, style: .continuous).fill(Color.white.opacity(0.06)))
     }
 
     @ViewBuilder
     private var keyRows: some View {
-        let keys = sheet.activeKeys(in: shownPeriod)
+        let keys = keysInPeriod
         let shown = expanded ? keys : Array(keys.prefix(Self.upFront))
         if keys.isEmpty {
             empty
@@ -170,11 +248,8 @@ struct BalanceSheetView: View {
                     subtitle: [key.maskedKey, key.isDisabled ? L10n.t("deleted", "已删除") : nil].compactMap { $0 }.joined(separator: " · "),
                     figures: figures.costs, requests: figures.requests, tokens: figures.tokens)
                     .onTapGesture {
-                        guard !forExport else { return }
+                        guard !forExport, !key.daily.isEmpty || !figures.models.isEmpty else { return }
                         withAnimation(Motion.animation(Motion.spring)) { focusedKey = key.id }
-                    }
-                    .hoverDetail {
-                        ModelCostList(title: "\(key.name) · \(shownPeriod.displayName)", models: figures.models)
                     }
                     .help(L10n.t("Click for this key's days and models", "点击查看这个 Key 每天的用量和模型"))
             }
@@ -184,8 +259,7 @@ struct BalanceSheetView: View {
 
     @ViewBuilder
     private var modelRows: some View {
-        let models = sheet.models[shownPeriod] ?? []
-        let shown = expanded ? models : Array(models.prefix(Self.upFront))
+        let shown = expanded && !forExport ? models : Array(models.prefix(Self.upFront))
         if models.isEmpty {
             empty
         }
@@ -253,7 +327,7 @@ struct BalanceSheetView: View {
         .contentShape(Rectangle())
     }
 
-    /// "23 requests · 208.7K tokens", or nil when the provider counts neither.
+    /// "4,210 requests · 61.0M tokens", or nil when the provider counts neither.
     static func counts(requests: Int?, tokens: Int?) -> String? {
         var parts: [String] = []
         if let requests, requests > 0 {
@@ -290,11 +364,126 @@ struct BalanceSheetView: View {
     }
 }
 
-/// One key opened from the list: its three periods side by side, what it
-/// spent each day, and its models in the chosen period.
+// MARK: - The chart
+
+/// Usage as bars or a line over hours, days or months; the current one in
+/// full colour, and each one's figures on hover.
+struct UsageChart: View {
+    let buckets: [UsageBucket]
+    let span: UsageBucket.Span
+    let style: BalanceChartStyle
+    let accent: Color
+    var height: CGFloat = 54
+
+    private var peak: Double { max(0.000_001, buckets.map(\.costTotal).max() ?? 0) }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 3) {
+            GeometryReader { proxy in
+                if style == .line, buckets.count > 1 {
+                    line(in: proxy.size)
+                } else {
+                    bars(in: proxy.size)
+                }
+            }
+            .frame(height: height)
+            if let first = buckets.first, let last = buckets.last {
+                HStack {
+                    Text(axis(first.start))
+                    Spacer()
+                    Text(axis(last.start))
+                }
+                .font(.system(size: 9))
+                .monospacedDigit()
+                .foregroundStyle(.white.opacity(0.35))
+            }
+        }
+    }
+
+    private func bars(in size: CGSize) -> some View {
+        let gap: CGFloat = buckets.count > 20 ? 1.5 : 3
+        return HStack(alignment: .bottom, spacing: gap) {
+            ForEach(buckets) { bucket in
+                RoundedRectangle(cornerRadius: 1.5, style: .continuous)
+                    .fill(bucket.costTotal > 0 ? accent.opacity(isCurrent(bucket) ? 1 : 0.62) : Color.white.opacity(0.07))
+                    .frame(height: max(2, size.height * bucket.costTotal / peak))
+                    .frame(maxWidth: .infinity)
+                    .help(detail(bucket))
+            }
+        }
+        .frame(width: size.width, height: size.height, alignment: .bottom)
+    }
+
+    private func line(in size: CGSize) -> some View {
+        let step = size.width / CGFloat(buckets.count - 1)
+        let points = buckets.enumerated().map { index, bucket in
+            CGPoint(x: CGFloat(index) * step, y: size.height - 2 - (size.height - 4) * bucket.costTotal / peak)
+        }
+        return ZStack(alignment: .topLeading) {
+            Path { path in
+                path.move(to: CGPoint(x: 0, y: size.height))
+                for point in points { path.addLine(to: point) }
+                path.addLine(to: CGPoint(x: size.width, y: size.height))
+                path.closeSubpath()
+            }
+            .fill(accent.opacity(0.16))
+            Path { path in
+                path.addLines(points)
+            }
+            .stroke(accent, style: StrokeStyle(lineWidth: 1.6, lineCap: .round, lineJoin: .round))
+            if let last = points.last {
+                Circle().fill(accent).frame(width: 5, height: 5).position(last)
+            }
+            // Hover targets, one column per bucket.
+            HStack(spacing: 0) {
+                ForEach(buckets) { bucket in
+                    Color.clear.contentShape(Rectangle()).frame(maxWidth: .infinity).help(detail(bucket))
+                }
+            }
+            .frame(width: size.width + step, height: size.height)
+            .offset(x: -step / 2)
+        }
+        .frame(width: size.width, height: size.height)
+    }
+
+    private func isCurrent(_ bucket: UsageBucket) -> Bool {
+        let calendar = Calendar.current
+        switch span {
+        case .hour: return calendar.isDate(bucket.start, equalTo: Date(), toGranularity: .hour)
+        case .day: return calendar.isDateInToday(bucket.start)
+        case .month: return calendar.isDate(bucket.start, equalTo: Date(), toGranularity: .month)
+        }
+    }
+
+    private func axis(_ date: Date) -> String {
+        let parts = Calendar.current.dateComponents([.year, .month, .day, .hour], from: date)
+        switch span {
+        case .hour: return String(format: "%02d:00", parts.hour ?? 0)
+        case .day: return "\(parts.month ?? 0)/\(parts.day ?? 0)"
+        case .month: return "\(parts.year ?? 0)/\(parts.month ?? 0)"
+        }
+    }
+
+    private func detail(_ bucket: UsageBucket) -> String {
+        let when: String = switch span {
+        case .hour: bucket.start.formatted(.dateTime.hour().minute())
+        case .day: bucket.start.formatted(.dateTime.month(.abbreviated).day())
+        case .month: bucket.start.formatted(.dateTime.year().month(.abbreviated))
+        }
+        var parts = [KeyUsageFigures(costs: bucket.costs).costLine]
+        if let counts = BalanceSheetView.counts(requests: bucket.requests, tokens: bucket.tokens) { parts.append(counts) }
+        return "\(when) · " + parts.joined(separator: " · ")
+    }
+}
+
+// MARK: - One key
+
+/// One key opened from the list: today, seven and thirty days side by side,
+/// its last thirty days as a chart, and its models in the chosen period.
 private struct KeyDetailView: View {
     let key: APIKeyUsage
     let period: KeyUsagePeriod
+    let style: BalanceChartStyle
     let accent: Color
     let onBack: () -> Void
 
@@ -323,7 +512,7 @@ private struct KeyDetailView: View {
                     .foregroundStyle(.white.opacity(0.35))
             }
             HStack(alignment: .top, spacing: 8) {
-                ForEach(KeyUsagePeriod.allCases) { period in
+                ForEach([KeyUsagePeriod.today, .last7, .last30]) { period in
                     let figures = key.usage[period]
                     VStack(alignment: .leading, spacing: 2) {
                         Text(period.displayName)
@@ -343,8 +532,10 @@ private struct KeyDetailView: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                 }
             }
-            if key.daily.contains(where: { $0.costTotal > 0 || ($0.requests ?? 0) > 0 }) {
-                days
+            if key.daily.contains(where: { $0.costTotal > 0 }) {
+                UsageChart(
+                    buckets: period == .last7 ? Array(key.daily.suffix(7)) : key.daily,
+                    span: .day, style: style, accent: accent, height: 40)
             }
             let models = key.usage[period]?.models ?? []
             if !models.isEmpty {
@@ -374,87 +565,11 @@ private struct KeyDetailView: View {
             }
         }
     }
-
-    /// A bar per day, to scale with the busiest; today in full colour.
-    private var days: some View {
-        let peak = max(0.000_001, key.daily.map(\.costTotal).max() ?? 0)
-        let calendar = Calendar.current
-        return VStack(alignment: .leading, spacing: 3) {
-            HStack(alignment: .bottom, spacing: 2) {
-                ForEach(key.daily) { day in
-                    let today = calendar.isDateInToday(day.day)
-                    RoundedRectangle(cornerRadius: 1.5, style: .continuous)
-                        .fill(day.costTotal > 0 ? accent.opacity(today ? 1 : 0.6) : Color.white.opacity(0.08))
-                        .frame(height: max(2, 34 * day.costTotal / peak))
-                        .frame(maxWidth: .infinity)
-                        .help(dayHelp(day))
-                }
-            }
-            .frame(height: 34, alignment: .bottom)
-            if let first = key.daily.first?.day, let last = key.daily.last?.day {
-                HStack {
-                    Text(first.formatted(.dateTime.month(.defaultDigits).day()))
-                    Spacer()
-                    Text(last.formatted(.dateTime.month(.defaultDigits).day()))
-                }
-                .font(.system(size: 9))
-                .foregroundStyle(.white.opacity(0.35))
-            }
-        }
-    }
-
-    private func dayHelp(_ day: DailyUsage) -> String {
-        let date = day.day.formatted(.dateTime.month(.abbreviated).day())
-        var parts = [KeyUsageFigures(costs: day.costs).costLine]
-        if let counts = BalanceSheetView.counts(requests: day.requests, tokens: day.tokens) { parts.append(counts) }
-        return "\(date) · " + parts.joined(separator: " · ")
-    }
-}
-
-/// One key's models, in the hover popover.
-private struct ModelCostList: View {
-    let title: String
-    let models: [ModelCost]
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text(title)
-                .font(.system(size: 11, weight: .semibold))
-                .foregroundStyle(.white.opacity(0.85))
-            if models.isEmpty {
-                Text(L10n.t("No data", "暂无数据"))
-                    .font(.system(size: 11))
-                    .foregroundStyle(.white.opacity(0.45))
-            }
-            ForEach(models) { model in
-                HStack(alignment: .firstTextBaseline) {
-                    Text(model.model)
-                        .font(.system(size: 11, weight: .medium))
-                        .foregroundStyle(.white)
-                        .lineLimit(1)
-                        .truncationMode(.middle)
-                    Spacer(minLength: 8)
-                    VStack(alignment: .trailing, spacing: 1) {
-                        Text(KeyUsageFigures(costs: model.costs).costLine)
-                            .font(.system(size: 11, design: .monospaced))
-                            .foregroundStyle(.white.opacity(0.85))
-                        if let counts = BalanceSheetView.counts(requests: model.requests, tokens: model.tokens) {
-                            Text(counts)
-                                .font(.system(size: 9))
-                                .foregroundStyle(.white.opacity(0.45))
-                        }
-                    }
-                }
-            }
-        }
-        .padding(12)
-        .frame(width: 280, alignment: .leading)
-    }
 }
 
 extension UsageStore {
-    /// "¥107" — a prepaid provider's largest balance, for the places that show
-    /// a percentage for everything else and would otherwise show a dash.
+    /// "¥107" — a prepaid provider's balance, for the places that show a
+    /// percentage for everything else and would otherwise show a dash.
     func balanceFigure(for id: ProviderID) -> String? {
         states[id]?.snapshot?.balance?.compactBalance
     }
@@ -463,8 +578,8 @@ extension UsageStore {
 // MARK: - On the desktop
 
 /// A prepaid provider on a single-provider desktop card, in place of a big
-/// percentage it does not have: the balance, the spend by period, and on the
-/// large card the keys that spent most this month.
+/// percentage it does not have: the balance, spend today, over seven and
+/// over thirty days, and on the large card a chart of the thirty days.
 struct DeskBalanceCard: View {
     @ObservedObject var store: UsageStore
     let id: ProviderID
@@ -489,25 +604,20 @@ struct DeskBalanceCard: View {
             if !compact {
                 Spacer(minLength: 10)
                 HStack(spacing: 0) {
-                    ForEach(KeyUsagePeriod.allCases) { period in
+                    ForEach([KeyUsagePeriod.today, .last7, .last30]) { period in
                         if period != .today { divider }
                         DeskStat(value: spent(period), label: period.displayName)
                     }
                 }
-                if size == .large, let keys = Optional(sheet.activeKeys(in: .month)), !keys.isEmpty {
+                if size == .large, let days = sheet.chart[.last30], days.contains(where: { $0.costTotal > 0 }) {
                     Spacer(minLength: 12)
-                    VStack(spacing: 8) {
-                        ForEach(keys.prefix(3)) { key in
-                            HStack {
-                                Text(key.name).font(.system(size: 11, weight: .medium)).foregroundStyle(.white.opacity(0.8)).lineLimit(1)
-                                Spacer()
-                                Text(key.usage[.month]?.costLine ?? "—").font(.system(size: 11, weight: .semibold, design: .monospaced)).foregroundStyle(.white.opacity(0.85))
-                            }
-                        }
-                    }
+                    UsageChart(buckets: days, span: .day, style: store.experience.balanceChart, accent: Color(hex: id.accentHex), height: 64)
                 }
                 Spacer(minLength: 10)
-                DeskFooter(symbol: "creditcard", text: L10n.t("Pay as you go", "按量付费"), time: store.deskUpdated([id]))
+                DeskFooter(
+                    symbol: "creditcard",
+                    text: sheet.estimated ? L10n.t("Estimated from the balance", "按余额变化估算") : L10n.t("Pay as you go", "按量付费"),
+                    time: store.deskUpdated([id]))
             } else {
                 Spacer(minLength: 4)
             }
@@ -526,7 +636,9 @@ struct DeskBalanceCard: View {
     }
 
     private func spent(_ period: KeyUsagePeriod) -> String {
-        guard let first = sheet.spend[period]?.first(where: { $0.amount > 0 }) else { return "—" }
+        guard let first = sheet.usage[period]?.costs.first(where: { $0.amount > 0 }) else {
+            return sheet.usage[period] == nil ? "—" : QuotaFormat.amount(0, code: sheet.balances.first?.currency ?? "USD")
+        }
         // Cents fit up to three figures; past that they only crowd the tile.
         return first.amount >= 1_000
             ? QuotaFormat.amountCompact(first.amount, code: first.currency)

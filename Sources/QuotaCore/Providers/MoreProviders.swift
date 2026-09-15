@@ -470,6 +470,7 @@ public struct OpenRouterProvider: QuotaProvider {
         var windows: [UsageWindow] = []
         var balances: [AccountBalance] = []
         var represented: [String] = []
+        var creditsUsed: Double?
         if let credits {
             guard let body = ProviderJSON.object(credits) as? [String: Any], let data = body["data"] as? [String: Any],
                   let total = QwenProvider.number(data["total_credits"]), let used = QwenProvider.number(data["total_usage"])
@@ -482,6 +483,7 @@ public struct OpenRouterProvider: QuotaProvider {
             windows.append(credit)
             represented.append(credit.id)
             balances.append(AccountBalance(currency: "USD", total: max(0, total - used), paid: total))
+            creditsUsed = used
         }
         var current: APIKeyUsage?
         if let keyBody = key.flatMap(ProviderJSON.object) as? [String: Any], let info = keyBody["data"] as? [String: Any] {
@@ -518,16 +520,18 @@ public struct OpenRouterProvider: QuotaProvider {
         guard !windows.isEmpty || listed != nil else { throw ProviderError.badResponse }
 
         let shown = listed ?? current.map { [$0] }
-        var spend: [KeyUsagePeriod: [Money]] = [:]
+        var usage: [KeyUsagePeriod: KeyUsageFigures] = [:]
         for period in KeyUsagePeriod.allCases {
             let total = (shown ?? []).compactMap { $0.usage[period]?.costs.first?.amount }.reduce(0, +)
-            if total > 0 { spend[period] = [Money(currency: "USD", amount: total)] }
+            usage[period] = KeyUsageFigures(costs: total > 0 ? [Money(currency: "USD", amount: total)] : [])
         }
+        // Everything the account ever spent, when the credits could be read.
+        if let spentEver = creditsUsed { usage[.all] = KeyUsageFigures(costs: [Money(currency: "USD", amount: spentEver)]) }
         return UsageSnapshot(
             windows: windows,
             balance: BalanceSheet(
                 balances: balances,
-                spend: spend,
+                usage: usage,
                 keys: shown,
                 keysNote: listed == nil
                     ? L10n.t(
@@ -538,10 +542,12 @@ public struct OpenRouterProvider: QuotaProvider {
     }
 
     /// One key from `/key` or `/keys`: name or label, and dollars spent per
-    /// period. OpenRouter counts dollars, not requests.
+    /// period. OpenRouter counts dollars, not requests, and counts them by
+    /// its own UTC day, week and month — so its seven and thirty days are
+    /// this week and this month.
     static func keyUsage(_ info: [String: Any], id: String) -> APIKeyUsage {
         var usage: [KeyUsagePeriod: KeyUsageFigures] = [:]
-        for (period, field) in [(KeyUsagePeriod.today, "usage_daily"), (.week, "usage_weekly"), (.month, "usage_monthly")] {
+        for (period, field) in [(KeyUsagePeriod.today, "usage_daily"), (.last7, "usage_weekly"), (.last30, "usage_monthly"), (.all, "usage")] {
             if let value = QwenProvider.number(info[field]), value > 0 {
                 usage[period] = KeyUsageFigures(costs: [Money(currency: "USD", amount: value)])
             }

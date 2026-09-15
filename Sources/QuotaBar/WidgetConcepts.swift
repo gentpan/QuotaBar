@@ -64,86 +64,113 @@ enum WidgetConceptBoard {
     }
 
     @MainActor
-    /// A prepaid provider's card, collapsed and expanded, from a made-up
-    /// account: `balance-collapsed.png`, `balance-expanded.png` and the
-    /// copied image, `balance-copied.png`.
+    /// A prepaid provider's card from made-up accounts: signed in to the
+    /// console (`balance-console-*.png`, with a key opened and the copied
+    /// image) and with an API key alone (`balance-estimated.png`).
     private static func renderBalanceCards(into url: URL) {
-        func figures(_ cny: Double, _ requests: Int, _ tokens: Int, _ models: [(String, Double)]) -> KeyUsageFigures {
-            KeyUsageFigures(
-                costs: [Money(currency: "CNY", amount: cny)], requests: requests, tokens: tokens,
-                models: models.map { ModelCost(model: $0.0, costs: [Money(currency: "CNY", amount: $0.1)]) })
+        let calendar = Calendar.current
+        let now = Date()
+        let today = calendar.startOfDay(for: now)
+        func cny(_ value: Double) -> [Money] { value > 0 ? [Money(currency: "CNY", amount: value)] : [] }
+        let pattern: [Double] = [18, 22, 9, 0, 0, 31, 27, 24, 19, 0, 35, 40, 21, 14, 12.4, 16, 25, 30, 8, 0, 11, 26, 33, 29, 18, 22, 0, 15, 20, 12.4]
+        let days = pattern.enumerated().map { index, spent in
+            UsageBucket(start: calendar.date(byAdding: .day, value: index - 29, to: today)!, costs: cny(spent), requests: Int(spent * 13), tokens: Int(spent * 190_000))
+        }
+        let hours = (0..<24).map { hour in
+            let spent = hour <= calendar.component(.hour, from: now) ? [0, 0, 0, 0, 0, 0, 0, 0.2, 1.1, 1.8, 2.4, 0.9, 0.4, 1.6, 2.2, 1.3, 0.5, 0, 0, 0, 0, 0, 0, 0][hour] : 0
+            return UsageBucket(start: calendar.date(byAdding: .hour, value: hour, to: today)!, costs: cny(spent))
+        }
+        let months = (0..<4).map { index in
+            UsageBucket(start: calendar.date(byAdding: .month, value: index - 3, to: calendar.dateInterval(of: .month, for: now)!.start)!, costs: cny([96.2, 289.7, 170.1, 36.8][index]))
+        }
+        func figures(_ spent: Double, _ models: [(String, Double)]) -> KeyUsageFigures {
+            KeyUsageFigures(costs: cny(spent), requests: Int(spent * 13), tokens: Int(spent * 190_000),
+                            models: models.map { ModelCost(model: $0.0, costs: cny($0.1), requests: Int($0.1 * 13), tokens: Int($0.1 * 190_000)) })
         }
         let keys = [
-            APIKeyUsage(id: "a", name: "Editor", maskedKey: "sk-8f3a****c21", lastUsed: Date().addingTimeInterval(-3_600), usage: [
-                .today: figures(12.4, 180, 2_400_000, [("deepseek-v4-pro", 9.1), ("deepseek-chat", 3.3)]),
-                .week: figures(58.2, 820, 11_000_000, [("deepseek-v4-pro", 41.0), ("deepseek-chat", 17.2)]),
-                .month: figures(312.4, 4_210, 61_000_000, [("deepseek-v4-pro", 240.1), ("deepseek-chat", 72.3)]),
-            ], daily: (0..<15).map { offset in
-                let spent = [18.0, 22, 9, 0, 0, 31, 27, 24, 19, 0, 35, 40, 21, 14, 12.4][offset]
-                return DailyUsage(
-                    day: Calendar.current.date(byAdding: .day, value: offset - 14, to: Calendar.current.startOfDay(for: Date()))!,
-                    costs: spent > 0 ? [Money(currency: "CNY", amount: spent)] : [],
-                    requests: Int(spent * 13), tokens: Int(spent * 190_000))
-            }),
+            APIKeyUsage(id: "a", name: "Editor", maskedKey: "sk-8f3a****c21", lastUsed: now.addingTimeInterval(-3_600), usage: [
+                .today: figures(8.1, [("deepseek-v4-pro", 6.0), ("deepseek-chat", 2.1)]),
+                .last7: figures(72.4, [("deepseek-v4-pro", 51.0), ("deepseek-chat", 21.4)]),
+                .last30: figures(354.3, [("deepseek-v4-pro", 270.1), ("deepseek-chat", 84.2)]),
+            ], daily: days.map { UsageBucket(start: $0.start, costs: cny($0.costTotal * 0.62), requests: $0.requests, tokens: $0.tokens) }),
             APIKeyUsage(id: "b", name: "Agents", maskedKey: "sk-19bd****7e0", usage: [
-                .week: figures(21.9, 300, 4_100_000, [("deepseek-v4-flash", 21.9)]),
-                .month: figures(180.0, 2_050, 30_500_000, [("deepseek-v4-flash", 180.0)]),
+                .today: figures(4.3, [("deepseek-v4-flash", 4.3)]),
+                .last7: figures(41.9, [("deepseek-v4-flash", 41.9)]),
+                .last30: figures(160.0, [("deepseek-v4-flash", 160.0)]),
             ]),
             APIKeyUsage(id: "c", name: "Scripts", maskedKey: "sk-c0de****911", usage: [
-                .month: figures(64.3, 900, 9_800_000, [("deepseek-chat", 64.3)]),
+                .last30: figures(51.4, [("deepseek-chat", 51.4)]),
             ]),
             APIKeyUsage(id: "d", name: "Old bot", maskedKey: "sk-77aa****0f2", isDisabled: true, usage: [
-                .month: figures(35.9, 410, 5_000_000, [("deepseek-chat", 35.9)]),
+                .last30: figures(22.2, [("deepseek-chat", 22.2)]),
             ]),
             APIKeyUsage(id: "e", name: "Test", maskedKey: "sk-4e41****a9b"),
         ]
-        func models(_ rows: [(String, Double, Int, Int)]) -> [ModelCost] {
-            rows.map { ModelCost(model: $0.0, costs: [Money(currency: "CNY", amount: $0.1)], requests: $0.2, tokens: $0.3) }
-        }
-        let sheet = BalanceSheet(
+        let console = BalanceSheet(
             balances: [
                 AccountBalance(currency: "CNY", total: 107.39, paid: 100, granted: 7.39),
                 AccountBalance(currency: "USD", total: 12.33, paid: 12.33),
             ],
-            spend: [
-                .today: [Money(currency: "CNY", amount: 12.4)],
-                .week: [Money(currency: "CNY", amount: 80.1)],
-                .month: [Money(currency: "CNY", amount: 592.67), Money(currency: "USD", amount: 7.66)],
+            usage: [
+                .today: figures(12.4, [("deepseek-v4-pro", 6.0), ("deepseek-v4-flash", 4.3), ("deepseek-chat", 2.1)]),
+                .last7: figures(114.3, [("deepseek-v4-pro", 51.0), ("deepseek-v4-flash", 41.9), ("deepseek-chat", 21.4)]),
+                .last30: figures(587.9, [("deepseek-v4-pro", 270.1), ("deepseek-v4-flash", 160.0), ("deepseek-chat", 157.8)]),
+                .all: KeyUsageFigures(costs: [Money(currency: "CNY", amount: 592.74), Money(currency: "USD", amount: 7.67)]),
             ],
-            models: [
-                .today: models([("deepseek-v4-pro", 9.1, 120, 1_700_000), ("deepseek-chat", 3.3, 60, 700_000)]),
-                .week: models([("deepseek-v4-pro", 41.0, 500, 7_000_000), ("deepseek-flash", 21.9, 300, 4_100_000), ("deepseek-chat", 17.2, 320, 4_000_000)]),
-                .month: models([("deepseek-v4-pro", 240.1, 2_900, 40_000_000), ("deepseek-v4-flash", 180.0, 2_050, 30_500_000), ("deepseek-chat", 172.5, 2_620, 35_800_000), ("deepseek-v4-flash-vision-exp", 0.07, 3, 12_000)]),
-            ],
+            chart: [.today: hours, .last7: Array(days.suffix(7)), .last30: days, .all: months],
             keys: keys)
-        let snapshot = UsageSnapshot(planName: L10n.t("Pay as you go", "按量付费"), balance: sheet)
-        let store = UsageStore.preview(enabled: [.deepseek], states: [.deepseek: .loaded(snapshot)], cost: .empty, ledger: .empty, history: [:])
-        store.serviceStatus[.deepseek] = ServiceStatus(level: .operational, description: "", pageURL: URL(string: "https://quota.bar")!, checkedAt: Date())
+        let estimated: BalanceSheet = {
+            var sheet = BalanceSheet(
+                balances: [AccountBalance(currency: "CNY", total: 64.12)],
+                keysNote: L10n.t(
+                    "For exact usage and each key's and model's, choose Sign in in a browser… for DeepSeek in Settings.",
+                    "想看精确用量和每个 Key、每个模型的明细，在设置 → 服务商 → DeepSeek 点「浏览器登录…」。"))
+            var total = 180.0
+            var readings = [BalanceReading(date: calendar.date(byAdding: .day, value: -12, to: now)!, totals: ["CNY": total])]
+            for step in 1...140 {
+                total -= [0, 0.4, 1.2, 0.0, 2.1, 0.8][step % 6]
+                readings.append(BalanceReading(date: calendar.date(byAdding: .hour, value: step * 2, to: readings[0].date)!, totals: ["CNY": max(total, 64.12)]))
+            }
+            BalanceEstimate.apply(to: &sheet, readings: readings, now: now, calendar: calendar)
+            return sheet
+        }()
 
+        func store(_ sheet: BalanceSheet) -> UsageStore {
+            let snapshot = UsageSnapshot(planName: L10n.t("Pay as you go", "按量付费"), balance: sheet)
+            let store = UsageStore.preview(enabled: [.deepseek], states: [.deepseek: .loaded(snapshot)], cost: .empty, ledger: .empty, history: [:])
+            store.serviceStatus[.deepseek] = ServiceStatus(level: .operational, description: "", pageURL: URL(string: "https://quota.bar")!, checkedAt: Date())
+            return store
+        }
         func write(_ view: some View, _ name: String) {
             if let image = CardImageExporter.image(view, scale: 2), let png = CardImageExporter.pngData(image) {
                 try? png.write(to: url.appendingPathComponent(name))
             }
         }
-        func panel(expanded: Bool) -> some View {
-            ProviderCardView(store: store, id: .deepseek)
-                .frame(width: 350)
-                .padding(12)
-                .background(Color.black)
-                .environment(\.colorScheme, .dark)
+        func panel(_ store: UsageStore, _ sheet: BalanceSheet, period: KeyUsagePeriod, focused: String? = nil, style: BalanceChartStyle = .bars) -> some View {
+            VStack(alignment: .leading, spacing: 10) {
+                HStack(spacing: 7) {
+                    ProviderGlyph(id: .deepseek, size: 16, tint: .white)
+                    Text("DeepSeek").font(.system(size: 13, weight: .semibold)).foregroundStyle(.white)
+                    Spacer()
+                }
+                BalanceSheetView(store: store, id: .deepseek, sheet: sheet, period: period, focusedKey: focused, chartStyle: style)
+            }
+            .padding(12)
+            .frame(width: 350)
+            .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(Color.white.opacity(0.05)))
+            .padding(12)
+            .background(Color.black)
+            .environment(\.colorScheme, .dark)
         }
-        write(panel(expanded: false), "balance-collapsed.png")
-        store.toggleCardExpanded(.deepseek)
-        write(panel(expanded: true), "balance-expanded.png")
-        store.toggleCardExpanded(.deepseek)
-        write(ShareableCard(store: store) { ProviderCardView(store: store, id: .deepseek, forExport: true) }, "balance-copied.png")
-        write(
-            BalanceSheetView(store: store, id: .deepseek, sheet: sheet, focusedKey: "a")
-                .frame(width: 326)
-                .padding(24)
-                .background(Color(white: 0.06))
-                .environment(\.colorScheme, .dark),
-            "balance-key.png")
+        let signedIn = store(console)
+        write(panel(signedIn, console, period: .last7), "balance-console-7d.png")
+        write(panel(signedIn, console, period: .last30, style: .line), "balance-console-30d-line.png")
+        write(panel(signedIn, console, period: .today), "balance-console-today.png")
+        write(panel(signedIn, console, period: .all), "balance-console-all.png")
+        write(panel(signedIn, console, period: .last30, focused: "a"), "balance-console-key.png")
+        write(ShareableCard(store: signedIn) { ProviderCardView(store: signedIn, id: .deepseek, forExport: true) }, "balance-copied.png")
+        let apiKey = store(estimated)
+        write(panel(apiKey, estimated, period: .last7), "balance-estimated.png")
     }
 
     /// The last readings, the archive and the trend history this Mac has on disk.

@@ -450,8 +450,8 @@ public enum ProviderID: String, CaseIterable, Codable, Sendable, Identifiable {
             return L10n.t("Session token (Bearer) from manus.im.", "manus.im 的会话 token（Bearer）。")
         case .deepseek:
             return L10n.t(
-                "An API key shows the balance. For this month's spend and each key's and model's usage, paste the console's sign-in token instead: open platform.deepseek.com signed in, DevTools → Application → Local Storage → userToken, copy its value.",
-                "填 API Key 只显示余额。想看本月消费和每个 Key、每个模型的用量，改填控制台登录令牌：登录 platform.deepseek.com 后打开开发者工具 → 应用 → 本地存储 → userToken，复制它的值。")
+                "An API key (platform.deepseek.com → API Keys) shows only the balance. For this month's spend and every key's and model's usage, choose Sign in in a browser… and sign in to the DeepSeek console; the sign-in is kept in place of the key.",
+                "填 API Key（platform.deepseek.com → API Keys）只能看到余额。想看本月消费和每个 Key、每个模型的用量，点「浏览器登录…」登录 DeepSeek 开放平台即可，登录凭证会替换掉 API Key。")
         case .alibaba:
             return L10n.t(
                 "Full Cookie header from bailian.console.aliyun.com (or the international Model Studio console), signed in.",

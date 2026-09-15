@@ -4,8 +4,9 @@ import QuotaCore
 
 /// Sign in to a cookie provider without leaving the app: a window with a
 /// web view on the provider's own site. The moment the session cookie the
-/// provider's API wants shows up in the web view's jar, it is stored as the
-/// credential and the window closes. Nothing is read from the user's other
+/// provider's API wants shows up in the web view's jar — or, for a console
+/// that keeps it in local storage, the session token there — it is stored
+/// as the credential and the window closes. Nothing is read from the user's other
 /// browsers — this is the in-app equivalent of CodexBar's "open the site
 /// and wait for the cookie", without touching Chrome's or Safari's stores.
 @MainActor
@@ -18,6 +19,9 @@ final class BrowserLogin: NSObject, WKNavigationDelegate, NSWindowDelegate {
         /// Store every cookie for the domain as a Cookie header, for the
         /// consoles that want the whole session rather than one token.
         var wholeHeader = false
+        /// A console that keeps its sign-in in local storage rather than a
+        /// cookie: the key to read once the page is on `domain`.
+        var localStorageKey: String?
     }
 
     static func target(for id: ProviderID) -> Target? {
@@ -32,6 +36,12 @@ final class BrowserLogin: NSObject, WKNavigationDelegate, NSWindowDelegate {
         case .mimo:
             Target(url: URL(string: "https://platform.xiaomimimo.com/#/console/balance")!,
                    cookie: "api-platform_serviceToken", domain: "xiaomimimo.com", wholeHeader: true)
+        case .deepseek:
+            // The platform console signs in on its own page and keeps the
+            // session as `userToken` in local storage — the token its usage
+            // page sends, and the one that shows each key's usage.
+            Target(url: URL(string: "https://platform.deepseek.com/usage")!,
+                   cookie: "", domain: "platform.deepseek.com", localStorageKey: "userToken")
         case .qwen:
             Target(url: URL(string: "https://home.qwencloud.com/billing/subscription/token-plan-individual")!,
                    cookie: "login_aliyunid_ticket", domain: "qwencloud.com", wholeHeader: true)
@@ -107,6 +117,10 @@ final class BrowserLogin: NSObject, WKNavigationDelegate, NSWindowDelegate {
 
     private func checkCookies() async {
         guard !finished, let webView else { return }
+        if let key = target.localStorageKey {
+            await checkLocalStorage(key, in: webView)
+            return
+        }
         let cookies = await webView.configuration.websiteDataStore.httpCookieStore.allCookies()
         guard let match = cookies.first(where: {
             $0.name == target.cookie && $0.domain.contains(target.domain) && !$0.value.isEmpty
@@ -120,6 +134,30 @@ final class BrowserLogin: NSObject, WKNavigationDelegate, NSWindowDelegate {
         } else {
             finish(with: match.value)
         }
+    }
+
+    /// Reads the key on the console's own origin only: before sign-in the
+    /// page may be elsewhere (a login host, a QR page), where the key is
+    /// absent or means something else. The stored value is sometimes the
+    /// JSON `{"value": "…"}` it is wrapped in; the token alone is kept.
+    private func checkLocalStorage(_ key: String, in webView: WKWebView) async {
+        guard webView.url?.host == target.domain else { return }
+        let script = """
+        (() => {
+          const raw = localStorage.getItem(\(String(reflecting: key)));
+          if (!raw) return null;
+          try {
+            const parsed = JSON.parse(raw);
+            if (parsed && typeof parsed === 'object' && typeof parsed.value === 'string') return parsed.value;
+            if (typeof parsed === 'string') return parsed;
+          } catch (e) {}
+          return raw;
+        })()
+        """
+        guard let value = try? await webView.evaluateJavaScript(script) as? String,
+              !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        else { return }
+        finish(with: value)
     }
 
     private func finish(with value: String) {

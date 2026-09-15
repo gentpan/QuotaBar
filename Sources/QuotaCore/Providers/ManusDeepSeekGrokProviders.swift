@@ -104,11 +104,17 @@ public struct DeepSeekProvider: QuotaProvider {
 
     static let console = "https://platform.deepseek.com/api/v0"
 
-    /// The console's own reads, as its usage page makes them: the wallets and
-    /// this month's spend, the keys, then cost and tokens per key per day.
-    /// One range covers the month and the week — whichever starts earlier, at
-    /// most 31 days, which is as long a range as the console accepts — so the
-    /// three periods come from two requests.
+    /// The console's own reads, as its usage page makes them:
+    ///
+    /// - the wallets, and everything ever spent (`total_costs`);
+    /// - the keys, with the names given them on DeepSeek;
+    /// - cost and requests per key per model per day over the last thirty
+    ///   days — as long a range as the per-key endpoints accept is 31 days;
+    /// - today's cost hour by hour, for today's chart;
+    /// - a month at a time for the chart of all of it, from the month the
+    ///   oldest key was made. A month that is over never changes, so months
+    ///   already read are carried over from the last reading and only the
+    ///   current one — and at most a few missing ones — are asked for.
     static func fetchConsole(token: String, now: Date = .now, calendar: Calendar = .current) async throws -> UsageSnapshot {
         let headers = [
             "Authorization": "Bearer \(token)",
@@ -117,47 +123,68 @@ public struct DeepSeekProvider: QuotaProvider {
             "Referer": "https://platform.deepseek.com/usage",
             "User-Agent": QwenProvider.browserAgent,
         ]
+        func get(_ path: String) async -> Data? {
+            try? await HTTP.get(URL(string: "\(console)/\(path)")!, headers: headers).requireOK().data
+        }
         let summary = try await HTTP.get(URL(string: "\(console)/users/get_user_summary")!, headers: headers).requireOK()
         let range = ConsoleRange(now: now, calendar: calendar)
-        let query = "start=\(Int(range.start.timeIntervalSince1970))&end=\(Int(range.end.timeIntervalSince1970))&tz=\(calendar.timeZone.secondsFromGMT(for: now))"
-        let keys = try? await HTTP.get(URL(string: "\(console)/users/get_api_keys")!, headers: headers).requireOK()
-        let cost = try? await HTTP.get(URL(string: "\(console)/usage/by_api_key/cost?\(query)")!, headers: headers).requireOK()
-        let amount = try? await HTTP.get(URL(string: "\(console)/usage/by_api_key/amount?\(query)")!, headers: headers).requireOK()
-        return try parseConsole(summary: summary.data, keys: keys?.data, cost: cost?.data, amount: amount?.data, range: range)
+        let tz = calendar.timeZone.secondsFromGMT(for: now)
+        let recent = "start=\(Int(range.start.timeIntervalSince1970))&end=\(Int(range.end.timeIntervalSince1970))&tz=\(tz)"
+        let day = "start=\(Int(range.today.timeIntervalSince1970))&end=\(Int(range.end.timeIntervalSince1970))&tz=\(tz)"
+        let keys = await get("users/get_api_keys")
+        let cost = await get("usage/by_api_key/cost?\(recent)")
+        let amount = await get("usage/by_api_key/amount?\(recent)")
+        let hourly = await get("usage/by_api_key/cost?\(day)")
+
+        // Months for the all-time chart.
+        let firstKey = keys.flatMap { try? consoleData($0) }.flatMap { $0["api_keys"] as? [[String: Any]] }?
+            .compactMap { QwenProvider.date($0["created_at"]) }.min()
+        let cached = SnapshotCache.shared.snapshot(for: .deepseek)?.balance?.chart[.all] ?? []
+        var months: [UsageBucket] = []
+        var asked = 0
+        for start in UsageBuckets.starts(for: .all, now: now, first: firstKey ?? range.month, calendar: calendar).suffix(24) {
+            let current = start == range.month
+            if !current, let known = cached.first(where: { $0.start == start }) {
+                months.append(known)
+                continue
+            }
+            // A handful a refresh: the console turns away a burst.
+            guard current || asked < 3 else { continue }
+            asked += 1
+            let parts = calendar.dateComponents([.year, .month], from: start)
+            if let data = await get("usage/cost?month=\(parts.month ?? 1)&year=\(parts.year ?? 1970)"),
+               let bucket = monthBucket(data, start: start)
+            {
+                months.append(bucket)
+            }
+        }
+        return try parseConsole(summary: summary.data, keys: keys, cost: cost, amount: amount, hourly: hourly, months: months, range: range)
     }
 
     struct ConsoleRange {
+        let now: Date
+        let calendar: Calendar
         let today: Date
-        let week: Date
         let month: Date
+        /// The first of the thirty days the per-key reads cover.
         let start: Date
         let end: Date
 
-        /// The start of every day in the range, oldest first.
-        let days: [Date]
-
         init(now: Date, calendar: Calendar) {
+            self.now = now
+            self.calendar = calendar
             today = calendar.startOfDay(for: now)
-            week = calendar.dateInterval(of: .weekOfYear, for: now)?.start ?? today
             month = calendar.dateInterval(of: .month, for: now)?.start ?? today
-            start = min(week, month)
+            start = calendar.date(byAdding: .day, value: -29, to: today) ?? today
             end = calendar.date(byAdding: .day, value: 1, to: today) ?? today.addingTimeInterval(86_400)
-            var days: [Date] = []
-            var day = start
-            while day < end, days.count < 32 {
-                days.append(day)
-                guard let next = calendar.date(byAdding: .day, value: 1, to: day) else { break }
-                day = next
-            }
-            self.days = days
         }
 
-        func periods(containing time: Date) -> [KeyUsagePeriod] {
-            var periods: [KeyUsagePeriod] = []
-            if time >= today { periods.append(.today) }
-            if time >= week { periods.append(.week) }
-            if time >= month { periods.append(.month) }
-            return periods
+        /// The periods ending today that a day belongs to. All of it is told
+        /// by the console's own total, not by adding up thirty days.
+        func periods(containing day: Date) -> [KeyUsagePeriod] {
+            [KeyUsagePeriod.today, .last7, .last30].filter { period in
+                UsageBuckets.periodStart(period, now: now, calendar: calendar).map { day >= $0 } ?? false
+            }
         }
     }
 
@@ -177,7 +204,30 @@ public struct DeepSeekProvider: QuotaProvider {
         return payload
     }
 
-    static func parseConsole(summary: Data, keys: Data?, cost: Data?, amount: Data?, range: ConsoleRange) throws -> UsageSnapshot {
+    /// `usage/cost?month=&year=`: per currency, each model's cost split by
+    /// token type (`PROMPT_CACHE_HIT_TOKEN`, `RESPONSE_TOKEN`, …). Its
+    /// `biz_data` is the array itself, not an object.
+    static func monthBucket(_ data: Data, start: Date) -> UsageBucket? {
+        guard let body = ProviderJSON.object(data) as? [String: Any], (QwenProvider.number(body["code"]) ?? 0) == 0,
+              let inner = body["data"] as? [String: Any], (QwenProvider.number(inner["biz_code"]) ?? 0) == 0,
+              let currencies = inner["biz_data"] as? [[String: Any]]
+        else { return nil }
+        var money = MoneyTally()
+        for block in currencies {
+            let currency = (ProviderJSON.string(block["currency"]) ?? "CNY").uppercased()
+            let total = (block["total"] as? [[String: Any]] ?? []).reduce(0.0) { sum, model in
+                sum + (model["usage"] as? [[String: Any]] ?? []).reduce(0.0) { $0 + (QwenProvider.number($1["amount"]) ?? 0) }
+            }
+            if total > 0 { money.add(currency, total) }
+        }
+        return UsageBucket(start: start, costs: money.money)
+    }
+
+    static func parseConsole(
+        summary: Data, keys: Data?, cost: Data?, amount: Data?, hourly: Data? = nil, months: [UsageBucket] = [],
+        range: ConsoleRange) throws -> UsageSnapshot
+    {
+        let calendar = range.calendar
         let wallets = try consoleData(summary)
         func amounts(_ list: Any?, _ field: String) -> [(currency: String, value: Double)] {
             (list as? [[String: Any]] ?? []).compactMap { entry in
@@ -199,10 +249,13 @@ public struct DeepSeekProvider: QuotaProvider {
         if balances.contains(where: { $0.total > 0 }) { balances.removeAll { $0.total <= 0 } }
         if balances.isEmpty { balances = [AccountBalance(currency: "CNY", total: 0)] }
 
-        var spend: [KeyUsagePeriod: [Money]] = [:]
-        var models: [KeyUsagePeriod: [ModelCost]] = [:]
-        let month = amounts(wallets["total_costs"], "amount").filter { $0.value > 0 }
-        if !month.isEmpty { spend[.month] = month.map { Money(currency: $0.currency, amount: $0.value) } }
+        var usage: [KeyUsagePeriod: KeyUsageFigures] = [:]
+        var chart: [KeyUsagePeriod: [UsageBucket]] = [:]
+        // `total_costs` is everything the account has spent, not this month:
+        // on the owner's account it was ¥592.74 against ¥36.79 for September.
+        let lifetime = amounts(wallets["total_costs"], "amount").filter { $0.value > 0 }
+        usage[.all] = KeyUsageFigures(costs: lifetime.map { Money(currency: $0.currency, amount: $0.value) })
+        if !months.isEmpty { chart[.all] = months.sorted { $0.start < $1.start } }
 
         var keyList: [APIKeyUsage]?
         var note: String?
@@ -216,10 +269,11 @@ public struct DeepSeekProvider: QuotaProvider {
                     lastUsed: (QwenProvider.number(entry["last_use"]) ?? 0) > 0 ? QwenProvider.date(entry["last_use"]) : nil)
             }
         }
+
         let costs = cost.flatMap { try? consoleData($0) }
         let counts = amount.flatMap { try? consoleData($0) }
         if costs == nil && counts == nil {
-            note = L10n.t("Couldn't read each key's usage this time.", "这次没能读到各个 Key 的用量。")
+            note = L10n.t("Couldn't read the recent usage this time.", "这次没能读到最近的用量。")
         } else {
             var byID: [String: APIKeyUsage] = [:]
             var order: [String] = []
@@ -240,9 +294,8 @@ public struct DeepSeekProvider: QuotaProvider {
                 }
                 return id
             }
-            var money: [String: [KeyUsagePeriod: MoneyTally]] = [:]
-            var modelMoney: [String: [KeyUsagePeriod: [String: MoneyTally]]] = [:]
-            var dayMoney: [String: [Double: MoneyTally]] = [:]
+            // Every non-zero bucket of both replies, as (key, model, entry).
+            var events: [(key: String, model: String, entry: UsageBuckets.Entry)] = []
             for block in costs?["data"] as? [[String: Any]] ?? [] {
                 let currency = (ProviderJSON.string(block["currency"]) ?? "CNY").uppercased()
                 for series in block["series"] as? [[String: Any]] ?? [] {
@@ -250,88 +303,76 @@ public struct DeepSeekProvider: QuotaProvider {
                     let model = ProviderJSON.string(series["model"]) ?? "—"
                     for bucket in series["buckets"] as? [[String: Any]] ?? [] {
                         guard let time = QwenProvider.number(bucket["time"]), let value = QwenProvider.number(bucket["cost"]), value > 0 else { continue }
-                        dayMoney[id, default: [:]][time, default: MoneyTally()].add(currency, value)
-                        for period in range.periods(containing: Date(timeIntervalSince1970: time)) {
-                            money[id, default: [:]][period, default: MoneyTally()].add(currency, value)
-                            modelMoney[id, default: [:]][period, default: [:]][model, default: MoneyTally()].add(currency, value)
-                        }
-                    }
-                }
-            }
-            // Requests and tokens come from the other reply, also per key and
-            // per model; the model names are the same strings in both.
-            var requests: [String: [KeyUsagePeriod: [String: Int]]] = [:]
-            var tokens: [String: [KeyUsagePeriod: [String: Int]]] = [:]
-            var dayCounts: [String: [Double: (requests: Int, tokens: Int)]] = [:]
-            for series in counts?["series"] as? [[String: Any]] ?? [] {
-                guard let id = key(series["api_key"]) else { continue }
-                let model = ProviderJSON.string(series["model"]) ?? "—"
-                for bucket in series["buckets"] as? [[String: Any]] ?? [] {
-                    guard let time = QwenProvider.number(bucket["time"]), let usage = bucket["usage"] as? [String: Any] else { continue }
-                    let asked = Int(QwenProvider.number(usage["REQUEST"]) ?? 0)
-                    let used = ["RESPONSE_TOKEN", "PROMPT_CACHE_HIT_TOKEN", "PROMPT_CACHE_MISS_TOKEN"]
-                        .reduce(0) { $0 + Int(QwenProvider.number(usage[$1]) ?? 0) }
-                    guard asked > 0 || used > 0 else { continue }
-                    dayCounts[id, default: [:]][time, default: (0, 0)].requests += asked
-                    dayCounts[id, default: [:]][time, default: (0, 0)].tokens += used
-                    for period in range.periods(containing: Date(timeIntervalSince1970: time)) {
-                        requests[id, default: [:]][period, default: [:]][model, default: 0] += asked
-                        tokens[id, default: [:]][period, default: [:]][model, default: 0] += used
+                        events.append((id, model, UsageBuckets.Entry(date: Date(timeIntervalSince1970: time), currency: currency, cost: value)))
                     }
                 }
             }
             let known = counts != nil
-            var totals: [KeyUsagePeriod: MoneyTally] = [:]
-            var accountModels: [KeyUsagePeriod: [String: (money: MoneyTally, requests: Int, tokens: Int)]] = [:]
+            for series in counts?["series"] as? [[String: Any]] ?? [] {
+                guard let id = key(series["api_key"]) else { continue }
+                let model = ProviderJSON.string(series["model"]) ?? "—"
+                for bucket in series["buckets"] as? [[String: Any]] ?? [] {
+                    guard let time = QwenProvider.number(bucket["time"]), let figures = bucket["usage"] as? [String: Any] else { continue }
+                    let asked = Int(QwenProvider.number(figures["REQUEST"]) ?? 0)
+                    let used = ["RESPONSE_TOKEN", "PROMPT_CACHE_HIT_TOKEN", "PROMPT_CACHE_MISS_TOKEN"]
+                        .reduce(0) { $0 + Int(QwenProvider.number(figures[$1]) ?? 0) }
+                    guard asked > 0 || used > 0 else { continue }
+                    events.append((id, model, UsageBuckets.Entry(date: Date(timeIntervalSince1970: time), currency: "", cost: 0, requests: asked, tokens: used)))
+                }
+            }
+
+            func models(_ rows: [(key: String, model: String, entry: UsageBuckets.Entry)]) -> [ModelCost] {
+                Dictionary(grouping: rows, by: \.model).map { name, rows in
+                    let figures = UsageBuckets.figures(rows.map(\.entry), since: nil)
+                    return ModelCost(model: name, costs: figures.costs, requests: known ? figures.requests ?? 0 : nil, tokens: known ? figures.tokens ?? 0 : nil)
+                }
+                .sorted(by: ModelCost.busiestFirst)
+            }
+            func figures(_ rows: [(key: String, model: String, entry: UsageBuckets.Entry)]) -> KeyUsageFigures {
+                var total = UsageBuckets.figures(rows.map(\.entry), since: nil, models: models(rows))
+                if known { total.requests = total.requests ?? 0; total.tokens = total.tokens ?? 0 } else { total.requests = nil; total.tokens = nil }
+                return total
+            }
+
+            for period in [KeyUsagePeriod.today, .last7, .last30] {
+                let inPeriod = events.filter { range.periods(containing: $0.entry.date).contains(period) }
+                usage[period] = figures(inPeriod)
+            }
+            let days = UsageBuckets.starts(for: .last30, now: range.now, first: nil, calendar: calendar)
+            chart[.last30] = UsageBuckets.fill(days, span: .day, entries: events.map(\.entry), calendar: calendar)
+            chart[.last7] = Array((chart[.last30] ?? []).suffix(7))
+
             keyList = order.compactMap { id in
                 guard var entry = byID[id] else { return nil }
-                for period in KeyUsagePeriod.allCases {
-                    let costs = money[id]?[period]?.money ?? []
-                    for cost in costs { totals[period, default: MoneyTally()].add(cost.currency, cost.amount) }
-                    let spent = modelMoney[id]?[period] ?? [:]
-                    let asked = requests[id]?[period] ?? [:]
-                    let used = tokens[id]?[period] ?? [:]
-                    let names = Set(spent.keys).union(asked.keys).union(used.keys)
-                    let models = names.map { name -> ModelCost in
-                        var row = accountModels[period, default: [:]][name] ?? (MoneyTally(), 0, 0)
-                        for cost in spent[name]?.money ?? [] { row.money.add(cost.currency, cost.amount) }
-                        row.requests += asked[name] ?? 0
-                        row.tokens += used[name] ?? 0
-                        accountModels[period, default: [:]][name] = row
-                        return ModelCost(
-                            model: name, costs: spent[name]?.money ?? [],
-                            requests: known ? asked[name] ?? 0 : nil, tokens: known ? used[name] ?? 0 : nil)
-                    }
-                    .sorted(by: ModelCost.busiestFirst)
-                    let figures = KeyUsageFigures(
-                        costs: costs,
-                        requests: known ? asked.values.reduce(0, +) : nil,
-                        tokens: known ? used.values.reduce(0, +) : nil,
-                        models: models)
+                let mine = events.filter { $0.key == id }
+                for period in [KeyUsagePeriod.today, .last7, .last30] {
+                    let figures = figures(mine.filter { range.periods(containing: $0.entry.date).contains(period) })
                     if !figures.isEmpty { entry.usage[period] = figures }
                 }
                 if !entry.usage.isEmpty {
-                    entry.daily = range.days.map { day in
-                        let time = day.timeIntervalSince1970
-                        return DailyUsage(
-                            day: day,
-                            costs: dayMoney[id]?[time]?.money ?? [],
-                            requests: known ? dayCounts[id]?[time]?.requests ?? 0 : nil,
-                            tokens: known ? dayCounts[id]?[time]?.tokens ?? 0 : nil)
-                    }
+                    entry.daily = UsageBuckets.fill(days, span: .day, entries: mine.map(\.entry), calendar: calendar)
                 }
                 // A deleted key with nothing in range is not worth a row.
                 return entry.isDisabled && entry.usage.isEmpty ? nil : entry
             }
-            for period in [KeyUsagePeriod.today, .week] {
-                if let tally = totals[period] { spend[period] = tally.money }
+        }
+
+        // Today by the hour, from its own read; the daily figures above
+        // already count today, so this is for the chart only.
+        if let hours = hourly.flatMap({ try? consoleData($0) }) {
+            var entries: [UsageBuckets.Entry] = []
+            for block in hours["data"] as? [[String: Any]] ?? [] {
+                let currency = (ProviderJSON.string(block["currency"]) ?? "CNY").uppercased()
+                for series in block["series"] as? [[String: Any]] ?? [] {
+                    for bucket in series["buckets"] as? [[String: Any]] ?? [] {
+                        guard let time = QwenProvider.number(bucket["time"]), let value = QwenProvider.number(bucket["cost"]), value > 0 else { continue }
+                        entries.append(UsageBuckets.Entry(date: Date(timeIntervalSince1970: time), currency: currency, cost: value))
+                    }
+                }
             }
-            if spend[.month] == nil, let tally = totals[.month] { spend[.month] = tally.money }
-            for (period, rows) in accountModels {
-                models[period] = rows
-                    .map { ModelCost(model: $0.key, costs: $0.value.money.money, requests: known ? $0.value.requests : nil, tokens: known ? $0.value.tokens : nil) }
-                    .sorted(by: ModelCost.busiestFirst)
-            }
+            chart[.today] = UsageBuckets.fill(
+                UsageBuckets.starts(for: .today, now: range.now, first: nil, calendar: calendar),
+                span: .hour, entries: entries, calendar: calendar)
         }
 
         let windows = balanceWindows(balances, canCallAPI: nil)
@@ -340,8 +381,8 @@ public struct DeepSeekProvider: QuotaProvider {
             windows: windows,
             balance: BalanceSheet(
                 balances: balances,
-                spend: spend,
-                models: models,
+                usage: usage,
+                chart: chart,
                 keys: keyList,
                 keysNote: note,
                 representedWindowIDs: windows.map(\.id)))
@@ -398,8 +439,8 @@ public struct DeepSeekProvider: QuotaProvider {
             balance: BalanceSheet(
                 balances: balances,
                 keysNote: L10n.t(
-                    "An API key only shows the balance. Paste the console's sign-in token in Settings to see this month's spend and each key's usage.",
-                    "API Key 只能读到余额。在设置里改为粘贴控制台的登录令牌，可以看到本月消费和每个 Key 的用量。"),
+                    "For exact usage and each key's and model's, choose Sign in in a browser… for DeepSeek in Settings.",
+                    "想看精确用量和每个 Key、每个模型的明细，在设置 → 服务商 → DeepSeek 点「浏览器登录…」。"),
                 canCallAPI: canCall,
                 representedWindowIDs: windows.map(\.id)))
     }

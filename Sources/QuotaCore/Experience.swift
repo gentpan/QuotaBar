@@ -264,6 +264,8 @@ public struct ExperiencePrefs: Codable, Equatable, Sendable {
     public var balanceFloor: BalanceFloor = BalanceFloor()
     /// The providers already notified as low, until they are topped up.
     public var balanceFloorNotified: [String] = []
+    /// Bars or a line for a prepaid card's usage.
+    public var balanceChart: BalanceChartStyle = .bars
     /// A notification each Monday morning with last week's spend.
     public var weeklyDigest: Bool = true
     /// The week (`2026-W37`) whose digest was last sent.
@@ -293,7 +295,7 @@ public struct ExperiencePrefs: Codable, Equatable, Sendable {
         case deskCards, deskCardsMigrated
         case hideWhenSharing, hotkey, paceAlerts, localAPI, proxy, betaUpdates
         case resetEffects, resetNotify, resetCreditNotify, resetCreditNotified, hiddenProviders, cardWindows, hiddenWindows
-        case spendBudget, budgetNotified, balanceFloor, balanceFloorNotified, weeklyDigest, weeklyDigestSent
+        case spendBudget, budgetNotified, balanceFloor, balanceFloorNotified, balanceChart, weeklyDigest, weeklyDigestSent
         case shareSignature, shareShowsSignature, shareMasksAccount, shareCardShownForVersion
     }
 
@@ -344,6 +346,7 @@ public struct ExperiencePrefs: Codable, Equatable, Sendable {
         budgetNotified = value(.budgetNotified, d.budgetNotified)
         balanceFloor = value(.balanceFloor, d.balanceFloor)
         balanceFloorNotified = value(.balanceFloorNotified, d.balanceFloorNotified)
+        balanceChart = choice(.balanceChart, d.balanceChart)
         weeklyDigest = value(.weeklyDigest, d.weeklyDigest)
         weeklyDigestSent = value(.weeklyDigestSent, d.weeklyDigestSent)
         localAPI = value(.localAPI, d.localAPI)

@@ -453,7 +453,8 @@ final class UsageStore: ObservableObject {
 
     private func apply(_ id: ProviderID, _ result: Result<UsageSnapshot, Error>) {
         switch result {
-        case let .success(snapshot):
+        case let .success(reading):
+            let snapshot = withBalanceEstimate(id, reading)
             let before = meterReading
             // Signed in to another account: its trend starts afresh rather than
             // splicing two accounts into one line.

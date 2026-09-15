@@ -286,17 +286,18 @@ enum Diagnostics {
                 out += "  \(window.title): \(used)\(window.detail.map { " · " + $0 } ?? "")\(reset)\n"
             }
             if let sheet = snapshot.balance {
-                out += "  balance: \(sheet.balanceLine.isEmpty ? "—" : sheet.balanceLine)\(sheet.canCallAPI == false ? " · not enough for API calls" : "")\n"
+                out += "  balance: \(sheet.balanceLine.isEmpty ? "—" : sheet.balanceLine)\(sheet.canCallAPI == false ? " · not enough for API calls" : "")\(sheet.estimated ? " · usage estimated" : "")\n"
                 for period in KeyUsagePeriod.allCases {
-                    let spent = (sheet.spend[period] ?? []).map { QuotaFormat.amount($0.amount, code: $0.currency) }.joined(separator: " · ")
-                    let models = (sheet.models[period] ?? []).prefix(3).map { "\($0.model) \(KeyUsageFigures(costs: $0.costs).costLine)" }.joined(separator: ", ")
-                    out += "  \(period.rawValue): \(spent.isEmpty ? "—" : spent)\(models.isEmpty ? "" : " · " + models)\n"
+                    let figures = sheet.usage[period]
+                    let models = (figures?.models ?? []).prefix(3).map { "\($0.model) \(KeyUsageFigures(costs: $0.costs).costLine)" }.joined(separator: ", ")
+                    let bars = sheet.chart[period].map { " · \($0.count) \(period.bucket.rawValue)s, \($0.filter { $0.costTotal > 0 }.count) with spend" } ?? ""
+                    out += "  \(period.rawValue): \(figures.map { $0.costLine } ?? "—")\(figures?.requests.map { " · \($0) requests" } ?? "")\(bars)\(models.isEmpty ? "" : " · " + models)\n"
                 }
                 if let keys = sheet.keys {
-                    out += "  keys: \(keys.count), active this month: \(sheet.activeKeys(in: .month).count)\n"
-                    for key in sheet.activeKeys(in: .month) {
-                        let month = key.usage[.month]
-                        out += "    \(key.name) \(key.maskedKey ?? "")\(key.isDisabled ? " (deleted)" : ""): \(month?.costLine ?? "—") · \(month?.requests ?? 0) requests · \(key.daily.count) days\n"
+                    out += "  keys: \(keys.count), active in 30 days: \(sheet.activeKeys(in: .last30).count)\n"
+                    for key in sheet.activeKeys(in: .last30) {
+                        let month = key.usage[.last30]
+                        out += "    \(key.name) \(key.maskedKey ?? "")\(key.isDisabled ? " (deleted)" : ""): \(month?.costLine ?? "—") · \(month?.requests ?? 0) requests\n"
                     }
                 }
                 if let note = sheet.keysNote { out += "  note: \(note)\n" }

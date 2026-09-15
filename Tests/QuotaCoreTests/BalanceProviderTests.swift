@@ -94,9 +94,26 @@ final class BalanceProviderTests: XCTestCase {
         return try! JSONSerialization.data(withJSONObject: body)
     }
 
+    private func hourly() -> Data {
+        let today = midnight(15)
+        let body: [String: Any] = ["code": 0, "msg": "", "data": ["biz_code": 0, "biz_msg": "", "biz_data": [
+            "start": today, "end": today + 86_400, "bucket": 3_600,
+            "data": [["currency": "CNY", "series": [
+                ["api_key": ["tracking_id": "t-editor", "name": "Editor", "sensitive_id": "sk-aaaa****1111", "valid": true],
+                 "model": "deepseek-v4-pro",
+                 "buckets": [["time": today + 3 * 3_600, "cost": "0.5"], ["time": today + 9 * 3_600, "cost": "1.5"]]],
+            ]]],
+        ]]]
+        return try! JSONSerialization.data(withJSONObject: body)
+    }
+
+    private var august: UsageBucket {
+        UsageBucket(start: Date(timeIntervalSince1970: TimeInterval(midnight(1))).addingTimeInterval(-31 * 86_400), costs: [Money(currency: "CNY", amount: 50)])
+    }
+
     private func console() throws -> UsageSnapshot {
         try DeepSeekProvider.parseConsole(
-            summary: summary, keys: keys, cost: cost(), amount: amount(),
+            summary: summary, keys: keys, cost: cost(), amount: amount(), hourly: hourly(), months: [august],
             range: .init(now: now, calendar: calendar))
     }
 
@@ -106,61 +123,86 @@ final class BalanceProviderTests: XCTestCase {
             AccountBalance(currency: "USD", total: 12.33, paid: 12.33),
             AccountBalance(currency: "CNY", total: 107.39, paid: 100, granted: 7.39),
         ])
-        XCTAssertEqual(sheet.spend[.month], [Money(currency: "USD", amount: 7.66), Money(currency: "CNY", amount: 592.67)])
     }
 
-    func testEachKeyIsToldOverTodayThisWeekAndThisMonth() throws {
+    func testAllOfItIsTheConsolesLifetimeTotalNotThisMonth() throws {
+        let sheet = try XCTUnwrap(try console().balance)
+        XCTAssertEqual(sheet.usage[.all]?.costs, [Money(currency: "USD", amount: 7.66), Money(currency: "CNY", amount: 592.67)])
+        XCTAssertEqual(sheet.chart[.all]?.map(\.costTotal), [50])
+    }
+
+    func testTheAccountIsToldOverTodaySevenAndThirtyDays() throws {
+        let sheet = try XCTUnwrap(try console().balance)
+        XCTAssertEqual(sheet.usage[.today]?.costs, [Money(currency: "CNY", amount: 2), Money(currency: "USD", amount: 1)])
+        XCTAssertEqual(sheet.usage[.last7]?.costs, [Money(currency: "CNY", amount: 7), Money(currency: "USD", amount: 1)])
+        XCTAssertEqual(sheet.usage[.last30]?.costs, [Money(currency: "CNY", amount: 17), Money(currency: "USD", amount: 1)])
+        XCTAssertEqual(sheet.usage[.last30]?.requests, 23)
+        XCTAssertEqual(sheet.usage[.last30]?.tokens, 2_150)
+    }
+
+    func testTheChartsAreHoursForTodayAndDaysForTheWeekAndMonth() throws {
+        let sheet = try XCTUnwrap(try console().balance)
+        let hours = try XCTUnwrap(sheet.chart[.today])
+        XCTAssertEqual(hours.count, 24)
+        XCTAssertEqual(hours[9].costTotal, 1.5)
+        XCTAssertEqual(hours[3].costTotal, 0.5)
+        let days = try XCTUnwrap(sheet.chart[.last30])
+        XCTAssertEqual(days.count, 30)
+        XCTAssertEqual(days.first?.start, Date(timeIntervalSince1970: TimeInterval(midnight(15))).addingTimeInterval(-29 * 86_400))
+        XCTAssertEqual(days[15].costTotal, 10, "1 September")
+        XCTAssertEqual(days[15].requests, 20)
+        XCTAssertEqual(sheet.chart[.last7]?.count, 7)
+        XCTAssertEqual(sheet.chart[.last7]?.last?.costTotal, 3)
+    }
+
+    func testEachKeyIsToldOverThePeriodsAndDayByDay() throws {
         let sheet = try XCTUnwrap(try console().balance)
         let editor = try XCTUnwrap(sheet.keys?.first { $0.id == "t-editor" })
         XCTAssertEqual(editor.maskedKey, "sk-aaaa****1111")
         XCTAssertEqual(editor.usage[.today]?.costs, [Money(currency: "CNY", amount: 2)])
-        XCTAssertEqual(editor.usage[.week]?.costs, [Money(currency: "CNY", amount: 7)])
-        XCTAssertEqual(editor.usage[.month]?.costs, [Money(currency: "CNY", amount: 17)])
-        XCTAssertEqual(editor.usage[.month]?.requests, 23)
+        XCTAssertEqual(editor.usage[.last7]?.costs, [Money(currency: "CNY", amount: 7)])
+        XCTAssertEqual(editor.usage[.last30]?.costs, [Money(currency: "CNY", amount: 17)])
+        XCTAssertEqual(editor.usage[.last30]?.requests, 23)
         XCTAssertEqual(editor.usage[.today]?.tokens, 150)
-        XCTAssertEqual(editor.usage[.month]?.models.map(\.model), ["deepseek-chat", "deepseek-v4-pro", "deepseek-chat & deepseek-reasoner"])
-        XCTAssertEqual(sheet.spend[.today], [Money(currency: "CNY", amount: 2), Money(currency: "USD", amount: 1)])
-    }
-
-    func testEachKeyIsAlsoToldDayByDayAcrossTheRange() throws {
-        let sheet = try XCTUnwrap(try console().balance)
-        let editor = try XCTUnwrap(sheet.keys?.first { $0.id == "t-editor" })
-        // 1 to 15 September: the month began before this week.
-        XCTAssertEqual(editor.daily.count, 15)
-        XCTAssertEqual(editor.daily.first?.costs, [Money(currency: "CNY", amount: 10)])
-        XCTAssertEqual(editor.daily.first?.requests, 20)
-        XCTAssertEqual(editor.daily[1].costTotal, 0)
-        XCTAssertEqual(editor.daily.last?.costs, [Money(currency: "CNY", amount: 2)])
-        XCTAssertEqual(editor.daily.last?.tokens, 150)
+        XCTAssertNil(editor.usage[.all], "the console has no per-key lifetime total")
+        XCTAssertEqual(editor.daily.count, 30)
+        XCTAssertEqual(editor.daily[15].costs, [Money(currency: "CNY", amount: 10)])
         XCTAssertTrue(try XCTUnwrap(sheet.keys?.first { $0.id == "t-idle" }).daily.isEmpty)
     }
 
-    func testTheWholeAccountIsAlsoToldPerModel() throws {
+    func testModelsAreToldPerPeriodBusiestFirst() throws {
         let sheet = try XCTUnwrap(try console().balance)
-        let month = try XCTUnwrap(sheet.models[.month])
-        XCTAssertEqual(month.first?.model, "deepseek-chat")
+        let month = try XCTUnwrap(sheet.usage[.last30]?.models)
+        XCTAssertEqual(month.map(\.model), ["deepseek-chat", "deepseek-v4-pro", "deepseek-chat & deepseek-reasoner"])
         XCTAssertEqual(month.first?.costs, [Money(currency: "CNY", amount: 15), Money(currency: "USD", amount: 1)])
         // Requests and tokens are reported under the combined model name.
-        let combined = try XCTUnwrap(month.first { $0.model == "deepseek-chat & deepseek-reasoner" })
-        XCTAssertEqual(combined.requests, 23)
-        XCTAssertEqual(combined.tokens, 2150)
-        XCTAssertEqual(sheet.models[.today]?.map(\.model).first, "deepseek-v4-pro")
+        XCTAssertEqual(month.last?.requests, 23)
+        XCTAssertEqual(sheet.usage[.today]?.models.first?.model, "deepseek-v4-pro")
     }
 
     func testAnIdleKeyIsListedButNotActiveAndADeletedOneOnlyWhileItHasHistory() throws {
         let sheet = try XCTUnwrap(try console().balance)
         XCTAssertEqual(sheet.keys?.map(\.id), ["t-editor", "t-idle", "t-gone"])
         XCTAssertEqual(sheet.keys?.last?.isDisabled, true)
-        XCTAssertEqual(sheet.activeKeys(in: .month).map(\.id), ["t-editor", "t-gone"])
+        XCTAssertEqual(sheet.activeKeys(in: .last30).map(\.id), ["t-editor", "t-gone"])
         XCTAssertEqual(sheet.activeKeys(in: .today).map(\.id), ["t-editor", "t-gone"])
     }
 
-    func testTheRangeStartsAtTheEarlierOfTheMonthAndTheWeek() {
-        // Tuesday 1 September: the week began on Monday 31 August.
-        let range = DeepSeekProvider.ConsoleRange(now: Date(timeIntervalSince1970: 1_788_238_800), calendar: calendar)
-        XCTAssertEqual(range.start, range.week)
-        XCTAssertLessThan(range.week, range.month)
+    func testAMonthReadAddsUpEveryModelAndTokenType() throws {
+        let data = json(#"{"code":0,"msg":"","data":{"biz_code":0,"biz_msg":"","biz_data":[{"currency":"CNY","total":[{"model":"deepseek-chat","usage":[{"type":"PROMPT_TOKEN","amount":"0"},{"type":"PROMPT_CACHE_MISS_TOKEN","amount":"16.37"},{"type":"RESPONSE_TOKEN","amount":"19.49"}]},{"model":"deepseek-v4-pro","usage":[{"type":"PROMPT_CACHE_HIT_TOKEN","amount":"0.88"}]}],"days":[]},{"currency":"USD","total":[],"days":[]}]}}"#)
+        let start = Date(timeIntervalSince1970: TimeInterval(midnight(1)))
+        let bucket = try XCTUnwrap(DeepSeekProvider.monthBucket(data, start: start))
+        XCTAssertEqual(bucket.start, start)
+        XCTAssertEqual(bucket.costs.count, 1)
+        XCTAssertEqual(bucket.costs.first?.currency, "CNY")
+        XCTAssertEqual(bucket.costs.first?.amount ?? 0, 36.74, accuracy: 0.001)
+    }
+
+    func testTheRecentRangeIsThirtyDaysEndingTonight() {
+        let range = DeepSeekProvider.ConsoleRange(now: now, calendar: calendar)
+        XCTAssertEqual(range.end.timeIntervalSince(range.start), 30 * 86_400)
         XCTAssertEqual(range.end.timeIntervalSince(range.today), 86_400)
+        XCTAssertEqual(range.month, Date(timeIntervalSince1970: TimeInterval(midnight(1))))
     }
 
     func testAMissingTokenIsUnauthorized() {
@@ -178,6 +220,7 @@ final class BalanceProviderTests: XCTestCase {
         XCTAssertEqual(sheet.balances.count, 2)
         XCTAssertNotNil(sheet.keysNote)
         XCTAssertEqual(sheet.keys?.count, 2)
+        XCTAssertNotNil(sheet.usage[.all], "the lifetime total comes with the wallets")
     }
 
     // MARK: OpenRouter
@@ -190,18 +233,21 @@ final class BalanceProviderTests: XCTestCase {
         XCTAssertTrue(sheet.balances.isEmpty)
         XCTAssertEqual(sheet.keys?.map(\.name), ["Agent", "Old"])
         XCTAssertEqual(sheet.keys?.first?.maskedKey, "sk-or-v1-abc...xyz")
-        XCTAssertEqual(sheet.activeKeys(in: .month).map(\.id), ["h1"])
-        XCTAssertEqual(sheet.spend[.week], [Money(currency: "USD", amount: 6)])
+        XCTAssertEqual(sheet.activeKeys(in: .last30).map(\.id), ["h1"])
+        XCTAssertEqual(sheet.usage[.last7]?.costs, [Money(currency: "USD", amount: 6)])
+        XCTAssertEqual(sheet.usage[.all]?.costs, [Money(currency: "USD", amount: 43)])
         XCTAssertNil(sheet.keysNote)
     }
 
     func testAnOrdinaryKeyShowsItselfAndTheCreditsAsABalance() throws {
         let snapshot = try OpenRouterProvider.parse(
             credits: json(#"{"data":{"total_credits":50,"total_usage":12.5}}"#),
-            key: json(#"{"data":{"label":"sk-or-v1-abc...xyz","usage_daily":1.2,"usage_weekly":4,"usage_monthly":12.5}}"#))
+            key: json(#"{"data":{"label":"sk-or-v1-abc...xyz","usage":12.5,"usage_daily":1.2,"usage_weekly":4,"usage_monthly":12.5}}"#))
         let sheet = try XCTUnwrap(snapshot.balance)
         XCTAssertEqual(sheet.balances, [AccountBalance(currency: "USD", total: 37.5, paid: 50)])
         XCTAssertEqual(sheet.keys?.count, 1)
+        XCTAssertEqual(sheet.usage[.today]?.costs, [Money(currency: "USD", amount: 1.2)])
+        XCTAssertEqual(sheet.usage[.all]?.costs, [Money(currency: "USD", amount: 12.5)])
         XCTAssertNotNil(sheet.keysNote)
         // The credits window keeps its figure for the ring; the card draws the sheet.
         XCTAssertEqual(snapshot.windows.first?.usedPercent, 25)
@@ -213,6 +259,7 @@ final class BalanceProviderTests: XCTestCase {
     func testMoonshotAndMiMoBalancesAreSheets() throws {
         let moonshot = try MoonshotBalanceProvider.parse(json(#"{"code":0,"data":{"available_balance":49.58,"voucher_balance":46.58,"cash_balance":3}}"#), currency: "CNY")
         XCTAssertEqual(moonshot.balance?.balances, [AccountBalance(currency: "CNY", total: 49.58, paid: 3, granted: 46.58)])
+        XCTAssertFalse(moonshot.balance?.hasUsage ?? true, "left for the estimate")
         let mimo = try MiMoProvider.parse(
             balance: json(#"{"code":0,"data":{"balance":"88.50","currency":"CNY","cashBalance":"80","giftBalance":"8.5"}}"#),
             detail: nil,
@@ -227,7 +274,51 @@ final class BalanceProviderTests: XCTestCase {
         let decoded = try JSONDecoder().decode(UsageSnapshot.self, from: JSONEncoder().encode(snapshot))
         XCTAssertEqual(decoded.balance, snapshot.balance)
         let text = String(decoding: try JSONEncoder().encode(snapshot.balance), as: UTF8.self)
-        XCTAssertTrue(text.contains(#""month""#), "periods encode as object keys")
+        XCTAssertTrue(text.contains(#""last30""#), "periods encode as object keys")
+    }
+
+    // MARK: Usage from the balance
+
+    private func at(_ day: Int, _ hour: Int, _ minute: Int = 0) -> Date {
+        calendar.date(from: DateComponents(year: 2026, month: 9, day: day, hour: hour, minute: minute))!
+    }
+
+    func testFallsAreSpendAndRisesAreTopUps() {
+        let readings = [
+            BalanceReading(date: at(13, 10), totals: ["CNY": 100]),
+            BalanceReading(date: at(14, 12), totals: ["CNY": 90]),
+            BalanceReading(date: at(15, 9), totals: ["CNY": 120]),
+            BalanceReading(date: at(15, 9, 30), totals: ["CNY": 115]),
+        ]
+        XCTAssertEqual(BalanceEstimate.entries(readings).map(\.cost), [10, 5])
+        var sheet = BalanceSheet(balances: [AccountBalance(currency: "CNY", total: 115)])
+        BalanceEstimate.apply(to: &sheet, readings: readings, now: now, calendar: calendar)
+        XCTAssertTrue(sheet.estimated)
+        XCTAssertEqual(sheet.estimatedSince, at(13, 10))
+        XCTAssertEqual(sheet.usage[.today]?.costs, [Money(currency: "CNY", amount: 5)])
+        XCTAssertEqual(sheet.usage[.last7]?.costs, [Money(currency: "CNY", amount: 15)])
+        XCTAssertEqual(sheet.usage[.all]?.costs, [Money(currency: "CNY", amount: 15)])
+        XCTAssertEqual(sheet.chart[.last7]?.map(\.costTotal), [0, 0, 0, 0, 0, 10, 5])
+        XCTAssertEqual(sheet.chart[.today]?[9].costTotal, 5)
+        XCTAssertEqual(sheet.chart[.all]?.count, 1)
+    }
+
+    func testAnEstimateNeverReplacesRealUsage() {
+        var sheet = BalanceSheet(balances: [AccountBalance(currency: "CNY", total: 1)], keys: [])
+        BalanceEstimate.apply(to: &sheet, readings: [BalanceReading(date: at(1, 0), totals: ["CNY": 9]), BalanceReading(date: at(2, 0), totals: ["CNY": 1])], now: now, calendar: calendar)
+        XCTAssertFalse(sheet.estimated)
+        XCTAssertTrue(sheet.usage.isEmpty)
+    }
+
+    func testTheHistoryKeepsAReadingOnlyWhenTheBalanceMoved() throws {
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("balance-history-\(UUID().uuidString).json")
+        defer { try? FileManager.default.removeItem(at: url) }
+        let store = BalanceHistoryStore(fileURL: url)
+        store.record(.deepseek, balances: [AccountBalance(currency: "CNY", total: 10)], at: at(1, 0))
+        store.record(.deepseek, balances: [AccountBalance(currency: "CNY", total: 10)], at: at(1, 1))
+        store.record(.deepseek, balances: [AccountBalance(currency: "CNY", total: 9)], at: at(1, 2))
+        XCTAssertEqual(store.readings(for: .deepseek).map(\.date), [at(1, 0), at(1, 2)])
+        XCTAssertEqual(BalanceHistoryStore(fileURL: url).readings(for: .deepseek).count, 2, "written to disk")
     }
 
     // MARK: Low balance

@@ -12,13 +12,14 @@ import Foundation
 /// local API and the surfaces that only know windows keep reading something;
 /// the card draws the sheet and leaves those windows out.
 public struct BalanceSheet: Sendable, Equatable, Codable {
-    /// One entry per currency the account holds, largest first as the
-    /// provider lists them.
+    /// One entry per currency the account holds, as the provider lists them.
     public var balances: [AccountBalance]
-    /// Spend so far in each period, per currency. Empty periods are absent.
-    public var spend: [KeyUsagePeriod: [Money]]
-    /// The whole account's usage per model in each period, busiest first.
-    public var models: [KeyUsagePeriod: [ModelCost]]
+    /// The whole account's cost, requests, tokens and models per period.
+    /// A period the provider cannot tell is absent.
+    public var usage: [KeyUsagePeriod: KeyUsageFigures]
+    /// What the chart draws per period, oldest first: hours for today, days
+    /// for seven and thirty days, months for all of it.
+    public var chart: [KeyUsagePeriod: [UsageBucket]]
     /// Each key's usage. Nil when the credential cannot see keys at all — say
     /// why in `keysNote` — and empty when it can and there are none.
     public var keys: [APIKeyUsage]?
@@ -26,26 +27,56 @@ public struct BalanceSheet: Sendable, Equatable, Codable {
     public var keysNote: String?
     /// False when the provider says the balance cannot pay for a call.
     public var canCallAPI: Bool?
+    /// The usage was worked out on this Mac from how the balance fell between
+    /// readings, because the credential cannot ask for usage.
+    public var estimated: Bool
+    /// When the estimate's readings start, for saying so.
+    public var estimatedSince: Date?
     /// The windows this sheet stands in for; the card does not draw them.
     public var representedWindowIDs: [String]
 
     public init(
         balances: [AccountBalance],
-        spend: [KeyUsagePeriod: [Money]] = [:],
-        models: [KeyUsagePeriod: [ModelCost]] = [:],
+        usage: [KeyUsagePeriod: KeyUsageFigures] = [:],
+        chart: [KeyUsagePeriod: [UsageBucket]] = [:],
         keys: [APIKeyUsage]? = nil,
         keysNote: String? = nil,
         canCallAPI: Bool? = nil,
+        estimated: Bool = false,
+        estimatedSince: Date? = nil,
         representedWindowIDs: [String] = [])
     {
         self.balances = balances
-        self.spend = spend
-        self.models = models
+        self.usage = usage
+        self.chart = chart
         self.keys = keys
         self.keysNote = keysNote
         self.canCallAPI = canCallAPI
+        self.estimated = estimated
+        self.estimatedSince = estimatedSince
         self.representedWindowIDs = representedWindowIDs
     }
+
+    private enum CodingKeys: String, CodingKey {
+        case balances, usage, chart, keys, keysNote, canCallAPI, estimated, estimatedSince, representedWindowIDs
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.init(
+            balances: (try? c.decodeIfPresent([AccountBalance].self, forKey: .balances)) ?? [],
+            usage: (try? c.decodeIfPresent([KeyUsagePeriod: KeyUsageFigures].self, forKey: .usage)) ?? [:],
+            chart: (try? c.decodeIfPresent([KeyUsagePeriod: [UsageBucket]].self, forKey: .chart)) ?? [:],
+            keys: try? c.decodeIfPresent([APIKeyUsage].self, forKey: .keys),
+            keysNote: try? c.decodeIfPresent(String.self, forKey: .keysNote),
+            canCallAPI: try? c.decodeIfPresent(Bool.self, forKey: .canCallAPI),
+            estimated: (try? c.decodeIfPresent(Bool.self, forKey: .estimated)) ?? false,
+            estimatedSince: try? c.decodeIfPresent(Date.self, forKey: .estimatedSince),
+            representedWindowIDs: (try? c.decodeIfPresent([String].self, forKey: .representedWindowIDs)) ?? [])
+    }
+
+    /// Whether there is any usage to show at all.
+    public var hasUsage: Bool { !usage.isEmpty || keys != nil }
 
     /// Keys with anything spent or asked in `period`, busiest first. Cost
     /// orders them — a request is not a unit of money — and requests break
@@ -65,7 +96,7 @@ public struct BalanceSheet: Sendable, Equatable, Codable {
         balances.map { QuotaFormat.amount($0.total, code: $0.currency) }.joined(separator: " · ")
     }
 
-    /// "¥107", "$12" — the largest balance without its cents, for a ring's
+    /// "¥107", "$12" — the first balance without its cents, for a ring's
     /// middle or the notch strip.
     public var compactBalance: String? {
         guard let first = balances.first else { return nil }
@@ -100,24 +131,61 @@ public struct Money: Sendable, Equatable, Codable {
     }
 }
 
-/// The periods a key's usage is told over: calendar ones, in the time zone
-/// the provider was asked in, so they line up with its own console.
+/// The periods usage is told over, ending today: today, the last seven and
+/// thirty days, and everything the provider or this Mac has.
+///
 /// `CodingKeyRepresentable` so a dictionary keyed by it encodes as an object
-/// ("month": …) rather than a flat array of alternating keys and values.
+/// ("last30": …) rather than a flat array of alternating keys and values.
 public enum KeyUsagePeriod: String, Sendable, CaseIterable, Codable, CodingKeyRepresentable, Identifiable {
     case today
-    case week
-    case month
+    case last7
+    case last30
+    case all
 
     public var id: String { rawValue }
 
     public var displayName: String {
         switch self {
         case .today: L10n.t("Today", "今日")
-        case .week: L10n.t("This week", "本周")
-        case .month: L10n.t("This month", "本月")
+        case .last7: L10n.t("7 days", "7 天")
+        case .last30: L10n.t("30 days", "30 天")
+        case .all: L10n.t("All", "全部")
         }
     }
+
+    /// What one bar or point of the chart covers.
+    public var bucket: UsageBucket.Span {
+        switch self {
+        case .today: .hour
+        case .last7, .last30: .day
+        case .all: .month
+        }
+    }
+}
+
+/// One bar of a chart: an hour, a day or a month.
+public struct UsageBucket: Sendable, Equatable, Codable, Identifiable {
+    public enum Span: String, Sendable, Codable {
+        case hour, day, month
+    }
+
+    /// Where the hour, day or month starts, in the time zone it was told in.
+    public var start: Date
+    public var costs: [Money]
+    public var requests: Int?
+    public var tokens: Int?
+
+    public var id: Date { start }
+
+    public init(start: Date, costs: [Money] = [], requests: Int? = nil, tokens: Int? = nil) {
+        self.start = start
+        self.costs = costs
+        self.requests = requests
+        self.tokens = tokens
+    }
+
+    /// For bar heights only; currencies are never added where they are read.
+    public var costTotal: Double { costs.reduce(0) { $0 + $1.amount } }
 }
 
 /// One API key and what it did.
@@ -131,13 +199,13 @@ public struct APIKeyUsage: Sendable, Equatable, Codable, Identifiable {
     public var isDisabled: Bool
     public var lastUsed: Date?
     public var usage: [KeyUsagePeriod: KeyUsageFigures]
-    /// Day by day across the range the provider was asked for, oldest first,
-    /// days without use included; empty when it only reports totals.
-    public var daily: [DailyUsage]
+    /// Day by day over the last thirty days, oldest first, days without use
+    /// included; empty when the provider only reports totals.
+    public var daily: [UsageBucket]
 
     public init(
         id: String, name: String, maskedKey: String? = nil, isDisabled: Bool = false,
-        lastUsed: Date? = nil, usage: [KeyUsagePeriod: KeyUsageFigures] = [:], daily: [DailyUsage] = [])
+        lastUsed: Date? = nil, usage: [KeyUsagePeriod: KeyUsageFigures] = [:], daily: [UsageBucket] = [])
     {
         self.id = id
         self.name = name
@@ -159,29 +227,16 @@ public struct APIKeyUsage: Sendable, Equatable, Codable, Identifiable {
             isDisabled: (try? c.decodeIfPresent(Bool.self, forKey: .isDisabled)) ?? false,
             lastUsed: try c.decodeIfPresent(Date.self, forKey: .lastUsed),
             usage: (try? c.decodeIfPresent([KeyUsagePeriod: KeyUsageFigures].self, forKey: .usage)) ?? [:],
-            daily: (try? c.decodeIfPresent([DailyUsage].self, forKey: .daily)) ?? [])
+            daily: (try? c.decodeIfPresent([UsageBucket].self, forKey: .daily)) ?? [])
     }
 }
 
-/// One day of one key.
-public struct DailyUsage: Sendable, Equatable, Codable, Identifiable {
-    /// The start of the day, in the time zone the provider was asked in.
-    public var day: Date
-    public var costs: [Money]
-    public var requests: Int?
-    public var tokens: Int?
+/// The chart style for a balance card's usage.
+public enum BalanceChartStyle: String, Sendable, Codable, CaseIterable, Identifiable {
+    case bars
+    case line
 
-    public var id: Date { day }
-
-    public init(day: Date, costs: [Money] = [], requests: Int? = nil, tokens: Int? = nil) {
-        self.day = day
-        self.costs = costs
-        self.requests = requests
-        self.tokens = tokens
-    }
-
-    /// For bar heights only; currencies are never added where they are read.
-    public var costTotal: Double { costs.reduce(0) { $0 + $1.amount } }
+    public var id: String { rawValue }
 }
 
 public struct KeyUsageFigures: Sendable, Equatable, Codable {
