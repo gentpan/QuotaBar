@@ -59,8 +59,9 @@
         <a role="menuitem" href="#providers">支持的服务商</a>
         <a role="menuitem" href="https://quota.run/zh/">Quota Run 排行榜</a>
         <hr>
-        <a role="menuitem" href="https://quota.bar/download/QuotaBar-0.5.4.dmg" download>下载 for Mac</a>
-        <a role="menuitem" href="https://github.com/gentpan/QuotaBar/releases/download/v0.5.4/QuotaBar-0.5.4.dmg">从 GitHub 下载<span class="mb-drop__ext" aria-hidden="true">↗</span></a>
+        <a role="menuitem" href="https://quota.bar/download/QuotaBar-0.5.4-apple-silicon.dmg" download>下载 Apple 芯片版</a>
+        <a role="menuitem" href="https://quota.bar/download/QuotaBar-0.5.4-intel.dmg" download>下载 Intel 版</a>
+        <a role="menuitem" href="https://github.com/gentpan/QuotaBar/releases/tag/v0.5.4">从 GitHub 下载<span class="mb-drop__ext" aria-hidden="true">↗</span></a>
         <a role="menuitem" href="https://github.com/gentpan/QuotaBar">查看源码<span class="mb-drop__ext" aria-hidden="true">↗</span></a>
       </div>
     </div>
@@ -341,23 +342,29 @@
       用了多少、什么时候重置，<br>
       菜单栏、刘海、屏幕边缘或桌面上一眼看完。
     </p>
-    <!-- 两个下载地址，同一个文件：quota.bar 自己的服务器（打不开 GitHub 也能下），
-         和 GitHub Releases（有的网络走 GitHub 更快）。 -->
+    <!-- 两个下载按钮，按芯片分：各是只含该架构的安装包（release_thin.sh 打的），
+         都放在 quota.bar 自己的服务器上，打不开 GitHub 也能下；GitHub Releases 上有
+         同样的文件和通用包。 -->
     <div class="hero__cta">
       <div class="hero__buttons">
-        <a class="btn btn--primary" href="https://quota.bar/download/QuotaBar-0.5.4.dmg" download>
+        <a class="btn btn--primary" href="https://quota.bar/download/QuotaBar-0.5.4-apple-silicon.dmg" download>
           <svg width="15" height="18" viewBox="0 0 15 18" fill="currentColor" aria-hidden="true">
           <path d="M12.3 9.5c0-2 1.6-3 1.7-3-1-1.4-2.4-1.6-2.9-1.6-1.2-.1-2.4.7-3 .7-.6 0-1.6-.7-2.6-.7C4.2 5 3 5.7 2.3 7c-1.3 2.3-.3 5.7 1 7.5.6.9 1.4 1.9 2.4 1.9.9 0 1.3-.6 2.4-.6 1.1 0 1.4.6 2.4.6 1 0 1.7-.9 2.3-1.8.7-1 1-2 1-2.1 0 0-2-.8-2-3zM10.4 3.4c.5-.6.9-1.5.8-2.4-.8 0-1.7.5-2.3 1.2-.5.6-.9 1.5-.8 2.4.9.1 1.8-.5 2.3-1.2z"/>
         </svg>
-          下载 for Mac
-          <span class="btn__src">quota.bar</span>
+          Apple 芯片
+          <span class="btn__src">M1 及更新</span>
         </a>
-        <a class="btn btn--ghost" href="https://github.com/gentpan/QuotaBar/releases/download/v0.5.4/QuotaBar-0.5.4.dmg">
-          <svg class="btn__mark" width="17" height="17" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
-          从 GitHub 下载
+        <a class="btn btn--primary" href="https://quota.bar/download/QuotaBar-0.5.4-intel.dmg" download>
+          <svg width="17" height="17" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" aria-hidden="true">
+          <rect x="3.5" y="3.5" width="9" height="9" rx="1.5"/><rect x="6" y="6" width="4" height="4" rx=".5"/>
+          <path d="M6 1.5v2M10 1.5v2M6 12.5v2M10 12.5v2M1.5 6h2M1.5 10h2M12.5 6h2M12.5 10h2" stroke-linecap="round"/>
+        </svg>
+          Intel 芯片
+          <span class="btn__src">Intel 机型</span>
         </a>
       </div>
-      <span class="btn__meta"><span class="latest-version">0.5.4</span> · Apple 公证 · 免费开源 · 两个地址是同一个文件</span>
+      <span class="btn__meta"><span class="latest-version">0.5.4</span> · 需要 macOS 14 Sonoma 或更新 · Apple 公证 · 免费开源 · 也可从 <a href="https://github.com/gentpan/QuotaBar/releases/tag/v0.5.4">GitHub</a> 下载</span>
+      <span class="btn__meta">不确定是哪种？点左上角苹果菜单 →「关于本机」：「芯片」写着 Apple M… 选 Apple 芯片，「处理器」写着 Intel 选 Intel。</span>
     </div>
   </div>
 
@@ -626,8 +633,9 @@
   <div class="shell">
     <img class="footer__icon" src="../assets/icon.png?v=b93e5857" alt="" loading="lazy" decoding="async">
     <div class="footer__links">
-      <a href="https://quota.bar/download/QuotaBar-0.5.4.dmg" download>下载</a>
-      <a href="https://github.com/gentpan/QuotaBar/releases/download/v0.5.4/QuotaBar-0.5.4.dmg">GitHub 下载</a>
+      <a href="https://quota.bar/download/QuotaBar-0.5.4-apple-silicon.dmg" download>Apple 芯片版下载</a>
+      <a href="https://quota.bar/download/QuotaBar-0.5.4-intel.dmg" download>Intel 版下载</a>
+      <a href="https://github.com/gentpan/QuotaBar/releases/tag/v0.5.4">GitHub 下载</a>
       <a href="https://quota.run/zh/">排行榜</a>
       <a href="https://github.com/gentpan/QuotaBar">源码</a>
       <a href="https://github.com/gentpan/QuotaBar/issues">反馈</a>

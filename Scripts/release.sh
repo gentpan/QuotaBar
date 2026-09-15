@@ -72,6 +72,12 @@ if [ -n "$SIGN_ID_USED" ]; then
 fi
 DMG_SHA="$(shasum -a 256 "$DIST/$DMG_NAME" | cut -d' ' -f1)"
 
+# One disk image per chip, for the site's two download buttons. The universal
+# zip and dmg above stay what updates and Homebrew install.
+if [ "${SKIP_NOTARIZE:-0}" != "1" ]; then
+  ./Scripts/release_thin.sh
+fi
+
 cat > "$DIST/quotabar.rb" <<CASK
 cask "quotabar" do
   version "${VERSION}"
@@ -105,7 +111,7 @@ echo "  sha256  $DMG_SHA"
 echo "  cask    $DIST/quotabar.rb"
 echo
 echo "Next:"
-echo "  1. gh release create v${VERSION} $DIST/$ZIP_NAME $DIST/$DMG_NAME --title 'QuotaBar ${VERSION}'"
+echo "  1. ./Scripts/publish_release.sh   (GitHub Release, quota.bar mirror, tap, site)"
 echo "  2. Copy $DIST/quotabar.rb into your tap repo as Casks/quotabar.rb"
 echo "     (repo must be named homebrew-tap, e.g. github.com/${REPO%%/*}/homebrew-tap)"
 echo "  3. Users then run:"

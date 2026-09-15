@@ -50,6 +50,10 @@ KIND_CLASS = {"新增": "add", "样式": "style", "修复": "fix", "删除": "re
               "Added": "add", "Style": "style", "Fixed": "fix", "Removed": "remove"}
 DOWNLOAD = "https://quota.bar/download/QuotaBar-{version}.dmg"
 GITHUB_DOWNLOAD = "https://github.com/gentpan/QuotaBar/releases/download/v{version}/QuotaBar-{version}.dmg"
+# One disk image per chip for the site's two download buttons, made by
+# Scripts/release_thin.sh; the universal one above stays for everything else.
+DOWNLOAD_ARCH = "https://quota.bar/download/QuotaBar-{version}-{arch}.dmg"
+GITHUB_RELEASE = "https://github.com/gentpan/QuotaBar/releases/tag/v{version}"
 
 # The two languages of the website. English lives at the root, Chinese under
 # /zh/, so every page-relative asset path in the Chinese copy climbs one level.
@@ -736,6 +740,9 @@ def main():
         info = LANGS[lang]
         values = dict(info, v=stamp, count=count, version=version,
                       dmg=DOWNLOAD.format(version=version), github_dmg=GITHUB_DOWNLOAD.format(version=version),
+                      dmg_arm=DOWNLOAD_ARCH.format(version=version, arch="apple-silicon"),
+                      dmg_intel=DOWNLOAD_ARCH.format(version=version, arch="intel"),
+                      github_release=GITHUB_RELEASE.format(version=version),
                       providers=site_providers(logos, count, lang, f"?v={stamp}"),
                       changelog=site_block(releases, lang))
         page = render_template(template, lang, values)

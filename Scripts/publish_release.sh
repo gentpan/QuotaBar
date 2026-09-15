@@ -23,16 +23,22 @@ STEPS="${STEPS:-github mirror tap site}"
 VERSION="${VERSION:-$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' Resources/Info.plist)}"
 ZIP="$DIST/QuotaBar-$VERSION.zip"
 DMG="$DIST/QuotaBar-$VERSION.dmg"
+# 官网两个下载按钮用的单一架构安装包，release_thin.sh 打的。
+DMG_ARM="$DIST/QuotaBar-$VERSION-apple-silicon.dmg"
+DMG_INTEL="$DIST/QuotaBar-$VERSION-intel.dmg"
 SSH=(ssh -i "$KEY" -o BatchMode=yes "$HOST")
 
 die() { echo "error: $*" >&2; exit 1; }
 has_step() { [[ " $STEPS " == *" $1 "* ]]; }
 
 [ -f "$ZIP" ] && [ -f "$DMG" ] || die "$DIST 里没有 $VERSION 的 zip 和 dmg，先跑 ./Scripts/release.sh"
+[ -f "$DMG_ARM" ] && [ -f "$DMG_INTEL" ] || die "$DIST 里没有 $VERSION 的 Apple 芯片版和 Intel 版 dmg，先跑 ./Scripts/release_thin.sh"
 grep -q "^## $VERSION " CHANGELOG.md || die "CHANGELOG.md 里还没有「## $VERSION · 日期」，版本还没定稿"
 git rev-parse -q --verify "refs/tags/v$VERSION" >/dev/null || die "没有 v$VERSION 的 tag"
 ZIP_SHA="$(shasum -a 256 "$ZIP" | cut -d' ' -f1)"
 DMG_SHA="$(shasum -a 256 "$DMG" | cut -d' ' -f1)"
+ARM_SHA="$(shasum -a 256 "$DMG_ARM" | cut -d' ' -f1)"
+INTEL_SHA="$(shasum -a 256 "$DMG_INTEL" | cut -d' ' -f1)"
 
 # 发布说明默认取两份更新日志里这个版本的那一节，英文在前。
 release_notes() {
@@ -58,7 +64,7 @@ if has_step github; then
   else
     notes="${NOTES:-$(mktemp)}"
     [ -n "${NOTES:-}" ] || release_notes > "$notes"
-    gh release create "v$VERSION" "$ZIP" "$DMG" --repo "$REPO" \
+    gh release create "v$VERSION" "$ZIP" "$DMG" "$DMG_ARM" "$DMG_INTEL" --repo "$REPO" \
       --title "QuotaBar $VERSION" --notes-file "$notes" --verify-tag
   fi
 fi
@@ -67,7 +73,7 @@ if has_step mirror; then
   echo "── 服务器副本 https://quota.bar/download/"
   "${SSH[@]}" "mkdir -p $ROOT/download"
   # 先传成 .part 再改名：下载到一半的人拿不到半截文件。
-  for f in "$ZIP" "$DMG"; do
+  for f in "$ZIP" "$DMG" "$DMG_ARM" "$DMG_INTEL"; do
     name="$(basename "$f")"
     scp -q -i "$KEY" -o BatchMode=yes "$f" "$HOST:$ROOT/download/$name.part"
     "${SSH[@]}" "mv $ROOT/download/$name.part $ROOT/download/$name"
@@ -75,9 +81,9 @@ if has_step mirror; then
   latest="$(mktemp)"
   notes_file="$(mktemp)"
   if [ -n "${NOTES:-}" ]; then cp "$NOTES" "$notes_file"; else release_notes > "$notes_file"; fi
-  python3 - "$VERSION" "$ZIP_SHA" "$DMG_SHA" "$REPO" "$notes_file" > "$latest" <<'PY'
+  python3 - "$VERSION" "$ZIP_SHA" "$DMG_SHA" "$REPO" "$notes_file" "$ARM_SHA" "$INTEL_SHA" > "$latest" <<'PY'
 import datetime, json, sys
-version, zip_sha, dmg_sha, repo, notes_file = sys.argv[1:6]
+version, zip_sha, dmg_sha, repo, notes_file, arm_sha, intel_sha = sys.argv[1:8]
 base = "https://quota.bar/download"
 print(json.dumps({
     "version": version,
@@ -85,6 +91,10 @@ print(json.dumps({
     "sha256": zip_sha,
     "dmg": f"{base}/QuotaBar-{version}.dmg",
     "dmgSha256": dmg_sha,
+    "dmgAppleSilicon": f"{base}/QuotaBar-{version}-apple-silicon.dmg",
+    "dmgAppleSiliconSha256": arm_sha,
+    "dmgIntel": f"{base}/QuotaBar-{version}-intel.dmg",
+    "dmgIntelSha256": intel_sha,
     "page": "https://quota.bar/changelog.html",
     "github": f"https://github.com/{repo}/releases/tag/v{version}",
     # 应用内的更新卡片读这里的摘要：英文一节、---、中文一节，和 GitHub 发布说明相同。
@@ -96,9 +106,9 @@ PY
   "${SSH[@]}" "chown -R www-data:www-data $ROOT/download && chmod 644 $ROOT/download/*"
 
   # 核对公网上拿到的，而不是服务器上放着的：中间隔着 Cloudflare。
-  remote="$("${SSH[@]}" "cd $ROOT/download && sha256sum QuotaBar-$VERSION.zip QuotaBar-$VERSION.dmg" | cut -d' ' -f1 | tr '\n' ' ')"
-  [ "$remote" = "$ZIP_SHA $DMG_SHA " ] || die "服务器上的文件校验值不对：$remote"
-  for f in "$ZIP" "$DMG"; do
+  remote="$("${SSH[@]}" "cd $ROOT/download && sha256sum QuotaBar-$VERSION.zip QuotaBar-$VERSION.dmg QuotaBar-$VERSION-apple-silicon.dmg QuotaBar-$VERSION-intel.dmg" | cut -d' ' -f1 | tr '\n' ' ')"
+  [ "$remote" = "$ZIP_SHA $DMG_SHA $ARM_SHA $INTEL_SHA " ] || die "服务器上的文件校验值不对：$remote"
+  for f in "$ZIP" "$DMG" "$DMG_ARM" "$DMG_INTEL"; do
     name="$(basename "$f")"
     want="$(stat -f%z "$f")"
     got="$(curl -sI --max-time 30 "https://quota.bar/download/$name" | tr -d '\r' | awk 'tolower($1)=="content-length:"{print $2}' | tail -1)"
