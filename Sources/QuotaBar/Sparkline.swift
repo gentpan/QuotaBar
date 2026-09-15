@@ -21,6 +21,8 @@ struct SparklineView: View {
     let values: [Double]
     let accent: Color
     var height: CGFloat = 26
+    /// "trend · last N refreshes" under the plot.
+    var showsCaption = true
 
     var body: some View {
         if values.count > 1 {
@@ -42,6 +44,7 @@ struct SparklineView: View {
                 .background(
                     RoundedRectangle(cornerRadius: Design.radiusTile - 2, style: .continuous)
                         .fill(Design.track.opacity(0.35)))
+                if showsCaption {
                 HStack(spacing: Design.space1) {
                     Text(L10n.t(
                         "trend · last \(values.count) refreshes",
@@ -53,6 +56,7 @@ struct SparklineView: View {
                 }
                 .font(.caption2)
                 .foregroundStyle(.secondary)
+                }
             }
         }
     }

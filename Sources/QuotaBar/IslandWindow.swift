@@ -258,7 +258,7 @@ final class IslandCoordinator {
             let rows = min(slots, max(1, store.islandProviders.count))
             return NSSize(
                 width: IslandPanelLayout.width(notchWidth: notch?.notchWidth),
-                height: IslandPanelLayout.height(rows: rows, notch: notch?.height ?? 0, page: page))
+                height: IslandPanelLayout.height(rows: rows, notch: notch?.height ?? 0, style: store.experience.islandChart, page: page))
         }
         if let notch {
             return NSSize(width: notch.totalWidth(slots: slots), height: notch.height)
@@ -375,6 +375,10 @@ struct IslandView: View {
                 .padding(.bottom, IslandCoordinator.margin(expanded: expanded))
         }
         .onChange(of: bridge.page) { _, _ in
+            if expanded { coordinator.relayout(animated: true) }
+        }
+        // Each chart style is its own height.
+        .onChange(of: store.experience.islandChart) { _, _ in
             if expanded { coordinator.relayout(animated: true) }
         }
         .onChange(of: bridge.peek) { _, _ in

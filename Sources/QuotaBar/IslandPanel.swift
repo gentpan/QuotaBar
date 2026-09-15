@@ -11,15 +11,37 @@ enum IslandPanelLayout {
     static let columnWidth: CGFloat = 300
     /// Between the columns on a screen with no notch to keep them apart.
     static let columnGap: CGFloat = 24
-    /// The title row and its 8pt gap, then a tile.
-    static let rowHeight: CGFloat = 102
+    /// A provider's title row and the 8pt gap under it.
+    static let titleHeight: CGFloat = 26
     static let rowGap: CGFloat = 12
     static let bodyPadding: CGFloat = 12
     static let footerHeight: CGFloat = 44
-    /// Fits the tallest tile, the big-figure style's and the usage page's
-    /// (73pt drawn); the stepped bars draw 64. At 96 every style had a band of
-    /// black under it.
-    static let tileHeight: CGFloat = 76
+
+    /// A tile is as tall as its style draws and no more, so the last line
+    /// sits the same distance above the footer whichever style is on; one
+    /// height for all left the shorter styles floating over a band of black.
+    /// The panel changes height with the style.
+    static func tileHeight(_ style: IslandChartStyle, page: IslandPanel.Page = .quota) -> CGFloat {
+        // Label, the token figure, the estimate.
+        if page == .usage { return 74 }
+        // Measured off the renders (`--island-preview`): each leaves its last
+        // line 13.5pt above the footer's rule.
+        switch style {
+        // Label and figure, the bar, the reset line.
+        case .bar: return 57
+        case .stepped: return 63
+        case .spark: return 69
+        // Label, the 34pt figure, the reset line.
+        case .numeric: return 72
+        // 8 clear of the title, the 58pt ring and the 3pt its stroke
+        // reaches past its frame.
+        case .ring: return 68
+        }
+    }
+
+    static func rowHeight(_ style: IslandChartStyle, page: IslandPanel.Page = .quota) -> CGFloat {
+        titleHeight + tileHeight(style, page: page)
+    }
     /// The overview page's spend bars and share button, which a single row
     /// of tiles is too short for.
     static let overviewHeight: CGFloat = 124
@@ -30,9 +52,9 @@ enum IslandPanelLayout {
         columnWidth * 2 + (notchWidth ?? columnGap) + horizontalInset * 2
     }
 
-    static func height(rows: Int, notch: CGFloat, page: IslandPanel.Page = .quota) -> CGFloat {
+    static func height(rows: Int, notch: CGFloat, style: IslandChartStyle, page: IslandPanel.Page = .quota) -> CGFloat {
         let rows = max(1, rows)
-        var body = CGFloat(rows) * rowHeight + CGFloat(rows - 1) * rowGap
+        var body = CGFloat(rows) * rowHeight(style, page: page) + CGFloat(rows - 1) * rowGap
         if page == .overview { body = max(body, overviewHeight) }
         return headerHeight(notch: notch) + bodyPadding * 2 + body + footerHeight
     }
@@ -111,13 +133,22 @@ struct IslandPanel: View {
     // MARK: Header
 
     private var header: some View {
-        HStack(spacing: 0) {
+        HStack(spacing: 6) {
+            // The app's mark in the wordmark's own white, not its green tile:
+            // on the black panel the brand colours belong to the providers.
+            if let url = ProviderGlyph.markURL(named: "quotabar-mark"), let image = NSImage(contentsOf: url) {
+                Image(nsImage: image)
+                    .renderingMode(.template)
+                    .resizable()
+                    .interpolation(.high)
+                    .scaledToFit()
+                    .frame(width: 14, height: 14)
+            }
             Text("QuotaBar")
                 .font(Design.wordmark(size: 12, weight: .bold))
-                .foregroundStyle(.white.opacity(0.7))
-                .frame(width: IslandPanelLayout.columnWidth, alignment: .leading)
             Spacer(minLength: 0)
         }
+        .foregroundStyle(.white.opacity(0.7))
     }
 
     // MARK: Columns
@@ -129,12 +160,12 @@ struct IslandPanel: View {
                 Text(L10n.t("Enable more providers in Settings.", "在设置里启用更多服务商。"))
                     .font(.system(size: 11))
                     .foregroundStyle(.white.opacity(0.4))
-                    .frame(height: IslandPanelLayout.rowHeight, alignment: .center)
+                    .frame(height: IslandPanelLayout.rowHeight(store.experience.islandChart, page: page), alignment: .center)
                     .frame(maxWidth: .infinity)
             }
             ForEach(ids) { id in
                 IslandProviderBlock(store: store, id: id, page: page)
-                    .frame(height: IslandPanelLayout.rowHeight, alignment: .top)
+                    .frame(height: IslandPanelLayout.rowHeight(store.experience.islandChart, page: page), alignment: .top)
             }
         }
     }
@@ -344,7 +375,7 @@ private struct IslandProviderBlock: View {
                     : L10n.t("Nothing logged locally yet.", "本地还没有记录。"))
                     .font(.system(size: 11))
                     .foregroundStyle(.white.opacity(0.5))
-                    .frame(maxWidth: .infinity, minHeight: IslandPanelLayout.tileHeight, alignment: .topLeading)
+                    .frame(maxWidth: .infinity, minHeight: IslandPanelLayout.tileHeight(store.experience.islandChart, page: page), alignment: .topLeading)
             } else {
                 HStack(alignment: .top, spacing: 18) {
                     ForEach([LedgerPeriod.today, .month]) { period in
@@ -359,7 +390,7 @@ private struct IslandProviderBlock: View {
                                 .foregroundStyle(.white.opacity(0.45))
                         }
                         .frame(maxWidth: .infinity, alignment: .leading)
-                        .frame(height: IslandPanelLayout.tileHeight, alignment: .top)
+                        .frame(height: IslandPanelLayout.tileHeight(store.experience.islandChart, page: .usage), alignment: .top)
                     }
                 }
             }
@@ -370,7 +401,7 @@ private struct IslandProviderBlock: View {
                 .font(.system(size: 11))
                 .foregroundStyle(.white.opacity(0.5))
                 .fixedSize(horizontal: false, vertical: true)
-                .frame(maxWidth: .infinity, minHeight: IslandPanelLayout.tileHeight, alignment: .topLeading)
+                .frame(maxWidth: .infinity, minHeight: IslandPanelLayout.tileHeight(store.experience.islandChart, page: page), alignment: .topLeading)
         }
     }
 
@@ -382,7 +413,7 @@ private struct IslandProviderBlock: View {
                 .lineLimit(3)
                 .fixedSize(horizontal: false, vertical: true)
         }
-        .frame(maxWidth: .infinity, minHeight: IslandPanelLayout.tileHeight, alignment: .topLeading)
+        .frame(maxWidth: .infinity, minHeight: IslandPanelLayout.tileHeight(store.experience.islandChart, page: page), alignment: .topLeading)
     }
 }
 
@@ -443,7 +474,7 @@ private struct IslandTile: View {
                 resetLine
             }
         }
-        .frame(height: IslandPanelLayout.tileHeight, alignment: .top)
+        .frame(height: IslandPanelLayout.tileHeight(store.experience.islandChart), alignment: .top)
         .animation(Motion.animation(Motion.chartSwap), value: store.experience.islandChart)
     }
 
@@ -475,8 +506,9 @@ private struct IslandTile: View {
         case .spark:
             let values = store.history[id] ?? []
             if values.count > 1 {
-                SparklineView(values: values, accent: accent)
-                    .frame(height: 22)
+                // Plotted the way the figure and the bars read, used or
+                // remaining; without the caption, which crowded the reset line.
+                SparklineView(values: values.map { store.meterMode.shownPercent(fromUsed: $0) }, accent: accent, height: 22, showsCaption: false)
                     .transition(.chartSwap)
             } else {
                 Meter(percent: percent, tint: accent, style: .continuous, height: 10, track: .white.opacity(0.10))
@@ -522,6 +554,9 @@ private struct IslandTile: View {
                 resetLine
             }
         }
+        // The stroke reaches 3pt past the ring's frame; this keeps it clear
+        // of the provider's title.
+        .padding(.top, 8)
         .transition(.chartSwap)
     }
 
