@@ -567,10 +567,14 @@ private struct IslandOverview: View {
         HStack(alignment: .top, spacing: 36) {
             figure(.today)
             figure(.window)
-            VStack(alignment: .leading, spacing: 8) {
-                ForEach(store.cost.spend(.window).contributions, id: \.source) { item in
+            let contributions = store.cost.spend(.window).contributions
+            // Three tools at the tiles' bar height overrun a row; the third
+            // makes the bars and the gaps a little shorter.
+            let crowded = contributions.count > 2
+            VStack(alignment: .leading, spacing: crowded ? 5 : 8) {
+                ForEach(contributions, id: \.source) { item in
                     let total = max(0.000_001, store.cost.spend(.window).usd)
-                    VStack(alignment: .leading, spacing: 3) {
+                    VStack(alignment: .leading, spacing: crowded ? 2 : 3) {
                         HStack {
                             Text(item.source.displayName)
                                 .font(.system(size: 11, weight: .medium))
@@ -580,13 +584,9 @@ private struct IslandOverview: View {
                                 .font(.system(size: 11, design: .monospaced))
                                 .foregroundStyle(.white.opacity(0.7))
                         }
-                        GeometryReader { proxy in
-                            ZStack(alignment: .leading) {
-                                Capsule().fill(Color.white.opacity(0.08))
-                                Capsule().fill(Color(hex: item.source.accentHex)).frame(width: max(3, proxy.size.width * item.usd / total))
-                            }
-                        }
-                        .frame(height: 5)
+                        // The quota tiles' stepped bar, so the pages read as one
+                        // panel.
+                        Meter(percent: item.usd / total * 100, tint: Color(hex: item.source.accentHex), style: .stepped, height: crowded ? 9 : 13, track: .white.opacity(0.10))
                     }
                 }
             }

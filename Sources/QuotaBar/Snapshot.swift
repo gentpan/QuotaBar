@@ -253,6 +253,18 @@ enum Snapshot {
                 render(panel, to: url, name: "island-\(page)-\(chart.rawValue)", backing: Color(hex: "D8D8D8"))
             }
         }
+        // The overview with two tools, where the bars keep the tiles' height.
+        bridge.page = .overview
+        for period in Array(store.cost.periods.keys) {
+            store.cost.periods[period]?.bySource[.openCode] = nil
+        }
+        let twoTools = ZStack(alignment: .top) {
+            shape.fill(Color.black)
+            IslandPanel(store: store, notch: notch, bridge: bridge)
+        }
+        .frame(width: IslandPanelLayout.width(notchWidth: notch.notchWidth), height: IslandPanelLayout.height(rows: rows, notch: notch.height))
+        .environment(\.colorScheme, .dark)
+        render(twoTools, to: url, name: "island-overview-two-tools", backing: Color(hex: "D8D8D8"))
     }
 
     /// Renders every menu-bar style across a range of levels, so a style can
