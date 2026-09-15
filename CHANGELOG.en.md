@@ -12,11 +12,13 @@ Server moves, the website, and build or release scripts don't change the app its
 - Copy as Image now shows the signed-in account on a provider card as mosaic tiles, so the email address stays out of the picture. The tiles are one fixed pattern that says nothing about the account, not even its length. Turn it off under Settings → General → Privacy with "Hide the account in copied images"; the panel itself still shows the address.
 - A provider card's right-click menu has Hide Limits, for a limit you never use, such as Codex's GPT-5.3-Codex-Spark. A hidden limit is gone from the card and from under its arrow; the ring, the notch island, desktop cards and the menu bar stop following it, and it sends no almost-out alerts. Each provider remembers its own, a language switch keeps them, and Show All brings them back; the last limit cannot be hidden. The dock ring's right-click menu has it too. The local `/v1/limits` endpoint still returns every limit. (#2)
 - Codex's Early resets row has an Expires line under it: when each banked reset runs out, soonest first, such as "5d 18h · 18d 23h · 19d 22h", with the rest counted past three. Like the limit rows, a click switches between countdown and clock time, and hovering shows the other. Resets that never expire are not listed. The dock ring's detail shows the line too. (#3)
+- Early resets Codex gives out are read in full. The row shows how many the account has been given in all, and stays once the last one is spent; hovering lists each one's name, such as "Full reset (Weekly + 5 hr)", and when it runs out. A notification says when a new one arrives, with how many are available and when the soonest expires, and another comes once for each one still unspent a day before it runs out. Turn them off under Settings → Alerts → Resets with "Early resets given". The list is read at most once an hour, and again at once when the count changes or one of them expires.
 
 #### Fixed
 
 - DeepSeek said "Provider response could not be parsed" on every API key and never showed a balance. The account balance now shows, split into paid and granted when there is a grant; an account holding both CNY and USD gets a row for each, and a balance too low for API calls says so. (#1)
 - Grok showed Weekly credits and Grok Build as two identical bars. When the week's credits all went to one product, that product's bar had the same figure and reset as the total; it is no longer shown twice. Credits spread over several products are still listed one by one. (#2)
+- ⌘V did nothing in Settings' text fields, so pasting an API key looked like the field refused input. ⌘V, ⌘C, ⌘X, ⌘A and ⌘Z now work in Settings and the app's other windows, and ⌘W closes the window.
 
 ### 2026-09-14
 

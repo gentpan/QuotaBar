@@ -31,6 +31,39 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         _ = NSApplicationMain(CommandLine.argc, CommandLine.unsafeArgv)
     }
 
+    /// A main menu nobody sees, for the shortcuts it carries.
+    ///
+    /// Text fields take ⌘V, ⌘C, ⌘X, ⌘A and ⌘Z from the main menu: AppKit hands
+    /// a key equivalent to the menu, and the menu item sends `paste:` and the
+    /// rest down the responder chain. An accessory app gets no menu from a
+    /// nib, so with none built here a pasted API key went nowhere — the
+    /// credential field in Settings looked like it refused input. The menu
+    /// bar never shows it: an accessory app does not own the menu bar.
+    private static func keyEquivalentMenu() -> NSMenu {
+        let main = NSMenu()
+
+        let edit = NSMenu(title: L10n.t("Edit", "编辑"))
+        edit.addItem(withTitle: L10n.t("Undo", "撤销"), action: Selector(("undo:")), keyEquivalent: "z")
+        edit.addItem(withTitle: L10n.t("Redo", "重做"), action: Selector(("redo:")), keyEquivalent: "Z")
+        edit.addItem(.separator())
+        edit.addItem(withTitle: L10n.t("Cut", "剪切"), action: #selector(NSText.cut(_:)), keyEquivalent: "x")
+        edit.addItem(withTitle: L10n.t("Copy", "拷贝"), action: #selector(NSText.copy(_:)), keyEquivalent: "c")
+        edit.addItem(withTitle: L10n.t("Paste", "粘贴"), action: #selector(NSText.paste(_:)), keyEquivalent: "v")
+        edit.addItem(withTitle: L10n.t("Select All", "全选"), action: #selector(NSText.selectAll(_:)), keyEquivalent: "a")
+        let editItem = NSMenuItem()
+        editItem.submenu = edit
+        main.addItem(editItem)
+
+        // ⌘W closes Settings and the other windows the way it does anywhere.
+        let window = NSMenu(title: L10n.t("Window", "窗口"))
+        window.addItem(withTitle: L10n.t("Close", "关闭"), action: #selector(NSWindow.performClose(_:)), keyEquivalent: "w")
+        let windowItem = NSMenuItem()
+        windowItem.submenu = window
+        main.addItem(windowItem)
+
+        return main
+    }
+
     /// Opening the app while it runs — from Launchpad, Spotlight, or the
     /// Finder — means "show me". With the menu-bar item hidden it is also
     /// the way back to Settings.
@@ -43,6 +76,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // Info.plist carries LSUIElement for the packaged app; setting it here
         // too keeps the dev loop (bare binary, no bundle) out of the Dock.
         NSApp.setActivationPolicy(.accessory)
+        NSApp.mainMenu = Self.keyEquivalentMenu()
 
         let arguments = CommandLine.arguments
         // Loading the config applies the saved language. Load it before

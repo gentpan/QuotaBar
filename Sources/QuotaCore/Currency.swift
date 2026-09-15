@@ -188,6 +188,37 @@ extension QuotaFormat {
         return parts.joined(separator: " · ")
     }
 
+    /// When one given reset runs out, in the reset rows' format: "expires in
+    /// 5d 18h", "9月20日 18:38 到期", "does not expire".
+    public static func creditExpiry(
+        _ credit: ResetCredit,
+        format: ResetTimeFormat,
+        clock: ClockStyle = .automatic,
+        now: Date = .now) -> String
+    {
+        guard let date = credit.expiresAt else { return L10n.t("does not expire", "不会过期") }
+        switch format {
+        case .countdown:
+            return L10n.t("expires in \(countdown(to: date, from: now))", "\(countdown(to: date, from: now))后到期")
+        case .exact:
+            let when = exactTime(date, clock: clock, now: now)
+            return L10n.t("expires \(when)", "\(when) 到期")
+        }
+    }
+
+    /// The given resets one per line, for the row's help: what each resets,
+    /// as the provider titles it, and when it runs out.
+    public static func creditLines(
+        _ credits: [ResetCredit],
+        format: ResetTimeFormat,
+        clock: ClockStyle = .automatic,
+        now: Date = .now) -> [String]
+    {
+        credits.map { credit in
+            "\(credit.title ?? L10n.t("Full reset", "完整重置")) · \(creditExpiry(credit, format: format, clock: clock, now: now))"
+        }
+    }
+
     /// "today at 18:38" / "今天 18:38", "tomorrow 09:00", "Sep 14 18:38".
     public static func exactTime(_ date: Date, clock: ClockStyle = .automatic, now: Date = .now) -> String {
         let calendar = Calendar.current

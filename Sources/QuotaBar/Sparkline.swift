@@ -112,8 +112,9 @@ struct ResetCreditDeadlines: View {
     }
 }
 
-/// Early-reset credits, when the plan grants them.
+/// Early-reset credits, when the account has been given some.
 struct ResetCreditsRow: View {
+    @ObservedObject var store: UsageStore
     let credits: ResetCredits
     let accent: Color
 
@@ -124,15 +125,19 @@ struct ResetCreditsRow: View {
             Text(L10n.t("Early resets", "限额重置额度"))
                 .font(.callout.weight(.medium))
             Spacer()
+            if let earned = credits.totalEarned, earned > 0 {
+                Text(L10n.t("\(earned) given ·", "累计获得 \(earned) 次 ·"))
+                    .font(.callout)
+                    .monospacedDigit()
+                    .foregroundStyle(.secondary)
+            }
             Text(L10n.t(
                 "\(credits.available) available",
                 "\(credits.available) 次可用"))
                 .font(.callout.weight(.semibold))
                 .monospacedDigit()
-                .foregroundStyle(accent)
+                .foregroundStyle(credits.available > 0 ? accent : .secondary)
         }
-        .help(L10n.t(
-            "Credits that reset a rate-limit window early. \(credits.applicable ?? 0) apply to the window limiting you right now.",
-            "可提前重置限额窗口的次数。当前正在限流的窗口可用 \(credits.applicable ?? 0) 次。"))
+        .help(store.resetCreditHelp(credits))
     }
 }

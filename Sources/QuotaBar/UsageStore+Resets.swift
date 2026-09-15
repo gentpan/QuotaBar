@@ -109,3 +109,67 @@ extension UsageStore {
         }
     }
 }
+
+// MARK: - Resets the account is given
+
+extension UsageStore {
+    /// A reset given since the reading before, and a reset about to run out
+    /// unspent — Codex hands them out every so often and each lasts about a
+    /// month. A reminder is remembered even while notifications are off, so
+    /// turning them on does not bring back a day of old ones.
+    func noteResetCredits(_ id: ProviderID, previous: UsageSnapshot?, current: ResetCredits?) {
+        let notices = ResetCreditCheck.notices(
+            provider: id, previous: previous, current: current, notified: experience.resetCreditNotified)
+        guard !notices.isEmpty else { return }
+        let reminders = notices.compactMap { notice -> String? in
+            if case .expiring = notice.kind { return notice.key }
+            return nil
+        }
+        if !reminders.isEmpty {
+            updateExperience { $0.resetCreditNotified = Array(($0.resetCreditNotified + reminders).suffix(24)) }
+        }
+        guard experience.resetCreditNotify, notificationsReady, notificationsAvailable, !isPrivacyMasked else { return }
+        for notice in notices { post(notice, credits: current) }
+    }
+
+    private func post(_ notice: ResetCreditNotice, credits: ResetCredits?) {
+        let content = UNMutableNotificationContent()
+        content.subtitle = notice.provider.displayName
+        switch notice.kind {
+        case let .given(count):
+            content.title = L10n.t("An early reset for you", "收到新的限额重置")
+            var body = L10n.t(
+                "\(notice.provider.displayName) gave you \(count) early reset\(count == 1 ? "" : "s"); \(notice.available) available now.",
+                "\(notice.provider.displayName) 送你 \(count) 次限额重置，现在共 \(notice.available) 次可用。")
+            if let soonest = credits?.upcomingExpirations().first {
+                body += L10n.t(
+                    " The soonest expires in \(QuotaFormat.countdown(to: soonest)).",
+                    "最早的 \(QuotaFormat.countdown(to: soonest))后到期。")
+            }
+            content.body = body
+        case let .expiring(credit):
+            content.title = L10n.t("An early reset is about to expire", "限额重置快过期了")
+            let name = credit.title ?? L10n.t("An early reset", "一次限额重置")
+            content.body = L10n.t(
+                "\(name) \(QuotaFormat.creditExpiry(credit, format: .countdown)), unspent. Use it with /usage in the Codex CLI.",
+                "\(name) \(QuotaFormat.creditExpiry(credit, format: .countdown))，还没用。可以在 Codex CLI 里用 /usage 兑换。")
+        }
+        content.threadIdentifier = "bar.quota.reset-credit"
+        UNUserNotificationCenter.current().add(UNNotificationRequest(
+            identifier: "bar.quota.reset-credit.\(notice.key)", content: content, trigger: nil))
+    }
+
+    /// The row's help: each given reset with what it resets and when it runs
+    /// out, in the reset rows' format.
+    func resetCreditHelp(_ credits: ResetCredits) -> String {
+        var lines = [L10n.t(
+            "Early resets reset your usage limits before their time. \(credits.applicable ?? 0) apply to the window limiting you right now.",
+            "限额重置可以提前重置用量限制。当前正在限流的窗口可用 \(credits.applicable ?? 0) 次。")]
+        if let earned = credits.totalEarned {
+            lines.append(L10n.t("\(earned) given in all.", "累计获得 \(earned) 次。"))
+        }
+        lines += QuotaFormat.creditLines(
+            credits.credits, format: experience.resetTimeFormat, clock: experience.clockStyle)
+        return lines.joined(separator: "\n")
+    }
+}

@@ -261,8 +261,8 @@ struct ProviderCallout: View {
         if history.count > 1 {
             SparklineView(values: history, accent: Color(hex: id.accentHex))
         }
-        if let credits = snapshot.resetCredits {
-            ResetCreditsRow(credits: credits, accent: Color(hex: id.accentHex))
+        if let credits = snapshot.resetCredits, credits.isShown {
+            ResetCreditsRow(store: store, credits: credits, accent: Color(hex: id.accentHex))
             ResetCreditDeadlines(store: store, credits: credits, accent: Color(hex: id.accentHex))
         }
         Text(L10n.t(

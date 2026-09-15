@@ -151,7 +151,7 @@ struct ProviderCardView: View {
     }
 
     private func hasMore(_ snapshot: UsageSnapshot) -> Bool {
-        !rest(snapshot).isEmpty || snapshot.resetCredits != nil || id.costSource != nil
+        !rest(snapshot).isEmpty || snapshot.resetCredits?.isShown == true || id.costSource != nil
             || StatusPages.page(for: id) != nil || id.dashboardURL != nil
     }
 
@@ -180,7 +180,7 @@ struct ProviderCardView: View {
             ForEach(rest(snapshot)) { window in
                 QuotaRowView(store: store, id: id, window: window, compact: compact)
             }
-            if let credits = snapshot.resetCredits {
+            if let credits = snapshot.resetCredits, credits.isShown {
                 HStack(spacing: 6) {
                     Image(systemName: "arrow.clockwise.circle")
                         .font(.system(size: 11))
@@ -189,11 +189,19 @@ struct ProviderCardView: View {
                         .font(.system(size: 11, weight: .medium))
                         .foregroundStyle(.white)
                     Spacer()
+                    if let earned = credits.totalEarned, earned > 0 {
+                        Text(L10n.t("\(earned) given ·", "累计获得 \(earned) 次 ·"))
+                            .font(.system(size: 11))
+                            .monospacedDigit()
+                            .foregroundStyle(.white.opacity(0.45))
+                    }
                     Text(L10n.t("\(credits.available) available", "\(credits.available) 次可用"))
                         .font(.system(size: 11, weight: .semibold))
                         .monospacedDigit()
-                        .foregroundStyle(Color(hex: id.accentHex))
+                        .foregroundStyle(credits.available > 0 ? Color(hex: id.accentHex) : .white.opacity(0.5))
                 }
+                .contentShape(Rectangle())
+                .help(store.resetCreditHelp(credits))
                 ResetCreditDeadlines(store: store, credits: credits, accent: Color(hex: id.accentHex))
             }
             if let source = id.costSource {

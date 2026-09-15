@@ -466,7 +466,9 @@ final class UsageStore: ObservableObject {
             if let old = renamingWindows.removeValue(forKey: id) {
                 carryWindowChoices(for: id, from: old, to: snapshot.windows)
             }
+            let previousReading = reported[id]
             reported[id] = snapshot
+            noteResetCredits(id, previous: previousReading, current: snapshot.resetCredits)
             let visible = shown(snapshot, for: id)
             let resets = ResetDetector.events(provider: id, previous: states[id]?.snapshot, current: visible)
             states[id] = .loaded(visible)

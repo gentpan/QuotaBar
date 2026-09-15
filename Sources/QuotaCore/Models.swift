@@ -724,19 +724,44 @@ public struct ResetCredits: Sendable, Equatable {
     /// How many apply to the window that is currently limiting — often 0 while
     /// nothing is actually throttled.
     public var applicable: Int?
-    /// When the credits that expire do, soonest first. Empty when none
-    /// expires, or the list could not be read.
-    public var expirations: [Date]
+    /// Every reset the account has been given, spent and expired ones too.
+    /// Known only once the credit list has been read.
+    public var totalEarned: Int?
+    /// The available credits the list names, soonest deadline first, ones
+    /// that never expire last. The list may name fewer than `available`, and
+    /// is empty when it could not be read.
+    public var credits: [ResetCredit]
 
-    public init(available: Int, applicable: Int? = nil, expirations: [Date] = []) {
+    public init(available: Int, applicable: Int? = nil, totalEarned: Int? = nil, credits: [ResetCredit] = []) {
         self.available = available
         self.applicable = applicable
-        self.expirations = expirations
+        self.totalEarned = totalEarned
+        self.credits = credits
     }
+
+    /// Worth a row: something to spend, or a history of being given some.
+    public var isShown: Bool { available > 0 || (totalEarned ?? 0) > 0 }
 
     /// The deadlines still ahead: a cached reading keeps ones that have passed.
     public func upcomingExpirations(now: Date = .now) -> [Date] {
-        expirations.filter { $0 > now }
+        credits.compactMap(\.expiresAt).filter { $0 > now }.sorted()
+    }
+}
+
+/// One reset the account was given: "Full reset (Weekly + 5 hr)", when it
+/// came and when it runs out.
+public struct ResetCredit: Sendable, Equatable, Codable {
+    public var id: String?
+    public var title: String?
+    public var grantedAt: Date?
+    /// Nil for a credit that does not expire.
+    public var expiresAt: Date?
+
+    public init(id: String? = nil, title: String? = nil, grantedAt: Date? = nil, expiresAt: Date? = nil) {
+        self.id = id
+        self.title = title
+        self.grantedAt = grantedAt
+        self.expiresAt = expiresAt
     }
 }
 

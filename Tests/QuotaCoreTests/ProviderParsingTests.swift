@@ -378,41 +378,74 @@ final class CodexResetCreditsTests: XCTestCase {
         XCTAssertEqual(credits.applicable, 0)
     }
 
-    func testZeroCreditsAreNotShown() throws {
+    func testZeroCreditsAreKeptButNotShown() throws {
         let none = """
         {"plan_type":"pro","rate_limit":null,
          "rate_limit_reset_credits":{"available_count":0,"applicable_available_count":0}}
         """
-        // Nothing to offer the user, so the row should not appear at all.
-        XCTAssertNil(try CodexProvider.parse(Data(none.utf8)).resetCredits)
+        // Nothing to spend and no history of being given any: no row. The
+        // count is kept so the credit list can still say how many came.
+        let credits = try XCTUnwrap(try CodexProvider.parse(Data(none.utf8)).resetCredits)
+        XCTAssertEqual(credits.available, 0)
+        XCTAssertFalse(credits.isShown)
+        XCTAssertTrue(ResetCredits(available: 0, totalEarned: 4).isShown, "given some before, all spent")
     }
 
     /// wham/rate-limit-reset-credits, in the shape the Codex CLI's own tests
-    /// record (issue #3): available credits' deadlines, soonest first.
-    func testExpirationsOfTheCreditsStillAvailable() {
+    /// record (issue #3): the available credits, soonest deadline first and
+    /// the one that never expires last, and how many came in all.
+    func testTheCreditListOfTheCreditsStillAvailable() throws {
         let now = Dates.parseISO("2026-09-15T00:00:00Z")!
-        let list = """
+        let body = """
         {"credits":[
-          {"id":"b","reset_type":"codex_rate_limits","status":"available","granted_at":"2026-09-10T00:00:00Z","expires_at":"2026-10-05T22:00:00Z"},
-          {"id":"a","reset_type":"codex_rate_limits","status":"available","granted_at":"2026-09-01T00:00:00Z","expires_at":"2026-09-20T18:00:00.000Z"},
+          {"id":"b","reset_type":"codex_rate_limits","status":"available","granted_at":"2026-09-10T00:00:00Z","expires_at":"2026-10-05T22:00:00Z","title":"Full reset (Weekly + 5 hr)"},
+          {"id":"a","reset_type":"codex_rate_limits","status":"available","granted_at":"2026-09-01T00:00:00Z","expires_at":"2026-09-20T18:00:00.000Z","title":" "},
           {"id":"c","reset_type":"codex_rate_limits","status":"available","granted_at":"2026-09-11T00:00:00Z","expires_at":null},
           {"id":"d","reset_type":"codex_rate_limits","status":"redeemed","granted_at":"2026-08-01T00:00:00Z","expires_at":"2026-09-30T00:00:00Z"},
           {"id":"e","reset_type":"codex_rate_limits","status":"available","granted_at":"2026-08-01T00:00:00Z","expires_at":"2026-09-14T00:00:00Z"}],
-         "available_count":3,"total_earned_count":5}
+         "available_count":3,"total_earned_count":5,"immediate_reset_purchase_eligible":false,"history_enabled":true}
         """
-        let dates = CodexProvider.resetCreditExpirations(Data(list.utf8), now: now)
-        XCTAssertEqual(dates, [Dates.parseISO("2026-09-20T18:00:00Z")!, Dates.parseISO("2026-10-05T22:00:00Z")!])
-        XCTAssertTrue(CodexProvider.resetCreditExpirations(Data(#"{"credits":[],"available_count":0}"#.utf8)).isEmpty)
-        XCTAssertTrue(CodexProvider.resetCreditExpirations(Data("<html>".utf8)).isEmpty)
+        let list = try XCTUnwrap(CodexProvider.resetCreditList(Data(body.utf8), now: now))
+        XCTAssertEqual(list.totalEarned, 5)
+        XCTAssertEqual(list.credits.map(\.id), ["a", "b", "c"])
+        XCTAssertEqual(list.credits.map(\.title), [nil, "Full reset (Weekly + 5 hr)", nil])
+        XCTAssertEqual(list.credits.first?.grantedAt, Dates.parseISO("2026-09-01T00:00:00Z"))
+        let credits = ResetCredits(available: 3, totalEarned: 5, credits: list.credits)
+        XCTAssertEqual(credits.upcomingExpirations(now: now), [Dates.parseISO("2026-09-20T18:00:00Z")!, Dates.parseISO("2026-10-05T22:00:00Z")!])
+
+        // The live reply on an account never given one.
+        let empty = try XCTUnwrap(CodexProvider.resetCreditList(Data(#"{"credits":[],"available_count":0,"total_earned_count":0,"immediate_reset_purchase_eligible":false,"history_enabled":true}"#.utf8)))
+        XCTAssertEqual(empty, CodexProvider.ResetCreditList(credits: [], totalEarned: 0))
+        XCTAssertNil(CodexProvider.resetCreditList(Data("<html>".utf8)))
+        XCTAssertNil(CodexProvider.resetCreditList(Data(#"{"detail":"Too many requests"}"#.utf8)))
     }
 
-    func testExpirationsSurviveTheSnapshotCache() throws {
-        let deadline = Date(timeIntervalSince1970: 1_800_000_000)
-        let snapshot = UsageSnapshot(windows: [], resetCredits: ResetCredits(available: 1, expirations: [deadline]))
+    /// The list answers 429 when polled, so a refresh reuses the last one
+    /// until something says it changed.
+    func testTheCreditListIsReadAgainOnlyWhenItMayHaveChanged() {
+        let cache = CodexProvider.ResetCreditListCache()
+        let now = Date(timeIntervalSince1970: 1_800_000_000)
+        let list = CodexProvider.ResetCreditList(credits: [
+            ResetCredit(id: "a", expiresAt: now.addingTimeInterval(86_400)),
+            ResetCredit(id: "b", expiresAt: nil),
+        ], totalEarned: 2)
+        XCTAssertNil(cache.reusable(account: "a", available: 2, now: now), "nothing read yet")
+        cache.store(list, account: "a", available: 2, now: now)
+        XCTAssertEqual(cache.reusable(account: "a", available: 2, now: now.addingTimeInterval(600)), list)
+        XCTAssertNil(cache.reusable(account: "a", available: 3, now: now.addingTimeInterval(600)), "a reset was given")
+        XCTAssertNil(cache.reusable(account: "b", available: 2, now: now.addingTimeInterval(600)), "another account")
+        XCTAssertNil(cache.reusable(account: "a", available: 2, now: now.addingTimeInterval(3700)), "an hour on")
+        cache.store(list, account: "a", available: 2, now: now.addingTimeInterval(80_000))
+        XCTAssertNil(cache.reusable(account: "a", available: 2, now: now.addingTimeInterval(86_500)), "the first deadline passed")
+    }
+
+    func testTheCreditsSurviveTheSnapshotCache() throws {
+        let credit = ResetCredit(id: "a", title: "Full reset (Weekly + 5 hr)", grantedAt: Date(timeIntervalSince1970: 1_799_000_000), expiresAt: Date(timeIntervalSince1970: 1_800_000_000))
+        let snapshot = UsageSnapshot(windows: [], resetCredits: ResetCredits(available: 1, totalEarned: 3, credits: [credit]))
         let back = try JSONDecoder().decode(UsageSnapshot.self, from: JSONEncoder().encode(snapshot))
-        XCTAssertEqual(back.resetCredits?.expirations, [deadline])
+        XCTAssertEqual(back.resetCredits, snapshot.resetCredits)
         let old = try JSONDecoder().decode(ResetCredits.self, from: Data(#"{"available":2,"applicable":0}"#.utf8))
-        XCTAssertEqual(old.expirations, [], "a cache written before deadlines were read")
+        XCTAssertEqual(old, ResetCredits(available: 2, applicable: 0), "a cache written before the list was read")
     }
 
     func testTheDeadlineListReadsLikeTheResetRows() {
@@ -427,6 +460,12 @@ final class CodexResetCreditsTests: XCTestCase {
         XCTAssertEqual(QuotaFormat.expiryList(dates, format: .countdown, now: now), "5d 18h · 18d 23h")
         let many = (1...5).map { now.addingTimeInterval(Double($0) * 86_400 + 30) }
         XCTAssertEqual(QuotaFormat.expiryList(many, format: .countdown, now: now), "1d 0h · 2d 0h · 3d 0h · +2 more")
+        XCTAssertEqual(
+            QuotaFormat.creditLines([
+                ResetCredit(title: "Full reset (Weekly + 5 hr)", expiresAt: now.addingTimeInterval(3 * 3600 + 30)),
+                ResetCredit(),
+            ], format: .countdown, now: now),
+            ["Full reset (Weekly + 5 hr) · expires in 3h 0m", "Full reset · does not expire"])
     }
 
     func testAbsentFieldIsTolerated() throws {

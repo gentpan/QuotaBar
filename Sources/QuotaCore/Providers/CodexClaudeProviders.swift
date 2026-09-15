@@ -26,38 +26,109 @@ public struct CodexProvider: QuotaProvider {
         let url = URL(string: "https://chatgpt.com/backend-api/wham/usage")!
         let response = try await HTTP.get(url, headers: headers).requireOK()
         var snapshot = try Self.parse(response.data, fallbackAccount: auth.accountId)
-        // The usage reply only counts the banked resets; their deadlines are
-        // one list away. Asked only when there is something banked, and a
-        // failure there costs the deadlines, not the reading (issue #3).
-        if snapshot.resetCredits != nil,
-           let list = try? await HTTP.get(URL(string: "https://chatgpt.com/backend-api/wham/rate-limit-reset-credits")!, headers: headers).requireOK()
-        {
-            snapshot.resetCredits?.expirations = Self.resetCreditExpirations(list.data)
+        // The usage reply only counts the resets the account was given; what
+        // they are, when each runs out and how many came in all is one list
+        // away. A failure there costs those, not the reading (issue #3).
+        if let available = snapshot.resetCredits?.available {
+            let account = auth.accountId ?? snapshot.account
+            var list = Self.creditList.reusable(account: account, available: available)
+            if list == nil,
+               let response = try? await HTTP.get(
+                   URL(string: "https://chatgpt.com/backend-api/wham/rate-limit-reset-credits")!, headers: headers).requireOK(),
+               let read = Self.resetCreditList(response.data)
+            {
+                Self.creditList.store(read, account: account, available: available)
+                list = read
+            }
+            if let list {
+                snapshot.resetCredits?.credits = list.credits
+                snapshot.resetCredits?.totalEarned = list.totalEarned
+            }
         }
         return snapshot
     }
 
+    static let creditList = ResetCreditListCache()
+
+    /// What the credit list says: the available credits and how many the
+    /// account was ever given.
+    struct ResetCreditList: Equatable, Sendable {
+        var credits: [ResetCredit]
+        var totalEarned: Int?
+    }
+
+    /// The last credit list read, so it is not read with every refresh: the
+    /// endpoint answers 429 when polled. Asked again when the count changes —
+    /// a reset given or spent — when a deadline it listed has passed, or
+    /// after an hour.
+    final class ResetCreditListCache: @unchecked Sendable {
+        private struct Entry {
+            let account: String?
+            let available: Int
+            let list: ResetCreditList
+            let readAt: Date
+        }
+
+        private let lock = NSLock()
+        private var entry: Entry?
+
+        func reusable(account: String?, available: Int, now: Date = .now) -> ResetCreditList? {
+            lock.withLock {
+                guard let entry, entry.account == account, entry.available == available,
+                      now.timeIntervalSince(entry.readAt) < 3600,
+                      !entry.list.credits.contains(where: { ($0.expiresAt ?? .distantFuture) <= now })
+                else { return nil }
+                return entry.list
+            }
+        }
+
+        func store(_ list: ResetCreditList, account: String?, available: Int, now: Date = .now) {
+            lock.withLock { entry = Entry(account: account, available: available, list: list, readAt: now) }
+        }
+    }
+
     /// `{"credits":[{"id":…,"reset_type":"codex_rate_limits","status":"available",
-    /// "granted_at":"2026-06-17T00:00:00Z","expires_at":"2026-07-17T00:00:00Z"}],
-    /// "available_count":1}` — the shape the Codex CLI reads. The deadlines of
-    /// the credits still available, soonest first; one with no `expires_at`
-    /// keeps, and has none to list.
-    static func resetCreditExpirations(_ data: Data, now: Date = .now) -> [Date] {
+    /// "granted_at":"2026-06-17T00:00:00Z","expires_at":"2026-07-17T00:00:00Z",
+    /// "title":"Full reset (Weekly + 5 hr)"}],"available_count":1,
+    /// "total_earned_count":3}` — the shape the Codex CLI reads. The credits
+    /// still available, soonest deadline first and the ones that never expire
+    /// last; nil for a reply that is not that list.
+    static func resetCreditList(_ data: Data, now: Date = .now) -> ResetCreditList? {
         struct Credit: Decodable {
+            let id: String?
             let status: String?
+            let title: String?
+            let grantedAt: String?
             let expiresAt: String?
             enum CodingKeys: String, CodingKey {
-                case status
+                case id, status, title
+                case grantedAt = "granted_at"
                 case expiresAt = "expires_at"
             }
         }
-        struct Body: Decodable { let credits: [Credit]? }
-        guard let body = try? JSONDecoder().decode(Body.self, from: data) else { return [] }
-        return (body.credits ?? [])
+        struct Body: Decodable {
+            let credits: [Credit]?
+            let totalEarnedCount: Int?
+            enum CodingKeys: String, CodingKey {
+                case credits
+                case totalEarnedCount = "total_earned_count"
+            }
+        }
+        guard let body = try? JSONDecoder().decode(Body.self, from: data),
+              body.credits != nil || body.totalEarnedCount != nil
+        else { return nil }
+        let credits = (body.credits ?? [])
             .filter { ($0.status ?? "available") == "available" }
-            .compactMap { Dates.parseISO($0.expiresAt) }
-            .filter { $0 > now }
-            .sorted()
+            .map { credit in
+                ResetCredit(
+                    id: credit.id,
+                    title: credit.title.map { $0.trimmingCharacters(in: .whitespaces) }.flatMap { $0.isEmpty ? nil : $0 },
+                    grantedAt: Dates.parseISO(credit.grantedAt),
+                    expiresAt: Dates.parseISO(credit.expiresAt))
+            }
+            .filter { ($0.expiresAt ?? .distantFuture) > now }
+            .sorted { ($0.expiresAt ?? .distantFuture) < ($1.expiresAt ?? .distantFuture) }
+        return ResetCreditList(credits: credits, totalEarned: body.totalEarnedCount)
     }
 
     // MARK: Response shape
@@ -182,8 +253,10 @@ public struct CodexProvider: QuotaProvider {
             windows.append(creditWindow)
         }
 
+        // Kept at zero too: an account that was given resets before still has
+        // a count to show, once the list says how many it had.
         var resetCredits: ResetCredits?
-        if let raw = body.rateLimitResetCredits, let available = raw.availableCount, available > 0 {
+        if let raw = body.rateLimitResetCredits, let available = raw.availableCount, available >= 0 {
             resetCredits = ResetCredits(
                 available: available,
                 applicable: raw.applicableAvailableCount)

@@ -47,10 +47,10 @@ enum Snapshot {
                 fetchedAt: now,
                 // Deadlines from the real clock: the card lists only those
                 // still ahead, and the reference date is long past.
-                resetCredits: ResetCredits(available: 3, applicable: 0, expirations: [
-                    Date().addingTimeInterval(5 * 86_400 + 18 * 3600 + 60),
-                    Date().addingTimeInterval(18 * 86_400 + 23 * 3600 + 60),
-                    Date().addingTimeInterval(19 * 86_400 + 22 * 3600 + 60),
+                resetCredits: ResetCredits(available: 3, applicable: 0, totalEarned: 5, credits: [
+                    ResetCredit(title: "Full reset (Weekly + 5 hr)", expiresAt: Date().addingTimeInterval(5 * 86_400 + 18 * 3600 + 60)),
+                    ResetCredit(title: "Full reset (Weekly + 5 hr)", expiresAt: Date().addingTimeInterval(18 * 86_400 + 23 * 3600 + 60)),
+                    ResetCredit(title: "Full reset (Weekly + 5 hr)", expiresAt: Date().addingTimeInterval(19 * 86_400 + 22 * 3600 + 60)),
                 ]))),
             .claude: .loaded(UsageSnapshot(
                 windows: [

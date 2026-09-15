@@ -92,6 +92,14 @@ struct AlertsPane: View {
                     onSelect: { mode in store.updateExperience { $0.resetNotify = mode } })
                 .frame(maxWidth: 300)
             }
+            SettingToggle(
+                L10n.t("Early resets given", "赠送的限额重置"),
+                caption: L10n.t(
+                    "When Codex gives you an early reset, and a day before one runs out unspent.",
+                    "Codex 送你限额重置时通知；某一次还没用、离到期不到一天时再提醒一次。"),
+                isOn: Binding(
+                    get: { store.experience.resetCreditNotify },
+                    set: { value in store.updateExperience { $0.resetCreditNotify = value } }))
         }
 
         SettingsCard(

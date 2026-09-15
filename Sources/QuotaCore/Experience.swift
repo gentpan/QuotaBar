@@ -241,6 +241,11 @@ public struct ExperiencePrefs: Codable, Equatable, Sendable {
     public var resetEffects: Bool = true
     /// Whether a reset also raises a system notification.
     public var resetNotify: ResetNotifyMode = .afterHeavyUse
+    /// A notification when a provider gives the account an early reset, and
+    /// a day before one runs out unspent.
+    public var resetCreditNotify: Bool = true
+    /// The run-out reminders already sent, by `ResetCreditNotice.key`.
+    public var resetCreditNotified: [String] = []
     /// Providers hidden per surface, by raw value: still enabled, still read,
     /// only not shown there.
     public var hiddenProviders: [String: [String]] = [:]
@@ -283,7 +288,7 @@ public struct ExperiencePrefs: Codable, Equatable, Sendable {
         case reduceMotion, islandGlow, lowPowerGlow, islandAutoPeek, islandChart, widgetSortsByUrgency
         case deskCards, deskCardsMigrated
         case hideWhenSharing, hotkey, paceAlerts, localAPI, proxy, betaUpdates
-        case resetEffects, resetNotify, hiddenProviders, cardWindows, hiddenWindows
+        case resetEffects, resetNotify, resetCreditNotify, resetCreditNotified, hiddenProviders, cardWindows, hiddenWindows
         case spendBudget, budgetNotified, weeklyDigest, weeklyDigestSent
         case shareSignature, shareShowsSignature, shareMasksAccount, shareCardShownForVersion
     }
@@ -326,6 +331,8 @@ public struct ExperiencePrefs: Codable, Equatable, Sendable {
         paceAlerts = value(.paceAlerts, d.paceAlerts)
         resetEffects = value(.resetEffects, d.resetEffects)
         resetNotify = choice(.resetNotify, d.resetNotify)
+        resetCreditNotify = value(.resetCreditNotify, d.resetCreditNotify)
+        resetCreditNotified = value(.resetCreditNotified, d.resetCreditNotified)
         hiddenProviders = value(.hiddenProviders, d.hiddenProviders)
         cardWindows = value(.cardWindows, d.cardWindows)
         hiddenWindows = value(.hiddenWindows, d.hiddenWindows)

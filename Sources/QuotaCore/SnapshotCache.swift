@@ -22,21 +22,23 @@ public enum AppSupport {
 }
 
 extension ResetCredits: Codable {
-    private enum CodingKeys: String, CodingKey { case available, applicable, expirations }
+    private enum CodingKeys: String, CodingKey { case available, applicable, totalEarned, credits }
 
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         self.init(
             available: try c.decode(Int.self, forKey: .available),
             applicable: try c.decodeIfPresent(Int.self, forKey: .applicable),
-            expirations: (try? c.decodeIfPresent([Date].self, forKey: .expirations)) ?? [])
+            totalEarned: try? c.decodeIfPresent(Int.self, forKey: .totalEarned),
+            credits: (try? c.decodeIfPresent([ResetCredit].self, forKey: .credits)) ?? [])
     }
 
     public func encode(to encoder: Encoder) throws {
         var c = encoder.container(keyedBy: CodingKeys.self)
         try c.encode(available, forKey: .available)
         try c.encodeIfPresent(applicable, forKey: .applicable)
-        if !expirations.isEmpty { try c.encode(expirations, forKey: .expirations) }
+        try c.encodeIfPresent(totalEarned, forKey: .totalEarned)
+        if !credits.isEmpty { try c.encode(credits, forKey: .credits) }
     }
 }
 
