@@ -193,9 +193,7 @@ public struct QwenProvider: QuotaProvider {
     }
 
     public func fetch(config: ConfigStore) async throws -> UsageSnapshot {
-        guard let raw = config.credential(for: .qwen), let cookie = Self.normalizeCookie(raw) else {
-            throw ProviderError.notConfigured(hint: ProviderID.qwen.setupHint)
-        }
+        let cookie = try Self.cookieHeader(config.credential(for: .qwen), for: .qwen)
         // The console injects sec_token into the signed-in page; a page
         // without one is the login page.
         let page = try await HTTP.get(Self.dashboard, headers: [
@@ -372,6 +370,25 @@ public struct QwenProvider: QuotaProvider {
         return value.isEmpty ? nil : value
     }
 
+    /// The Cookie header a console provider needs, or why what was saved is
+    /// not one. A header is always `name=value` pairs; an API key pasted in
+    /// its place has no `=`, and sent as a cookie it loads the console signed
+    /// out — which read as an expired session.
+    static func cookieHeader(_ raw: String?, for id: ProviderID) throws -> String {
+        guard let raw, let cookie = normalizeCookie(raw) else { throw ProviderError.notConfigured(hint: id.setupHint) }
+        guard cookie.contains("=") else {
+            let browser = id == .alibaba || id == .qwen || id == .mimo
+            throw ProviderError.notConfigured(hint: browser
+                ? L10n.t(
+                    "What's saved is an API key, but \(id.displayName) is read through its signed-in console. Choose Sign in in a browser… in Settings, or paste the console's Cookie header.",
+                    "填的是 API Key，但\(id.displayName)要通过登录后的控制台读取。请在设置里点「浏览器登录…」，或粘贴控制台的 Cookie 头。")
+                : L10n.t(
+                    "What's saved is an API key, but \(id.displayName) is read through its signed-in console. Paste the console's Cookie header in Settings.",
+                    "填的是 API Key，但\(id.displayName)要通过登录后的控制台读取。请在设置里粘贴控制台的 Cookie 头。"))
+        }
+        return cookie
+    }
+
     static func cookieValue(_ name: String, in header: String) -> String? {
         for pair in header.split(separator: ";") {
             let parts = pair.split(separator: "=", maxSplits: 1).map { $0.trimmingCharacters(in: .whitespaces) }
@@ -386,6 +403,11 @@ public struct QwenProvider: QuotaProvider {
             #""sec_token"\s*:\s*"([^"]+)""#,
             #"sec_token['"]?\s*[:=]\s*['"]([^'"]+)['"]"#,
             #""secToken"\s*:\s*"([^"]+)""#,
+            // The console's config object, as the Bailian page now writes it:
+            // `SEC_TOKEN: "…"` inside `window.ALIYUN_CONSOLE_CONFIG`. None of
+            // the spellings above matched, and every reading failed as an
+            // expired session while the sign-in was fine.
+            #"SEC_TOKEN['"]?\s*[:=]\s*['"]([^'"]+)['"]"#,
         ]
         for pattern in patterns {
             guard let regex = try? NSRegularExpression(pattern: pattern),

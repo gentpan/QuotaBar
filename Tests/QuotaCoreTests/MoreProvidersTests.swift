@@ -22,6 +22,27 @@ final class MoreProvidersTests: XCTestCase {
         }
     }
 
+    /// The console's subscription page on an account with no plan, September 2026.
+    func testAlibabaWithNoPlanSaysSoRatherThanAnExpiredSession() {
+        let body = json(#"{"code":"200","data":{"DataV2":{"ret":["SUCCESS::接口调用成功"],"data":{"data":{"codingPlanInstanceInfos":[],"userId":"1"},"success":true}},"success":true,"errorMsg":""},"successResponse":true}"#)
+        XCTAssertThrowsError(try AlibabaCodingPlanProvider.parse(body)) { error in
+            guard case ProviderError.noPlan = error else { return XCTFail("\(error)") }
+        }
+    }
+
+    func testAnAPIKeyInACookieFieldIsCalledOut() {
+        XCTAssertThrowsError(try QwenProvider.cookieHeader("sk-0123456789abcdef", for: .alibaba)) { error in
+            guard case let ProviderError.notConfigured(hint) = error else { return XCTFail("\(error)") }
+            XCTAssertTrue(hint.contains("API Key") || hint.contains("API key"))
+        }
+        XCTAssertEqual(try QwenProvider.cookieHeader("Cookie: a=1; login_aliyunid_ticket=x", for: .alibaba), "a=1; login_aliyunid_ticket=x")
+    }
+
+    func testTheConsolesSecTokenIsFoundInItsConfigObject() {
+        let html = #"<script>window.ALIYUN_CONSOLE_CONFIG = { CHANNEL: "", SEC_TOKEN: "abc123XYZ", LOCALE: "zh" };</script>"#
+        XCTAssertEqual(QwenProvider.secToken(inHTML: html), "abc123XYZ")
+    }
+
     func testArkcliPlanPeriods() throws {
         let data = json(#"{"viewer":{"auth_method":"sso"},"items":[{"product":"coding-plan","subscribed":true,"periods":[{"label":"five_hour","percent":25,"reset_at":"2026-09-13T10:00:00Z"},{"label":"weekly","percent":40}]},{"product":"agent-plan","subscribed":false,"periods":[]}]}"#)
         let snapshot = try VolcengineArkProvider.parse(data)

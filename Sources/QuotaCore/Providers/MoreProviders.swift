@@ -126,23 +126,33 @@ public struct AlibabaCodingPlanProvider: QuotaProvider {
             site: "MODELSTUDIO_ALIBABACLOUD")
     }
 
-    static let api = "zeldaEasy.broadscope-bailian.codingPlan.queryCodingPlanInstanceInfoV2"
+    /// The name the console's own subscription page calls it by; the older
+    /// `broadscope-bailian` spelling still answered in September 2026.
+    static let api = "zeldaEasy.bailian-commerce.codingPlan.queryCodingPlanInstanceInfoV2"
 
     public func isConfigured(config: ConfigStore) -> Bool { config.credential(for: id) != nil }
 
     public func fetch(config: ConfigStore) async throws -> UsageSnapshot {
-        guard let raw = config.credential(for: id), let cookie = QwenProvider.normalizeCookie(raw) else {
-            throw ProviderError.notConfigured(hint: id.setupHint)
+        let cookie = try QwenProvider.cookieHeader(config.credential(for: id), for: id)
+        // The cookie belongs to one site; the other one's failure says
+        // nothing about it. The error kept is the one that says most: no
+        // plan, then anything but a refusal, then the refusal.
+        var kept: Error = ProviderError.unauthorized
+        func rank(_ error: Error) -> Int {
+            switch error as? ProviderError {
+            case .noPlan: 3
+            case .unauthorized: 1
+            default: 2
+            }
         }
-        var lastError: Error = ProviderError.unauthorized
         for region in [Region.china, .international] {
             do {
                 return try await fetch(region: region, cookie: cookie)
             } catch {
-                lastError = error
+                if rank(error) > rank(kept) { kept = error }
             }
         }
-        throw lastError
+        throw kept
     }
 
     private func fetch(region: Region, cookie: String) async throws -> UsageSnapshot {
@@ -151,7 +161,14 @@ public struct AlibabaCodingPlanProvider: QuotaProvider {
         ])
         guard let secToken = page.flatMap({ QwenProvider.secToken(inHTML: String(decoding: $0.data, as: UTF8.self)) })
             ?? QwenProvider.cookieValue("sec_token", in: cookie)
-        else { throw ProviderError.unauthorized }
+        else {
+            // Sent to the sign-in host: the session is over. Still on the
+            // console with no token in the page: the page changed, which is
+            // not the owner's to fix by signing in again.
+            let host = page?.url?.host ?? ""
+            if page == nil || ["signin", "login", "passport"].contains(where: host.contains) { throw ProviderError.unauthorized }
+            throw ProviderError.badResponse
+        }
 
         var components = URLComponents(string: region.gateway + "/data/api.json")!
         components.queryItems = [
@@ -200,7 +217,17 @@ public struct AlibabaCodingPlanProvider: QuotaProvider {
         let text = String(decoding: data, as: UTF8.self)
         let counters: Set<String> = ["per5HourTotalQuota", "perWeekTotalQuota", "perBillMonthTotalQuota", "perFiveHourTotalQuota", "perMonthTotalQuota"]
         guard let quota = QwenProvider.findObject(containingAnyOf: counters, in: root) else {
-            if text.contains("ConsoleNeedLogin") || text.lowercased().contains("login") { throw ProviderError.unauthorized }
+            // Only the gateway's own sign-in codes. Any reply with "login"
+            // anywhere in it used to count, and read as an expired session.
+            if ["ConsoleNeedLogin", "NeedLogin", "NotLogin"].contains(where: text.contains) { throw ProviderError.unauthorized }
+            // Signed in, no plan: `"codingPlanInstanceInfos": []`.
+            if let instances = QwenProvider.findObject(containingAnyOf: ["codingPlanInstanceInfos"], in: root)?["codingPlanInstanceInfos"] as? [Any],
+               instances.isEmpty
+            {
+                throw ProviderError.noPlan(L10n.t(
+                    "This Alibaba Cloud account has no Coding Plan. Alibaba Cloud now sells it as Token Plan, which QuotaBar can't read yet.",
+                    "这个阿里云账号没有订阅百炼 Coding Plan。阿里云现在改为售卖 Token Plan，QuotaBar 暂时还读不了 Token Plan 的额度。"))
+            }
             throw ProviderError.badResponse
         }
         func window(_ title: String, _ used: [String], _ total: [String], _ reset: [String], seconds: Int) -> UsageWindow? {
@@ -572,9 +599,7 @@ public struct MiMoProvider: QuotaProvider {
     public func isConfigured(config: ConfigStore) -> Bool { config.credential(for: id) != nil }
 
     public func fetch(config: ConfigStore) async throws -> UsageSnapshot {
-        guard let raw = config.credential(for: id), let cookie = QwenProvider.normalizeCookie(raw) else {
-            throw ProviderError.notConfigured(hint: id.setupHint)
-        }
+        let cookie = try QwenProvider.cookieHeader(config.credential(for: id), for: id)
         let headers = [
             "Cookie": cookie, "Accept": "application/json, text/plain, */*", "Accept-Language": "zh-CN,zh;q=0.9",
             "x-timeZone": "UTC+08:00", "Origin": "https://platform.xiaomimimo.com",
@@ -641,9 +666,7 @@ public struct QoderProvider: QuotaProvider {
     public func isConfigured(config: ConfigStore) -> Bool { config.credential(for: id) != nil }
 
     public func fetch(config: ConfigStore) async throws -> UsageSnapshot {
-        guard let raw = config.credential(for: id), let cookie = QwenProvider.normalizeCookie(raw) else {
-            throw ProviderError.notConfigured(hint: id.setupHint)
-        }
+        let cookie = try QwenProvider.cookieHeader(config.credential(for: id), for: id)
         var lastError: Error = ProviderError.unauthorized
         for site in ["qoder.com.cn", "qoder.com"] {
             let origin = "https://\(site)"

@@ -6,6 +6,9 @@ import FoundationNetworking
 public struct HTTPResponse: Sendable {
     public let status: Int
     public let data: Data
+    /// Where the request ended up after redirects — a console page that
+    /// sends an expired session to its sign-in host says so only here.
+    public var url: URL? = nil
 
     public func json<T: Decodable>(_ type: T.Type, decoder: JSONDecoder = JSONDecoder()) throws -> T {
         do {
@@ -77,7 +80,7 @@ public enum HTTP {
             guard let http = response as? HTTPURLResponse else {
                 throw ProviderError.badResponse
             }
-            return HTTPResponse(status: http.statusCode, data: data)
+            return HTTPResponse(status: http.statusCode, data: data, url: http.url)
         } catch let error as ProviderError {
             throw error
         } catch {

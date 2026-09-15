@@ -845,9 +845,14 @@ public enum ProviderError: LocalizedError, Sendable {
     case http(Int)
     case badResponse
     case network(String)
+    /// Signed in, and the account simply has no plan to read — said as it
+    /// is, not as an expired session or a reply that would not parse.
+    case noPlan(String)
 
     public var errorDescription: String? {
         switch self {
+        case let .noPlan(message):
+            return message
         case let .notConfigured(hint):
             return L10n.t("Not configured. \(hint)", "尚未配置。\(hint)")
         case let .needsAuthorization(hint):
