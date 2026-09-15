@@ -24,7 +24,7 @@
     <a class="logbar__brand wordmark" href="./"><img src="assets/icon.png?v=b93e5857" alt="" width="22" height="22">QuotaBar</a>
     <nav class="logbar__links">
       <a href="./">Home</a>
-      <a href="https://quota.bar/download/QuotaBar-0.5.5.dmg" download>Download</a>
+      <a href="https://quota.bar/download/QuotaBar-0.5.6.dmg" download>Download</a>
       <a href="https://github.com/gentpan/QuotaBar/blob/main/CHANGELOG.en.md">View on GitHub</a>
       <a href="zh/changelog.html" hreflang="zh-CN" lang="zh-CN" data-lang="zh">简体中文</a>
     </nav>
@@ -37,6 +37,67 @@
     <p class="logdoc__legend"><span class="badge badge--add">Added</span><span class="badge badge--style">Style</span><span class="badge badge--fix">Fixed</span><span class="badge badge--remove">Removed</span></p>
   </header>
   <ol class="tl">
+    <li class="tl__release" id="v-0.5.6">
+      <div class="tl__meta">
+        <a class="tl__version" href="#v-0.5.6">0.5.6</a>
+        <time datetime="2026-09-16">2026-09-16</time>
+      </div>
+      <div class="tl__body">
+        <section class="tl__day" id="d-2026-09-16">
+          <h3><time datetime="2026-09-16">2026-09-16</time></h3>
+          <div class="tl__group">
+            <span class="badge badge--style">Style</span>
+            <ul>
+              <li>On the island's overview page the Share usage card button moves to the top right corner as the share icon alone; nothing sits under the spend bars.</li>
+              <li>The island overview's spend bars per tool are stepped, like the quota page's; with three tools the bars and gaps are a little shorter, so the panel stays the same height.</li>
+              <li>In the open island the quota tiles and the usage page's figures sit about 2pt lower, a little further from the provider's title and closer to the footer rule, so the blank above and below them is about even; the panel keeps its height.</li>
+              <li>Usage and spend split by tool now say "Codex" rather than "Codex CLI", OpenAI's own name for it.</li>
+              <li>The website, GitHub, X and email links in Settings → About drop their names and arrows: the icon and the address, nothing more.</li>
+              <li>The Quota Run settings page's subtitle uses the same word for records as the rest of the page (Chinese only).</li>
+              <li>Every segmented switch in Settings is sized by how many options it holds, 100pt each, so the switches in a card line up; a longer label, as in English, widens its switch to fit instead of being cut off.</li>
+              <li>Check now in Settings → Updates is an outlined button like Refresh now; the filled style is kept for steps that change something, such as installing, saving or signing in.</li>
+              <li>The acknowledgements list in Settings → About drops its arrows, like the links above it.</li>
+              <li>The Closest to the limit desktop card lists from just under its title, rather than centring the list and leaving a gap above it.</li>
+              <li>The open island shows the plan's own windows and leaves out a single model's limit such as GPT-5.3-Codex-Spark: Codex Plus shows its 5-hour and weekly bars, Pro its weekly bar alone, as codex-island does. A provider that only reports per-model limits still shows them.</li>
+              <li>In the open island a provider with a single window, such as Codex Pro's week, has its bar across the whole column, ending where a pair of tiles ends; Ring and Numeric tiles sit against the left edge under the provider's title rather than centred.</li>
+            </ul>
+          </div>
+          <div class="tl__group">
+            <span class="badge badge--fix">Fixed</span>
+            <ul>
+              <li>The medium Ring gauge desktop card ran its account row about 23pt past the card's bottom edge; its ring and gaps are a little smaller at that size and everything fits.</li>
+              <li>In the Provider grid desktop card a balance tile such as DeepSeek's was shorter than the quota tiles beside it; the balance now takes the percentage's size and the tiles match.</li>
+              <li>The classic desktop widget and the edge dock's rings always showed used, against the remaining reading of the bars beside them and the menu bar; they now follow Fill basis in Appearance.</li>
+            </ul>
+          </div>
+        </section>
+        <section class="tl__day" id="d-2026-09-15">
+          <h3><time datetime="2026-09-15">2026-09-15</time></h3>
+          <div class="tl__group">
+            <span class="badge badge--add">Added</span>
+            <ul>
+              <li>With the island or the edge dock folded, a quota down to its last 15% makes the outline flash, brightening and dimming, as codex-island does: amber within 15%, red within 5%, and it stops once the quota refills. It goes by the whole percentage shown on screen and ignores the alert thresholds and the notification switch; with Reduce Animations on, the outline stays lit instead of flashing.</li>
+            </ul>
+          </div>
+          <div class="tl__group">
+            <span class="badge badge--style">Style</span>
+            <ul>
+              <li>The open island no longer draws a halo, an orbiting light or a drop shadow round the panel, and its window is no bigger than the panel, so a window screenshot has no blank band at the sides and bottom; the folded island keeps its glow.</li>
+              <li>"Synced N minutes ago" showed twice in the open island, at the top and again at the bottom; it is now bottom right only, with a new Refresh now button beside it that turns into a spinner and "Refreshing…" while it works. The page dots stay centred.</li>
+              <li>The open island is one height throughout: switching between Bar, Stepped, Trend, Numeric and Ring, or between the Quota, Usage and Overview pages, no longer changes it. The height is set by the tallest content, about 26pt less than before, so there is no band of black under the bars; shorter styles are centred in it, which also moves the rings clear of the provider's title. The overview's spend bars and share button sit a little closer so three tools fit.</li>
+              <li>The island's Trend style drops the "trend · last N refreshes" caption that crowded the reset line, and the line now follows the used-or-remaining switch, reading the same way as the figure and the bars.</li>
+              <li>The QuotaBar wordmark at the top left of the open island has the app's mark before it, in the same white as the text.</li>
+            </ul>
+          </div>
+          <div class="tl__group">
+            <span class="badge badge--fix">Fixed</span>
+            <ul>
+              <li>Quitting now saves the local Quota Run records at once. A change used to be written five seconds later, and quitting within those five seconds lost it.</li>
+            </ul>
+          </div>
+        </section>
+      </div>
+    </li>
     <li class="tl__release" id="v-0.5.5">
       <div class="tl__meta">
         <a class="tl__version" href="#v-0.5.5">0.5.5</a>
@@ -660,7 +721,7 @@
 </main>
 <footer class="footer">
   <div class="shell">
-    <p class="footer__fine">© 2026 QuotaBar · <a href="https://github.com/gentpan/QuotaBar/blob/main/LICENSE">MIT License</a> · Current version 0.5.5</p>
+    <p class="footer__fine">© 2026 QuotaBar · <a href="https://github.com/gentpan/QuotaBar/blob/main/LICENSE">MIT License</a> · Current version 0.5.6</p>
   </div>
 </footer>
 <script src="app.js?v=b93e5857"></script>

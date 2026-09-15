@@ -23,7 +23,7 @@
     <a class="logbar__brand wordmark" href="./"><img src="../assets/icon.png?v=b93e5857" alt="" width="22" height="22">QuotaBar</a>
     <nav class="logbar__links">
       <a href="./">首页</a>
-      <a href="https://quota.bar/download/QuotaBar-0.5.5.dmg" download>下载</a>
+      <a href="https://quota.bar/download/QuotaBar-0.5.6.dmg" download>下载</a>
       <a href="https://github.com/gentpan/QuotaBar/blob/main/CHANGELOG.md">在 GitHub 上查看</a>
       <a href="../changelog.html" hreflang="en" lang="en" data-lang="en">English</a>
     </nav>
@@ -36,6 +36,67 @@
     <p class="logdoc__legend"><span class="badge badge--add">新增</span><span class="badge badge--style">样式</span><span class="badge badge--fix">修复</span><span class="badge badge--remove">删除</span></p>
   </header>
   <ol class="tl">
+    <li class="tl__release" id="v-0.5.6">
+      <div class="tl__meta">
+        <a class="tl__version" href="#v-0.5.6">0.5.6</a>
+        <time datetime="2026-09-16">2026-09-16</time>
+      </div>
+      <div class="tl__body">
+        <section class="tl__day" id="d-2026-09-16">
+          <h3><time datetime="2026-09-16">2026-09-16</time></h3>
+          <div class="tl__group">
+            <span class="badge badge--style">样式</span>
+            <ul>
+              <li>刘海岛总览页的「分享用量卡片」按钮移到面板右上角，只显示分享图标；花费条下方不再有按钮。</li>
+              <li>刘海岛总览页各工具的花费条改用和额度页一样的格子进度条；同时有三个工具时，格子条和间距略微压矮，面板高度不变。</li>
+              <li>刘海岛展开面板的额度卡片和用量页数字整体下移约 2pt，与服务商标题拉开一点，和底栏分隔线之间的空隙相应缩小，上下留白基本相等；面板高度不变。</li>
+              <li>各处按工具区分的用量和花费里，「Codex CLI」改称「Codex」，与 OpenAI 的正式名称一致。</li>
+              <li>设置 → 关于里的网站、GitHub、X、邮件四个链接去掉了名称和右上箭头，只保留图标和地址。</li>
+              <li>Quota Run 设置页顶部说明里的「个人纪录」改为「个人记录」，与页面其他地方用词一致。</li>
+              <li>设置里所有单选切换控件统一宽度：每个选项 100pt，两个选项 200pt、三个 300pt，同一张卡片里的控件左右对齐；英文等较长的标签会按最长的一项自动加宽，不再被截断。</li>
+              <li>设置 → 更新里的「立即检查」改为和「立即刷新」一样的描边按钮；实心按钮只留给安装、保存、登录这类会改变状态的操作。</li>
+              <li>设置 → 关于里的开源致谢列表去掉右侧箭头，与上方链接一致。</li>
+              <li>「紧迫排行」桌面卡片的列表紧贴标题往下排，服务商较少时不再在标题下方空出一大块。</li>
+              <li>刘海岛展开面板只显示套餐本身的额度窗口，不再显示 GPT-5.3-Codex-Spark 这类单个模型的限额：Codex Plus 显示 5 小时和周两条进度条，Pro 只显示周这一条，与 codex-island 一致。只有单个模型限额的服务商照常显示。</li>
+              <li>刘海岛展开面板里只有一个额度窗口时（如 Codex Pro 的周额度），进度条占满整栏宽度，右端与两个窗口并排时对齐；圆环和数字样式的卡片改为靠左，与服务商标题对齐，不再居中。</li>
+            </ul>
+          </div>
+          <div class="tl__group">
+            <span class="badge badge--fix">修复</span>
+            <ul>
+              <li>中号「环形仪表」桌面卡片底部的账号栏超出卡片约 23pt 被裁掉；中号卡片的圆环和间距略微缩小，内容完整放进卡片。</li>
+              <li>「服务商网格」桌面卡片里，DeepSeek 这类余额格比旁边的额度格矮一截；现在余额数字与百分比同样大小，格子等高。</li>
+              <li>经典样式桌面卡片和边缘停靠条的圆环与百分比一直按「已用」显示，与旁边进度条和菜单栏的「剩余」口径相反；现在跟随外观设置里的「填充口径」。</li>
+            </ul>
+          </div>
+        </section>
+        <section class="tl__day" id="d-2026-09-15">
+          <h3><time datetime="2026-09-15">2026-09-15</time></h3>
+          <div class="tl__group">
+            <span class="badge badge--add">新增</span>
+            <ul>
+              <li>刘海岛和边缘停靠条收起时，只要有一项额度剩余不到 15%，外框就会一明一暗地闪烁提醒（参考 codex-island）：剩 15% 以内是琥珀色，剩 5% 以内变红，额度恢复后自动停止。按屏幕上显示的整数百分比判断，不受提醒阈值和通知开关影响；打开「减少动画」时外框常亮不闪。</li>
+            </ul>
+          </div>
+          <div class="tl__group">
+            <span class="badge badge--style">样式</span>
+            <ul>
+              <li>刘海岛展开后不再在面板外面绘制光晕、流光和投影，窗口也不再比面板大一圈，截图时两侧和底部不会带出空白；收起时的光晕照旧。</li>
+              <li>刘海岛展开面板里「已同步 X 分钟前」原本顶部和底部各显示一次，现在只留在右下角，旁边新增立即刷新按钮，刷新时换成转圈并显示「正在刷新…」；底部的翻页圆点保持居中。</li>
+              <li>刘海岛展开面板改为固定高度：条形、阶梯、趋势线、数字、圆环五种样式，以及额度、用量、总览三页切换时面板高度都保持一致。高度按最高的内容定，比原来矮了约 26pt，进度条下方不再留一大段黑色空白；较矮的样式在这个高度里垂直居中，圆环因此与服务商标题拉开距离。总览页的花费条和分享按钮间距略微收紧，三个工具时也放得下。</li>
+              <li>刘海岛趋势线样式去掉了「趋势 · 最近 N 次刷新」说明文字，避免和重置时间挤在一起；折线改为跟随「已用 / 剩余」切换，和百分比、进度条的方向一致。</li>
+              <li>刘海岛展开面板左上角的 QuotaBar 字标前加上应用 logo，用和文字相同的白色。</li>
+            </ul>
+          </div>
+          <div class="tl__group">
+            <span class="badge badge--fix">修复</span>
+            <ul>
+              <li>退出应用时立即保存 Quota Run 本地成绩记录。此前记录改动后要等 5 秒才写入磁盘，在这 5 秒内退出会丢失这次改动。</li>
+            </ul>
+          </div>
+        </section>
+      </div>
+    </li>
     <li class="tl__release" id="v-0.5.5">
       <div class="tl__meta">
         <a class="tl__version" href="#v-0.5.5">0.5.5</a>
@@ -659,7 +720,7 @@
 </main>
 <footer class="footer">
   <div class="shell">
-    <p class="footer__fine">© 2026 QuotaBar · <a href="https://github.com/gentpan/QuotaBar/blob/main/LICENSE">MIT 许可证</a> · 当前版本 0.5.5</p>
+    <p class="footer__fine">© 2026 QuotaBar · <a href="https://github.com/gentpan/QuotaBar/blob/main/LICENSE">MIT 许可证</a> · 当前版本 0.5.6</p>
   </div>
 </footer>
 <script src="../app.js?v=b93e5857"></script>

@@ -62,9 +62,9 @@
         <a role="menuitem" href="#providers">Supported Providers</a>
         <a role="menuitem" href="https://quota.run/">Quota Run Leaderboard</a>
         <hr>
-        <a role="menuitem" href="https://quota.bar/download/QuotaBar-0.5.5-apple-silicon.dmg" download>Download for Apple Silicon</a>
-        <a role="menuitem" href="https://quota.bar/download/QuotaBar-0.5.5-intel.dmg" download>Download for Intel</a>
-        <a role="menuitem" href="https://github.com/gentpan/QuotaBar/releases/tag/v0.5.5">Download from GitHub<span class="mb-drop__ext" aria-hidden="true">↗</span></a>
+        <a role="menuitem" href="https://quota.bar/download/QuotaBar-0.5.6-apple-silicon.dmg" download>Download for Apple Silicon</a>
+        <a role="menuitem" href="https://quota.bar/download/QuotaBar-0.5.6-intel.dmg" download>Download for Intel</a>
+        <a role="menuitem" href="https://github.com/gentpan/QuotaBar/releases/tag/v0.5.6">Download from GitHub<span class="mb-drop__ext" aria-hidden="true">↗</span></a>
         <a role="menuitem" href="https://github.com/gentpan/QuotaBar">View Source<span class="mb-drop__ext" aria-hidden="true">↗</span></a>
       </div>
     </div>
@@ -350,14 +350,14 @@
          同样的文件和通用包。 -->
     <div class="hero__cta">
       <div class="hero__buttons">
-        <a class="btn btn--primary" href="https://quota.bar/download/QuotaBar-0.5.5-apple-silicon.dmg" download>
+        <a class="btn btn--primary" href="https://quota.bar/download/QuotaBar-0.5.6-apple-silicon.dmg" download>
           <svg width="15" height="18" viewBox="0 0 15 18" fill="currentColor" aria-hidden="true">
           <path d="M12.3 9.5c0-2 1.6-3 1.7-3-1-1.4-2.4-1.6-2.9-1.6-1.2-.1-2.4.7-3 .7-.6 0-1.6-.7-2.6-.7C4.2 5 3 5.7 2.3 7c-1.3 2.3-.3 5.7 1 7.5.6.9 1.4 1.9 2.4 1.9.9 0 1.3-.6 2.4-.6 1.1 0 1.4.6 2.4.6 1 0 1.7-.9 2.3-1.8.7-1 1-2 1-2.1 0 0-2-.8-2-3zM10.4 3.4c.5-.6.9-1.5.8-2.4-.8 0-1.7.5-2.3 1.2-.5.6-.9 1.5-.8 2.4.9.1 1.8-.5 2.3-1.2z"/>
         </svg>
           Apple Silicon
           <span class="btn__src">M1 and later</span>
         </a>
-        <a class="btn btn--primary" href="https://quota.bar/download/QuotaBar-0.5.5-intel.dmg" download>
+        <a class="btn btn--primary" href="https://quota.bar/download/QuotaBar-0.5.6-intel.dmg" download>
           <svg width="17" height="17" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" aria-hidden="true">
           <rect x="3.5" y="3.5" width="9" height="9" rx="1.5"/><rect x="6" y="6" width="4" height="4" rx=".5"/>
           <path d="M6 1.5v2M10 1.5v2M6 12.5v2M10 12.5v2M1.5 6h2M1.5 10h2M12.5 6h2M12.5 10h2" stroke-linecap="round"/>
@@ -366,7 +366,7 @@
           <span class="btn__src">Intel Macs</span>
         </a>
       </div>
-      <span class="btn__meta"><span class="latest-version">0.5.5</span> · Requires macOS 14 Sonoma or later · Notarized by Apple · Free and open source · Also on <a href="https://github.com/gentpan/QuotaBar/releases/tag/v0.5.5">GitHub</a></span>
+      <span class="btn__meta"><span class="latest-version">0.5.6</span> · Requires macOS 14 Sonoma or later · Notarized by Apple · Free and open source · Also on <a href="https://github.com/gentpan/QuotaBar/releases/tag/v0.5.6">GitHub</a></span>
       <span class="btn__meta">Not sure which? Apple menu → About This Mac: the Chip line says Apple M…, the Processor line says Intel.</span>
     </div>
   </div>
@@ -380,7 +380,7 @@
     <span class="dock__tile" title="Cursor"><img src="assets/dock/cursor.png?v=b93e5857" alt="" width="46" height="46"></span>
     <span class="dock__tile" title="Grok"><img src="assets/dock/grok.png?v=b93e5857" alt="" width="46" height="46"></span>
     <span class="dock__sep"></span>
-    <a class="dock__tile dock__tile--app" href="https://quota.bar/download/QuotaBar-0.5.5.dmg" download title="Download QuotaBar">
+    <a class="dock__tile dock__tile--app" href="https://quota.bar/download/QuotaBar-0.5.6.dmg" download title="Download QuotaBar">
       <img src="assets/icon.png?v=b93e5857" alt="QuotaBar">
     </a>
   </div>
@@ -541,34 +541,38 @@
     <div class="shell">
       <div class="section-head">
         <h2>Changelog</h2>
-        <p>Current version 0.5.5 · last updated 2026-09-15. What changed, day by day.</p>
+        <p>Current version 0.5.6 · last updated 2026-09-16. What changed, day by day.</p>
       </div>
       <div class="log">
+        <article class="log__day">
+          <header class="log__head"><time datetime="2026-09-16">2026-09-16</time><span class="log__tag">0.5.6</span></header>
+          <p class="log__counts">12 style · 3 fixed</p>
+          <ul class="log__list">
+            <li><span class="badge badge--style">Style</span>On the island's overview page the Share usage card button moves to the top right corner as the share icon alone; nothing sits under the spend bars.</li>
+            <li><span class="badge badge--style">Style</span>The island overview's spend bars per tool are stepped, like the quota page's; with three tools the bars and gaps are a little shorter, so the panel stays the same height.</li>
+            <li><span class="badge badge--style">Style</span>In the open island the quota tiles and the usage page's figures sit about 2pt lower, a little further from the provider's title and closer to the footer rule, so the blank above and below them is about even; the panel keeps its height.</li>
+            <li><span class="badge badge--style">Style</span>Usage and spend split by tool now say "Codex" rather than "Codex CLI", OpenAI's own name for it.</li>
+            <li><span class="badge badge--style">Style</span>The website, GitHub, X and email links in Settings → About drop their names and arrows: the icon and the address, nothing more.</li>
+          </ul>
+          <a class="log__more" href="changelog.html#d-2026-09-16">10 more →</a>
+        </article>
+        <article class="log__day">
+          <header class="log__head"><time datetime="2026-09-15">2026-09-15</time><span class="log__tag">0.5.6</span></header>
+          <p class="log__counts">1 added · 5 style · 1 fixed</p>
+          <ul class="log__list">
+            <li><span class="badge badge--add">Added</span>With the island or the edge dock folded, a quota down to its last 15% makes the outline flash, brightening and dimming, as codex-island does: amber within 15%, red within 5%, and it stops once the quota refills. It goes by the whole percentage shown on screen and ignores the alert thresholds and the notification switch; with Reduce Animations on, the outline stays lit instead of flashing.</li>
+            <li><span class="badge badge--style">Style</span>The open island no longer draws a halo, an orbiting light or a drop shadow round the panel, and its window is no bigger than the panel, so a window screenshot has no blank band at the sides and bottom; the folded island keeps its glow.</li>
+            <li><span class="badge badge--style">Style</span>"Synced N minutes ago" showed twice in the open island, at the top and again at the bottom; it is now bottom right only, with a new Refresh now button beside it that turns into a spinner and "Refreshing…" while it works. The page dots stay centred.</li>
+            <li><span class="badge badge--style">Style</span>The open island is one height throughout: switching between Bar, Stepped, Trend, Numeric and Ring, or between the Quota, Usage and Overview pages, no longer changes it. The height is set by the tallest content, about 26pt less than before, so there is no band of black under the bars; shorter styles are centred in it, which also moves the rings clear of the provider's title. The overview's spend bars and share button sit a little closer so three tools fit.</li>
+            <li><span class="badge badge--style">Style</span>The island's Trend style drops the "trend · last N refreshes" caption that crowded the reset line, and the line now follows the used-or-remaining switch, reading the same way as the figure and the bars.</li>
+          </ul>
+          <a class="log__more" href="changelog.html#d-2026-09-15">2 more →</a>
+        </article>
         <article class="log__day">
           <header class="log__head"><time datetime="2026-09-15">2026-09-15</time><span class="log__tag">0.5.5</span></header>
           <p class="log__counts">1 style</p>
           <ul class="log__list">
             <li><span class="badge badge--style">Style</span>The usage share card's address, bottom right, is Quota Run's: signed in to Quota Run with Sign it on, it is your profile, quota.run/@username; signed out it is quota.run alone with the signature before it, rather than a quota.bar/name address that leads nowhere. Signed in, the share window says which profile the card shows in place of the signature field.</li>
-          </ul>
-        </article>
-        <article class="log__day">
-          <header class="log__head"><time datetime="2026-09-15">2026-09-15</time><span class="log__tag">0.5.4</span></header>
-          <p class="log__counts">8 added · 4 fixed</p>
-          <ul class="log__list">
-            <li><span class="badge badge--add">Added</span>Copy as Image now shows the signed-in account on a provider card as mosaic tiles, so the email address stays out of the picture. The tiles are one fixed pattern that says nothing about the account, not even its length. Turn it off under Settings → General → Privacy with "Hide the account in copied images"; the panel itself still shows the address.</li>
-            <li><span class="badge badge--add">Added</span>A provider card's right-click menu has Hide Limits, for a limit you never use, such as Codex's GPT-5.3-Codex-Spark. A hidden limit is gone from the card and from under its arrow; the ring, the notch island, desktop cards and the menu bar stop following it, and it sends no almost-out alerts. Each provider remembers its own, a language switch keeps them, and Show All brings them back; the last limit cannot be hidden. The dock ring's right-click menu has it too. The local <code>/v1/limits</code> endpoint still returns every limit. (<a href="https://github.com/gentpan/QuotaBar/issues/2">#2</a>)</li>
-            <li><span class="badge badge--add">Added</span>Codex's Early resets row has an Expires line under it: when each banked reset runs out, soonest first, such as "5d 18h · 18d 23h · 19d 22h", with the rest counted past three. Like the limit rows, a click switches between countdown and clock time, and hovering shows the other. Resets that never expire are not listed. The dock ring's detail shows the line too. (<a href="https://github.com/gentpan/QuotaBar/issues/3">#3</a>)</li>
-            <li><span class="badge badge--add">Added</span>Early resets Codex gives out are read in full. The row shows how many the account has been given in all, and stays once the last one is spent; hovering lists each one's name, such as "Full reset (Weekly + 5 hr)", and when it runs out. A notification says when a new one arrives, with how many are available and when the soonest expires, and another comes once for each one still unspent a day before it runs out. Turn them off under Settings → Alerts → Resets with "Early resets given". The list is read at most once an hour, and again at once when the count changes or one of them expires.</li>
-            <li><span class="badge badge--add">Added</span>Prepaid providers no longer show an empty bar. DeepSeek, Moonshot API, OpenRouter and Xiaomi MiMo cards show each currency's balance in large figures, split into paid and granted when there is a grant and in red when it is too low for API calls. Below it is recent usage for Today, 7 days, 30 days or All: the spend and a chart of bars or a line — hours for today, days for 7 and 30 days, months for all — with the style switched at the top right and remembered, and each bar's figures on hover. Where the provider gives the detail (OpenRouter with a provisioning key, for one), usage by API key or by model sits under the chart, the top three listed and a key opening to its own figures. The dock's hover card shows the same. A Big figure or Gauge desktop card on a prepaid provider becomes a balance card — the balance in large figures, spend today, over 7 and over 30 days, and on the large card the 30-day chart — and the Provider grid and Closest first cards show the balance without a bar. The notch island and the menu bar's right-click menu show the balance instead of a dash. A copied image shows 30 days of spend and the chart, without key names. MiMo's monthly Token Plan keeps its bar.</li>
-          </ul>
-          <a class="log__more" href="changelog.html#d-2026-09-15">7 more →</a>
-        </article>
-        <article class="log__day">
-          <header class="log__head"><time datetime="2026-09-14">2026-09-14</time><span class="log__tag">0.5.4</span></header>
-          <p class="log__counts">2 added</p>
-          <ul class="log__list">
-            <li><span class="badge badge--add">Added</span>A new Projects page in Settings works out which project each token from this Mac's Claude Code, Codex and OpenCode session logs went to. A project is a Git repository, recognised by its remote, so every checkout and worktree of it counts together; work outside a repository is grouped by folder, and a folder with a repository's name is folded into it. For 7, 30, 90 or 365 days it shows an overview (projects, estimated cost, tokens, sessions, ways of working) and the projects ranked by cost with a bar split by CLI. Opening a project shows cost per day as bars (hover for the day), the split by CLI and by way of working (terminal, desktop app, editor, SDK), its top models, and a weekday-by-hour activity grid. Folder paths never leave the Mac.</li>
-            <li><span class="badge badge--add">Added</span>Projects on Quota Run: signed in, each project has a Public on quota.run switch, off for every project until turned on, a public name, and a button to open its page once it is up. This Mac uploads tokens per day by project, CLI, way of working and model: public projects with their name and repository, all others folded together as other projects without a name; paths and session content are never uploaded. quota.run prices the tokens itself at list rates. Changing a switch or a name sends every day again, so a project turned off comes down from the site right away. The consent sheet lists this upload too.</li>
           </ul>
         </article>
       </div>
@@ -631,9 +635,9 @@
   <div class="shell">
     <img class="footer__icon" src="assets/icon.png?v=b93e5857" alt="" loading="lazy" decoding="async">
     <div class="footer__links">
-      <a href="https://quota.bar/download/QuotaBar-0.5.5-apple-silicon.dmg" download>Download for Apple Silicon</a>
-      <a href="https://quota.bar/download/QuotaBar-0.5.5-intel.dmg" download>Download for Intel</a>
-      <a href="https://github.com/gentpan/QuotaBar/releases/tag/v0.5.5">Download from GitHub</a>
+      <a href="https://quota.bar/download/QuotaBar-0.5.6-apple-silicon.dmg" download>Download for Apple Silicon</a>
+      <a href="https://quota.bar/download/QuotaBar-0.5.6-intel.dmg" download>Download for Intel</a>
+      <a href="https://github.com/gentpan/QuotaBar/releases/tag/v0.5.6">Download from GitHub</a>
       <a href="https://quota.run/">Leaderboard</a>
       <a href="https://github.com/gentpan/QuotaBar">Source</a>
       <a href="https://github.com/gentpan/QuotaBar/issues">Feedback</a>
