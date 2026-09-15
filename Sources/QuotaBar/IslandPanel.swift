@@ -353,10 +353,12 @@ private struct IslandProviderBlock: View {
                     HStack(alignment: .top, spacing: 18) {
                         ForEach(horizons) { window in
                             IslandTile(window: window, accent: Color(hex: id.accentHex), store: store, id: id)
-                                .frame(maxWidth: .infinity)
+                                .frame(maxWidth: .infinity, alignment: .leading)
                         }
                     }
-                    .frame(maxWidth: horizons.count == 1 ? 240 : .infinity, alignment: .leading)
+                    // A lone window — Codex Pro's week — takes the column's
+                    // full width, ending where a pair of tiles ends.
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 }
             case .usage:
                 usageTiles

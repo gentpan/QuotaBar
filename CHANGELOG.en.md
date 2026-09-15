@@ -20,6 +20,7 @@ Server moves, the website, and build or release scripts don't change the app its
 - The acknowledgements list in Settings → About drops its arrows, like the links above it.
 - The Closest to the limit desktop card lists from just under its title, rather than centring the list and leaving a gap above it.
 - The open island shows the plan's own windows and leaves out a single model's limit such as GPT-5.3-Codex-Spark: Codex Plus shows its 5-hour and weekly bars, Pro its weekly bar alone, as codex-island does. A provider that only reports per-model limits still shows them.
+- In the open island a provider with a single window, such as Codex Pro's week, has its bar across the whole column, ending where a pair of tiles ends; Ring and Numeric tiles sit against the left edge under the provider's title rather than centred.
 
 #### Fixed
 
