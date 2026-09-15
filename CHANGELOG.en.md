@@ -18,6 +18,9 @@ Server moves, the website, and build or release scripts don't change the app its
 - The open island is one height throughout: switching between Bar, Stepped, Trend, Numeric and Ring, or between the Quota, Usage and Overview pages, no longer changes it. The height is set by the tallest content, about 26pt less than before, so there is no band of black under the bars; shorter styles are centred in it, which also moves the rings clear of the provider's title. The overview's spend bars and share button sit a little closer so three tools fit.
 - The island's Trend style drops the "trend · last N refreshes" caption that crowded the reset line, and the line now follows the used-or-remaining switch, reading the same way as the figure and the bars.
 - The QuotaBar wordmark at the top left of the open island has the app's mark before it, in the same white as the text.
+- On the island's overview page the Share usage card button moves to the top right corner as the share icon alone; nothing sits under the spend bars.
+- Usage and spend split by tool now say "Codex" rather than "Codex CLI", OpenAI's own name for it.
+- The website, GitHub, X and email links in Settings → About drop their names and arrows: the icon and the address, nothing more.
 
 #### Fixed
 

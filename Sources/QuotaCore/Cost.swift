@@ -11,7 +11,7 @@ public enum CostSource: String, Sendable, CaseIterable, Codable {
     public var displayName: String {
         switch self {
         case .claudeCode: "Claude Code"
-        case .codexCLI: "Codex CLI"
+        case .codexCLI: "Codex"
         case .openCode: "OpenCode"
         }
     }

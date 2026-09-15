@@ -126,6 +126,14 @@ struct IslandPanel: View {
             Text("QuotaBar")
                 .font(Design.wordmark(size: 12, weight: .bold))
             Spacer(minLength: 0)
+            // On the overview, the way to the share card: the icon alone,
+            // top right, over the refresh button in the footer.
+            if page == .overview {
+                CalloutButton(symbol: "square.and.arrow.up", help: L10n.t("Share usage card", "分享用量卡片")) {
+                    ShareStudio.open(store: store)
+                }
+                .transition(.opacity)
+            }
         }
         .foregroundStyle(.white.opacity(0.7))
     }
@@ -551,7 +559,7 @@ private struct IslandTile: View {
 
 
 /// The overview page: spend today and over the window, counting up, with
-/// each CLI's share, and the way to the share card.
+/// each tool's share. The share card opens from the header's button.
 private struct IslandOverview: View {
     @ObservedObject var store: UsageStore
 
@@ -559,11 +567,10 @@ private struct IslandOverview: View {
         HStack(alignment: .top, spacing: 36) {
             figure(.today)
             figure(.window)
-            // Three tools and the button in one row of tiles' height.
-            VStack(alignment: .leading, spacing: 5) {
+            VStack(alignment: .leading, spacing: 8) {
                 ForEach(store.cost.spend(.window).contributions, id: \.source) { item in
                     let total = max(0.000_001, store.cost.spend(.window).usd)
-                    VStack(alignment: .leading, spacing: 2) {
+                    VStack(alignment: .leading, spacing: 3) {
                         HStack {
                             Text(item.source.displayName)
                                 .font(.system(size: 11, weight: .medium))
@@ -581,14 +588,6 @@ private struct IslandOverview: View {
                         }
                         .frame(height: 5)
                     }
-                }
-                Pressable(action: { ShareStudio.open(store: store) }) {
-                    Label(L10n.t("Share usage card", "分享用量卡片"), systemImage: "square.and.arrow.up")
-                        .font(.system(size: 11, weight: .semibold))
-                        .foregroundStyle(.black)
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 4)
-                        .background(Capsule().fill(Color.white))
                 }
             }
             .frame(maxWidth: .infinity)

@@ -266,7 +266,8 @@ private struct CreditRow: View {
     }
 }
 
-/// One of the About card's links: a mark, a name and where it goes.
+/// One of the About card's links: the mark and where it goes. The name is
+/// what VoiceOver reads; on screen the mark already says it.
 private struct AboutLink: View {
     enum Mark {
         case symbol(String)
@@ -286,16 +287,8 @@ private struct AboutLink: View {
             HStack(spacing: Design.space2) {
                 glyph
                     .frame(width: 16, height: 16)
-                VStack(alignment: .leading, spacing: 1) {
-                    Text(title)
-                        .font(.system(size: 12, weight: .medium))
-                    Text(detail)
-                        .font(.system(size: 11))
-                        .foregroundStyle(.secondary)
-                }
-                Image(systemName: "arrow.up.right")
-                    .font(.system(size: 9, weight: .semibold))
-                    .foregroundStyle(.tertiary)
+                Text(detail)
+                    .font(.system(size: 12))
             }
             .padding(.horizontal, Design.space3)
             .padding(.vertical, Design.space2)
@@ -306,6 +299,7 @@ private struct AboutLink: View {
         }
         .buttonStyle(.plain)
         .help(url)
+        .accessibilityLabel("\(title), \(detail)")
     }
 
     @ViewBuilder

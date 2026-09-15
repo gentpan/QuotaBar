@@ -91,7 +91,7 @@ struct SpendCardView: View {
     private var sourcesNote: String {
         let names = store.cost.spend(.window).contributions.map(\.source.displayName)
         let separator = L10n.t(", ", "、")
-        let list = (names.isEmpty ? ["Claude Code", "Codex CLI", "OpenCode"] : names).joined(separator: separator)
+        let list = (names.isEmpty ? ["Claude Code", "Codex", "OpenCode"] : names).joined(separator: separator)
         return L10n.t(
             "From local session logs: \(list). Dollars are estimates at list prices.",
             "来自本地会话日志：\(list)。金额按公开价格估算。")
