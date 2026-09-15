@@ -19,6 +19,7 @@ Server moves, the website, and build or release scripts don't change the app its
 - Check now in Settings → Updates is an outlined button like Refresh now; the filled style is kept for steps that change something, such as installing, saving or signing in.
 - The acknowledgements list in Settings → About drops its arrows, like the links above it.
 - The Closest to the limit desktop card lists from just under its title, rather than centring the list and leaving a gap above it.
+- The open island shows the plan's own windows and leaves out a single model's limit such as GPT-5.3-Codex-Spark: Codex Plus shows its 5-hour and weekly bars, Pro its weekly bar alone, as codex-island does. A provider that only reports per-model limits still shows them.
 
 #### Fixed
 

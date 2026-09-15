@@ -302,10 +302,18 @@ private struct IslandProviderBlock: View {
 
     /// One window per horizon, two at most — the 5-hour and the 7-day when
     /// both exist, the one there is otherwise.
+    ///
+    /// The plan's own windows only: a limit on one model or feature (Codex's
+    /// GPT-5.3-Codex-Spark) is not a horizon of the plan, and next to a Pro
+    /// plan's lone weekly bar it read as a second one. As codex-island, Plus
+    /// shows its 5-hour and weekly bars, Pro its weekly. A provider that only
+    /// reports scoped windows still shows those.
     private var horizons: [UsageWindow] {
+        let reading = (snapshot?.windows ?? []).filter { $0.usedPercent != nil }
+        let plan = reading.filter { $0.scope == nil }
         var seen = Set<String>()
         var out: [UsageWindow] = []
-        for window in snapshot?.windows ?? [] where window.usedPercent != nil {
+        for window in plan.isEmpty ? reading : plan {
             guard seen.insert(window.shortLabel ?? window.title).inserted else { continue }
             out.append(window)
             if out.count == 2 { break }
