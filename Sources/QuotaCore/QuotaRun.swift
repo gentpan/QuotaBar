@@ -248,8 +248,6 @@ public struct RunRecord: Codable, Sendable, Equatable, Identifiable {
     /// The board this run would be ranked on.
     public var boardKey: String { "\(provider)|\(planNorm)|\(windowKey)" }
 
-    public var providerID: ProviderID? { ProviderID(rawValue: provider) }
-
     /// Whether the server would rank it, as far as this Mac can tell.
     public var wouldRank: Bool { tier != .flagged && !unbound }
 }
@@ -565,8 +563,6 @@ public struct PersonalBest: Codable, Sendable, Equatable, Identifiable {
         self.fastest = fastest
         self.highestPeak = highestPeak
     }
-
-    public var providerID: ProviderID? { ProviderID(rawValue: provider) }
 }
 
 // MARK: - Formatting

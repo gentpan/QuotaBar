@@ -72,6 +72,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         return false
     }
 
+    /// The run ledger saves five seconds after a change; quitting inside
+    /// that window would drop the change without this.
+    func applicationWillTerminate(_ notification: Notification) {
+        RunLedgerStore.shared.flush()
+    }
+
     func applicationDidFinishLaunching(_ notification: Notification) {
         // Info.plist carries LSUIElement for the packaged app; setting it here
         // too keeps the dev loop (bare binary, no bundle) out of the Dock.

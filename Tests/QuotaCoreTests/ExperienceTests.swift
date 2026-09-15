@@ -225,7 +225,6 @@ final class LimitsAndUpdatesTests: XCTestCase {
         XCTAssertTrue(UpdateCheck.compare("0.5.0-beta.2", isNewerThan: "0.5.0-beta.1"))
         XCTAssertTrue(UpdateCheck.compare("0.5.0-beta.1", isNewerThan: "0.4.0"))
         XCTAssertTrue(UpdateCheck.compare("0.2.10", isNewerThan: "0.2.9"))
-        XCTAssertTrue(UpdateCheck.isPrerelease("v0.5.0-rc.1"))
     }
 
     func testTheNewestReleaseInAListSkipsDrafts() throws {

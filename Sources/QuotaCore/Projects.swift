@@ -298,13 +298,6 @@ public struct ProjectInfo: Codable, Equatable, Sendable, Identifiable {
     public var displayName: String {
         isUnknown || name.isEmpty ? L10n.t("Outside a project", "项目之外") : name
     }
-
-    /// `github.com/owner/repo` when the remote is on GitHub.
-    public var githubRepo: String? {
-        guard let repo, repo.lowercased().hasPrefix("github.com/") else { return nil }
-        let parts = repo.split(separator: "/")
-        return parts.count >= 3 ? "\(parts[1])/\(parts[2])" : nil
-    }
 }
 
 /// QuotaBar's record of tokens per project, kept next to the usage archive

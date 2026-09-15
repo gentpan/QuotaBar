@@ -59,10 +59,6 @@ public enum UpdateCheck {
         }
     }
 
-    public static func isPrerelease(_ version: String) -> Bool {
-        split(version).1 != nil
-    }
-
     private static func split(_ version: String) -> ([Int], [Int]?) {
         let trimmed = version.hasPrefix("v") ? String(version.dropFirst()) : version
         let parts = trimmed.split(separator: "-", maxSplits: 1)
