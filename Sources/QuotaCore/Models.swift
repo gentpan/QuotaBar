@@ -724,10 +724,19 @@ public struct ResetCredits: Sendable, Equatable {
     /// How many apply to the window that is currently limiting — often 0 while
     /// nothing is actually throttled.
     public var applicable: Int?
+    /// When the credits that expire do, soonest first. Empty when none
+    /// expires, or the list could not be read.
+    public var expirations: [Date]
 
-    public init(available: Int, applicable: Int? = nil) {
+    public init(available: Int, applicable: Int? = nil, expirations: [Date] = []) {
         self.available = available
         self.applicable = applicable
+        self.expirations = expirations
+    }
+
+    /// The deadlines still ahead: a cached reading keeps ones that have passed.
+    public func upcomingExpirations(now: Date = .now) -> [Date] {
+        expirations.filter { $0 > now }
     }
 }
 

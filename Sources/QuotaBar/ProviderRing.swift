@@ -263,6 +263,7 @@ struct ProviderCallout: View {
         }
         if let credits = snapshot.resetCredits {
             ResetCreditsRow(credits: credits, accent: Color(hex: id.accentHex))
+            ResetCreditDeadlines(store: store, credits: credits, accent: Color(hex: id.accentHex))
         }
         Text(L10n.t(
             "Updated \(QuotaFormat.age(of: snapshot.fetchedAt))",

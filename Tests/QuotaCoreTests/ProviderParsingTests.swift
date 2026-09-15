@@ -387,6 +387,48 @@ final class CodexResetCreditsTests: XCTestCase {
         XCTAssertNil(try CodexProvider.parse(Data(none.utf8)).resetCredits)
     }
 
+    /// wham/rate-limit-reset-credits, in the shape the Codex CLI's own tests
+    /// record (issue #3): available credits' deadlines, soonest first.
+    func testExpirationsOfTheCreditsStillAvailable() {
+        let now = Dates.parseISO("2026-09-15T00:00:00Z")!
+        let list = """
+        {"credits":[
+          {"id":"b","reset_type":"codex_rate_limits","status":"available","granted_at":"2026-09-10T00:00:00Z","expires_at":"2026-10-05T22:00:00Z"},
+          {"id":"a","reset_type":"codex_rate_limits","status":"available","granted_at":"2026-09-01T00:00:00Z","expires_at":"2026-09-20T18:00:00.000Z"},
+          {"id":"c","reset_type":"codex_rate_limits","status":"available","granted_at":"2026-09-11T00:00:00Z","expires_at":null},
+          {"id":"d","reset_type":"codex_rate_limits","status":"redeemed","granted_at":"2026-08-01T00:00:00Z","expires_at":"2026-09-30T00:00:00Z"},
+          {"id":"e","reset_type":"codex_rate_limits","status":"available","granted_at":"2026-08-01T00:00:00Z","expires_at":"2026-09-14T00:00:00Z"}],
+         "available_count":3,"total_earned_count":5}
+        """
+        let dates = CodexProvider.resetCreditExpirations(Data(list.utf8), now: now)
+        XCTAssertEqual(dates, [Dates.parseISO("2026-09-20T18:00:00Z")!, Dates.parseISO("2026-10-05T22:00:00Z")!])
+        XCTAssertTrue(CodexProvider.resetCreditExpirations(Data(#"{"credits":[],"available_count":0}"#.utf8)).isEmpty)
+        XCTAssertTrue(CodexProvider.resetCreditExpirations(Data("<html>".utf8)).isEmpty)
+    }
+
+    func testExpirationsSurviveTheSnapshotCache() throws {
+        let deadline = Date(timeIntervalSince1970: 1_800_000_000)
+        let snapshot = UsageSnapshot(windows: [], resetCredits: ResetCredits(available: 1, expirations: [deadline]))
+        let back = try JSONDecoder().decode(UsageSnapshot.self, from: JSONEncoder().encode(snapshot))
+        XCTAssertEqual(back.resetCredits?.expirations, [deadline])
+        let old = try JSONDecoder().decode(ResetCredits.self, from: Data(#"{"available":2,"applicable":0}"#.utf8))
+        XCTAssertEqual(old.expirations, [], "a cache written before deadlines were read")
+    }
+
+    func testTheDeadlineListReadsLikeTheResetRows() {
+        let now = Date(timeIntervalSince1970: 1_800_000_000)
+        let dates = [
+            now.addingTimeInterval(18 * 86_400 + 23 * 3600 + 30),
+            now.addingTimeInterval(5 * 86_400 + 18 * 3600 + 30),
+            now.addingTimeInterval(-60),
+        ]
+        L10n.override = .en
+        defer { L10n.override = .system }
+        XCTAssertEqual(QuotaFormat.expiryList(dates, format: .countdown, now: now), "5d 18h · 18d 23h")
+        let many = (1...5).map { now.addingTimeInterval(Double($0) * 86_400 + 30) }
+        XCTAssertEqual(QuotaFormat.expiryList(many, format: .countdown, now: now), "1d 0h · 2d 0h · 3d 0h · +2 more")
+    }
+
     func testAbsentFieldIsTolerated() throws {
         let none = #"{"plan_type":"pro","rate_limit":null}"#
         XCTAssertNil(try CodexProvider.parse(Data(none.utf8)).resetCredits)

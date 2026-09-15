@@ -194,6 +194,7 @@ struct ProviderCardView: View {
                         .monospacedDigit()
                         .foregroundStyle(Color(hex: id.accentHex))
                 }
+                ResetCreditDeadlines(store: store, credits: credits, accent: Color(hex: id.accentHex))
             }
             if let source = id.costSource {
                 trend(source)

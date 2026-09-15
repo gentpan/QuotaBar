@@ -25,7 +25,39 @@ public struct CodexProvider: QuotaProvider {
         }
         let url = URL(string: "https://chatgpt.com/backend-api/wham/usage")!
         let response = try await HTTP.get(url, headers: headers).requireOK()
-        return try Self.parse(response.data, fallbackAccount: auth.accountId)
+        var snapshot = try Self.parse(response.data, fallbackAccount: auth.accountId)
+        // The usage reply only counts the banked resets; their deadlines are
+        // one list away. Asked only when there is something banked, and a
+        // failure there costs the deadlines, not the reading (issue #3).
+        if snapshot.resetCredits != nil,
+           let list = try? await HTTP.get(URL(string: "https://chatgpt.com/backend-api/wham/rate-limit-reset-credits")!, headers: headers).requireOK()
+        {
+            snapshot.resetCredits?.expirations = Self.resetCreditExpirations(list.data)
+        }
+        return snapshot
+    }
+
+    /// `{"credits":[{"id":…,"reset_type":"codex_rate_limits","status":"available",
+    /// "granted_at":"2026-06-17T00:00:00Z","expires_at":"2026-07-17T00:00:00Z"}],
+    /// "available_count":1}` — the shape the Codex CLI reads. The deadlines of
+    /// the credits still available, soonest first; one with no `expires_at`
+    /// keeps, and has none to list.
+    static func resetCreditExpirations(_ data: Data, now: Date = .now) -> [Date] {
+        struct Credit: Decodable {
+            let status: String?
+            let expiresAt: String?
+            enum CodingKeys: String, CodingKey {
+                case status
+                case expiresAt = "expires_at"
+            }
+        }
+        struct Body: Decodable { let credits: [Credit]? }
+        guard let body = try? JSONDecoder().decode(Body.self, from: data) else { return [] }
+        return (body.credits ?? [])
+            .filter { ($0.status ?? "available") == "available" }
+            .compactMap { Dates.parseISO($0.expiresAt) }
+            .filter { $0 > now }
+            .sorted()
     }
 
     // MARK: Response shape

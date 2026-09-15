@@ -169,6 +169,25 @@ extension QuotaFormat {
         }
     }
 
+    /// Banked resets' deadlines in the reset rows' format, soonest first:
+    /// "5d 18h · 18d 23h · 19d 22h" or "Sep 20 18:38 · Oct 3 09:00". Past
+    /// three, the rest are counted.
+    public static func expiryList(
+        _ dates: [Date],
+        format: ResetTimeFormat,
+        clock: ClockStyle = .automatic,
+        now: Date = .now) -> String
+    {
+        let upcoming = dates.filter { $0 > now }.sorted()
+        var parts = upcoming.prefix(3).map { date in
+            format == .countdown ? countdown(to: date, from: now) : exactTime(date, clock: clock, now: now)
+        }
+        if upcoming.count > 3 {
+            parts.append(L10n.t("+\(upcoming.count - 3) more", "另 \(upcoming.count - 3) 次"))
+        }
+        return parts.joined(separator: " · ")
+    }
+
     /// "today at 18:38" / "今天 18:38", "tomorrow 09:00", "Sep 14 18:38".
     public static func exactTime(_ date: Date, clock: ClockStyle = .automatic, now: Date = .now) -> String {
         let calendar = Calendar.current

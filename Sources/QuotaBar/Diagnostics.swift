@@ -77,7 +77,11 @@ enum Diagnostics {
                     let snapshot = try await ProviderRegistry.make(id).fetch(config: config)
                     if let plan = snapshot.planName { out += "  plan: \(plan)\n" }
                     if let credits = snapshot.resetCredits {
-                        out += "  resetCredits: \(credits.available)\n"
+                        out += "  resetCredits: \(credits.available)"
+                        if !credits.expirations.isEmpty {
+                            out += ", expiring \(credits.expirations.map { ISO8601DateFormatter().string(from: $0) }.joined(separator: ", "))"
+                        }
+                        out += "\n"
                     }
                     for window in snapshot.windows {
                         let length = window.windowSeconds.map { "\($0)s = \(WindowTitle.short($0) ?? "?")" }

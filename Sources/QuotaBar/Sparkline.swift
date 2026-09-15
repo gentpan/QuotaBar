@@ -74,6 +74,44 @@ struct SparklineView: View {
 
 }
 
+/// When the banked early resets expire, soonest first, under their count —
+/// in the reset rows' format, and a click switches it the way theirs does
+/// (issue #3). Nothing when none of them expires.
+struct ResetCreditDeadlines: View {
+    @ObservedObject var store: UsageStore
+    let credits: ResetCredits
+    let accent: Color
+
+    var body: some View {
+        let upcoming = credits.upcomingExpirations()
+        if !upcoming.isEmpty {
+            let prefs = store.experience
+            let other = QuotaFormat.expiryList(
+                upcoming, format: prefs.resetTimeFormat == .countdown ? .exact : .countdown, clock: prefs.clockStyle)
+            HStack(spacing: 6) {
+                Image(systemName: "clock")
+                    .font(.system(size: 10))
+                    .foregroundStyle(accent.opacity(0.8))
+                Text(L10n.t("Expires", "到期"))
+                    .font(.system(size: 11))
+                    .foregroundStyle(.white.opacity(0.5))
+                Spacer(minLength: Design.space2)
+                Text(QuotaFormat.expiryList(upcoming, format: prefs.resetTimeFormat, clock: prefs.clockStyle))
+                    .font(.system(size: 11))
+                    .monospacedDigit()
+                    .foregroundStyle(.white.opacity(0.5))
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+            }
+            .contentShape(Rectangle())
+            .onTapGesture { store.toggleResetFormat() }
+            .help(L10n.t(
+                "Each banked reset expires on its own, soonest first: \(other)",
+                "每次攒下的重置各自到期，最早的在前：\(other)"))
+        }
+    }
+}
+
 /// Early-reset credits, when the plan grants them.
 struct ResetCreditsRow: View {
     let credits: ResetCredits

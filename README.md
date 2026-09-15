@@ -50,15 +50,16 @@ English and Simplified Chinese and follows the system language unless you pick o
 <!-- changelog:start -->
 <!-- Generated from CHANGELOG.en.md by Scripts/sync_changelog.py. Do not edit by hand. -->
 
-Latest release **0.5.3** (2026-09-13) · **24** changes in development · [full changelog](CHANGELOG.en.md)
+Latest release **0.5.3** (2026-09-13) · **25** changes in development · [full changelog](CHANGELOG.en.md)
 
 <details open>
-<summary><b>2026-09-15</b> · Unreleased · 2 added · 2 fixed</summary>
+<summary><b>2026-09-15</b> · Unreleased · 3 added · 2 fixed</summary>
 
 **Added**
 
 - Copy as Image now shows the signed-in account on a provider card as mosaic tiles, so the email address stays out of the picture. The tiles are one fixed pattern that says nothing about the account, not even its length. Turn it off under Settings → General → Privacy with "Hide the account in copied images"; the panel itself still shows the address.
 - A provider card's right-click menu has Hide Limits, for a limit you never use, such as Codex's GPT-5.3-Codex-Spark. A hidden limit is gone from the card and from under its arrow; the ring, the notch island, desktop cards and the menu bar stop following it, and it sends no almost-out alerts. Each provider remembers its own, a language switch keeps them, and Show All brings them back; the last limit cannot be hidden. The dock ring's right-click menu has it too. The local `/v1/limits` endpoint still returns every limit. ([#2](https://github.com/gentpan/QuotaBar/issues/2))
+- Codex's Early resets row has an Expires line under it: when each banked reset runs out, soonest first, such as "5d 18h · 18d 23h · 19d 22h", with the rest counted past three. Like the limit rows, a click switches between countdown and clock time, and hovering shows the other. Resets that never expire are not listed. The dock ring's detail shows the line too. ([#3](https://github.com/gentpan/QuotaBar/issues/3))
 
 **Fixed**
 

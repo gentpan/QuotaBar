@@ -45,7 +45,13 @@ enum Snapshot {
                         scope: "GPT-5.3-Codex-Spark"),
                 ],
                 fetchedAt: now,
-                resetCredits: ResetCredits(available: 1, applicable: 0))),
+                // Deadlines from the real clock: the card lists only those
+                // still ahead, and the reference date is long past.
+                resetCredits: ResetCredits(available: 3, applicable: 0, expirations: [
+                    Date().addingTimeInterval(5 * 86_400 + 18 * 3600 + 60),
+                    Date().addingTimeInterval(18 * 86_400 + 23 * 3600 + 60),
+                    Date().addingTimeInterval(19 * 86_400 + 22 * 3600 + 60),
+                ]))),
             .claude: .loaded(UsageSnapshot(
                 windows: [
                     UsageWindow(
