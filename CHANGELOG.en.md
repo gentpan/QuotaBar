@@ -11,6 +11,7 @@ Server moves, the website, and build or release scripts don't change the app its
 
 - On the island's overview page the Share usage card button moves to the top right corner as the share icon alone; nothing sits under the spend bars.
 - The island overview's spend bars per tool are stepped, like the quota page's; with three tools the bars and gaps are a little shorter, so the panel stays the same height.
+- In the open island the quota tiles and the usage page's figures sit about 2pt lower, a little further from the provider's title and closer to the footer rule, so the blank above and below them is about even; the panel keeps its height.
 - Usage and spend split by tool now say "Codex" rather than "Codex CLI", OpenAI's own name for it.
 - The website, GitHub, X and email links in Settings → About drop their names and arrows: the icon and the address, nothing more.
 

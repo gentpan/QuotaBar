@@ -17,10 +17,14 @@ enum IslandPanelLayout {
     /// it, the blank shared above and below rather than left under it. The
     /// overview is laid out to fit the same row.
     static let tileHeight: CGFloat = 76
-    /// A provider's title row and the 8pt gap under it, then a tile.
-    static let rowHeight: CGFloat = 26 + tileHeight
+    /// A provider's title row and the 10pt gap under it, then a tile.
+    static let rowHeight: CGFloat = 28 + tileHeight
     static let rowGap: CGFloat = 12
-    static let bodyPadding: CGFloat = 12
+    /// Above the rows, and below them. The footer's rule reads as more room
+    /// than the title's text above a tile, so the rows sit 2pt lower than
+    /// centre: measured, the blank over and under each tile then match.
+    static let bodyTop: CGFloat = 12
+    static let bodyBottom: CGFloat = 10
     static let footerHeight: CGFloat = 44
 
     static func headerHeight(notch: CGFloat) -> CGFloat { max(32, notch) }
@@ -32,7 +36,7 @@ enum IslandPanelLayout {
     static func height(rows: Int, notch: CGFloat) -> CGFloat {
         let rows = max(1, rows)
         return headerHeight(notch: notch)
-            + bodyPadding * 2 + CGFloat(rows) * rowHeight + CGFloat(rows - 1) * rowGap
+            + bodyTop + bodyBottom + CGFloat(rows) * rowHeight + CGFloat(rows - 1) * rowGap
             + footerHeight
     }
 }
@@ -94,7 +98,8 @@ struct IslandPanel: View {
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-            .padding(.vertical, IslandPanelLayout.bodyPadding)
+            .padding(.top, IslandPanelLayout.bodyTop)
+            .padding(.bottom, IslandPanelLayout.bodyBottom)
             .contentShape(Rectangle())
             // ⌘-click cycles the chart style, as in codex-island.
             .simultaneousGesture(TapGesture().modifiers(.command).onEnded {
@@ -309,7 +314,7 @@ private struct IslandProviderBlock: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 8) {
                 ProviderGlyph(id: id, size: 14, tint: .white)
                 Text(id.displayName)
@@ -377,7 +382,9 @@ private struct IslandProviderBlock: View {
                                 .foregroundStyle(.white.opacity(0.45))
                         }
                         .frame(maxWidth: .infinity, alignment: .leading)
-                        .frame(height: IslandPanelLayout.tileHeight, alignment: .center)
+                        // Its figure's line has more air under it than over
+                        // the label; at the bottom the two gaps match.
+                        .frame(height: IslandPanelLayout.tileHeight, alignment: .bottom)
                     }
                 }
             }
