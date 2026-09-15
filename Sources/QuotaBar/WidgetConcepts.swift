@@ -121,10 +121,7 @@ enum WidgetConceptBoard {
             keys: keys)
         let estimated: BalanceSheet = {
             var sheet = BalanceSheet(
-                balances: [AccountBalance(currency: "CNY", total: 64.12)],
-                keysNote: L10n.t(
-                    "For exact usage and each key's and model's, choose Sign in in a browser… for DeepSeek in Settings.",
-                    "想看精确用量和每个 Key、每个模型的明细，在设置 → 服务商 → DeepSeek 点「浏览器登录…」。"))
+                balances: [AccountBalance(currency: "CNY", total: 64.12)])
             var total = 180.0
             var readings = [BalanceReading(date: calendar.date(byAdding: .day, value: -12, to: now)!, totals: ["CNY": total])]
             for step in 1...140 {

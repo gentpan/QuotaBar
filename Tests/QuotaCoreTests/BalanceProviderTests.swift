@@ -32,13 +32,14 @@ final class BalanceProviderTests: XCTestCase {
         XCTAssertEqual(DeepSeekProvider.credential(#"{"value":"AbCdEf0123","__version":"0"}"#), .consoleToken("AbCdEf0123"))
     }
 
-    func testAnAPIKeyReadingIsASheetThatSaysHowToSeeKeys() throws {
+    func testAnAPIKeyReadingIsABalanceLeftForTheEstimate() throws {
         let snapshot = try DeepSeekProvider.parse(json(#"{"is_available":false,"balance_infos":[{"currency":"CNY","total_balance":"1.00","granted_balance":"0.00","topped_up_balance":"1.00"}]}"#))
         let sheet = try XCTUnwrap(snapshot.balance)
         XCTAssertEqual(sheet.balances, [AccountBalance(currency: "CNY", total: 1, paid: 1)])
         XCTAssertEqual(sheet.canCallAPI, false)
         XCTAssertNil(sheet.keys)
-        XCTAssertNotNil(sheet.keysNote)
+        XCTAssertNil(sheet.keysNote, "an API key is all DeepSeek needs; nothing to nag about")
+        XCTAssertFalse(sheet.hasUsage)
         XCTAssertEqual(sheet.representedWindowIDs, snapshot.windows.map(\.id))
     }
 
