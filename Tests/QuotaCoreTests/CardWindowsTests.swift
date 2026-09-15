@@ -72,10 +72,31 @@ final class CardWindowsTests: XCTestCase {
     func testTheChoiceSurvivesCoding() throws {
         var prefs = ExperiencePrefs()
         prefs.cardWindows["codex"] = ["周窗口"]
+        prefs.hiddenWindows["codex"] = ["周窗口 · GPT-5.3-Codex-Spark"]
         let back = try JSONDecoder().decode(ExperiencePrefs.self, from: JSONEncoder().encode(prefs))
         XCTAssertEqual(back.cardWindows["codex"], ["周窗口"])
+        XCTAssertEqual(back.hiddenWindows["codex"], ["周窗口 · GPT-5.3-Codex-Spark"])
         let odd = try JSONDecoder().decode(ExperiencePrefs.self, from: Data(#"{"cardWindows":7}"#.utf8))
         XCTAssertTrue(odd.cardWindows.isEmpty)
+        XCTAssertTrue(odd.hiddenWindows.isEmpty, "a config from before the menu had it")
+    }
+
+    /// Spark hidden (issue #2): gone from the reading, so from the card, its
+    /// arrow and the ring's automatic pick alike.
+    func testHiddenWindowsLeaveTheReading() {
+        let week = window("Week", 604_800, used: 40)
+        let spark5h = window("5h", 18_000, scope: "GPT-5.3-Codex-Spark", used: 90)
+        let sparkWeek = window("Week", 604_800, scope: "GPT-5.3-Codex-Spark", used: 5)
+        let snapshot = UsageSnapshot(planName: "Plus", account: nil, windows: [week, spark5h, sparkWeek])
+        let shown = snapshot.hiding([spark5h.id, sparkWeek.id])
+        XCTAssertEqual(ids(shown.windows), ["Week"])
+        XCTAssertEqual(shown.headlineWindow?.id, week.id, "the fullest was Spark's 5-hour")
+        XCTAssertEqual(ids(snapshot.hiding(nil).windows).count, 3)
+    }
+
+    func testHidingEveryWindowShowsTheReadingWhole() {
+        let snapshot = UsageSnapshot(planName: nil, account: nil, windows: [window("Week", 604_800)])
+        XCTAssertEqual(ids(snapshot.hiding(["Week"]).windows), ["Week"])
     }
 }
 

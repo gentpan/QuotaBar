@@ -25,6 +25,7 @@ extension UsageStore {
             Task { await CurrencyRates.shared.refreshIfNeeded(); self.objectWillChange.send() }
         }
         if next.tokenCounting != before.tokenCounting { tick &+= 1 }
+        if next.hiddenWindows != before.hiddenWindows { reapplyHiddenWindows() }
         experienceRevision &+= 1
     }
 
@@ -235,6 +236,31 @@ extension UsageStore {
 
     func resetCardWindows(for id: ProviderID) {
         updateExperience { $0.cardWindows[id.rawValue] = nil }
+    }
+
+    /// Every window the provider reported, hidden ones included — what the
+    /// card's menu lists.
+    func reportedWindows(for id: ProviderID) -> [UsageWindow] {
+        (reported[id] ?? states[id]?.snapshot)?.windows ?? []
+    }
+
+    func isWindowHidden(_ windowID: String, for id: ProviderID) -> Bool {
+        experience.hiddenWindows[id.rawValue]?.contains(windowID) == true
+    }
+
+    /// Hides a window everywhere the provider shows, or brings it back. The
+    /// last window still showing cannot be hidden.
+    func setWindowHidden(_ windowID: String, _ hidden: Bool, for id: ProviderID) {
+        let reportedIDs = reportedWindows(for: id).map(\.id)
+        // Ids the provider no longer reports are dropped as the list changes.
+        var list = (experience.hiddenWindows[id.rawValue] ?? []).filter { reportedIDs.contains($0) && $0 != windowID }
+        if hidden { list.append(windowID) }
+        guard list.count < reportedIDs.count else { return }
+        updateExperience { $0.hiddenWindows[id.rawValue] = list.isEmpty ? nil : list }
+    }
+
+    func showAllWindows(for id: ProviderID) {
+        updateExperience { $0.hiddenWindows[id.rawValue] = nil }
     }
 
     /// A big-figure card for one provider, shown on the desktop even if the

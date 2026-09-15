@@ -77,6 +77,10 @@ final class UsageStore: ObservableObject {
     /// Each provider's windows as they were read before a language switch,
     /// until the reading in the new language arrives.
     private var renamingWindows: [ProviderID: [UsageWindow]] = [:]
+    /// Each provider's last reading as it was handed back. `states` carries
+    /// the same reading without the windows the owner hid; this keeps them
+    /// for the card's menu, to show them again, and for the local API.
+    private(set) var reported: [ProviderID: UsageSnapshot] = [:]
     /// The release the last check found, kept for a retry or a manual
     /// download after a failure, whose stage no longer carries it.
     private(set) var lastRelease: UpdateRelease?
@@ -170,7 +174,9 @@ final class UsageStore: ObservableObject {
     {
         let store = UsageStore(inert: true)
         store.enabled = enabled
+        store.reported = states.compactMapValues(\.snapshot)
         store.states = states
+        store.reapplyHiddenWindows()
         store.cost = cost
         store.ledger = ledger
         store.history = history
@@ -215,7 +221,8 @@ final class UsageStore: ObservableObject {
             // Stale-while-revalidate: last session's numbers until the first
             // refresh lands, instead of a column of spinners.
             if let cached = SnapshotCache.shared.snapshot(for: id) {
-                states[id] = .loaded(cached)
+                reported[id] = cached
+                states[id] = .loaded(shown(cached, for: id))
             }
         }
         HTTP.configureProxy(experience.proxy)
@@ -454,15 +461,19 @@ final class UsageStore: ObservableObject {
                 UsageHistoryStore.shared.clear(id)
                 history[id] = []
             }
-            let resets = ResetDetector.events(provider: id, previous: states[id]?.snapshot, current: snapshot)
-            states[id] = .loaded(snapshot)
+            // Before the reading is shown: a hidden window renamed by a
+            // language switch has to be hidden under its new name.
             if let old = renamingWindows.removeValue(forKey: id) {
                 carryWindowChoices(for: id, from: old, to: snapshot.windows)
             }
+            reported[id] = snapshot
+            let visible = shown(snapshot, for: id)
+            let resets = ResetDetector.events(provider: id, previous: states[id]?.snapshot, current: visible)
+            states[id] = .loaded(visible)
             if !resets.isEmpty { noteResets(resets, before: before) }
             SnapshotCache.shared.store(snapshot, for: id)
             run.record(id, snapshot)
-            if let percent = snapshot.headlinePercent {
+            if let percent = visible.headlinePercent {
                 UsageHistoryStore.shared.record(id, percent: percent)
                 history[id] = UsageHistoryStore.shared.readings(for: id).map(\.percent)
             }
@@ -486,6 +497,26 @@ final class UsageStore: ObservableObject {
         }
         if let shown = experience.cardWindows[id.rawValue] {
             updateExperience { $0.cardWindows[id.rawValue] = shown.map { renamed[$0] ?? $0 } }
+        }
+        if let hidden = experience.hiddenWindows[id.rawValue] {
+            updateExperience { $0.hiddenWindows[id.rawValue] = hidden.map { renamed[$0] ?? $0 } }
+        }
+    }
+
+    /// A reading as the app shows it: without the windows the owner hid.
+    private func shown(_ snapshot: UsageSnapshot, for id: ProviderID) -> UsageSnapshot {
+        snapshot.hiding(experience.hiddenWindows[id.rawValue])
+    }
+
+    /// Hiding or showing a window takes effect on the readings already in,
+    /// not at the next refresh.
+    func reapplyHiddenWindows() {
+        for (id, snapshot) in reported {
+            switch states[id] {
+            case .loaded: states[id] = .loaded(shown(snapshot, for: id))
+            case let .stale(_, error): states[id] = .stale(shown(snapshot, for: id), error: error)
+            case .loading, .failed, nil: break
+            }
         }
     }
 
@@ -891,6 +922,7 @@ final class UsageStore: ObservableObject {
         } else {
             enabled.removeAll { $0 == id }
             states[id] = nil
+            reported[id] = nil
             SnapshotCache.shared.remove(id)
             if selected == id { selected = enabled.first }
         }
@@ -942,7 +974,7 @@ final class UsageStore: ObservableObject {
             // The windows come back renamed; remember them as they were, so
             // the owner's picks can follow them to their new names.
             for id in enabled {
-                if let windows = states[id]?.snapshot?.windows { renamingWindows[id] = windows }
+                if let windows = (reported[id] ?? states[id]?.snapshot)?.windows { renamingWindows[id] = windows }
             }
             refreshAll()
             Task { await refreshServiceStatus() }

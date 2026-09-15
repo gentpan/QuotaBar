@@ -61,6 +61,25 @@ public extension UsageSnapshot {
     }
 }
 
+// MARK: - Windows the owner hid
+
+public extension UsageSnapshot {
+    /// The reading without the windows the owner hid from the card's menu —
+    /// GPT-5.3-Codex-Spark for someone who never uses it.
+    ///
+    /// A reading is never emptied: if every window it reports is on the list
+    /// (the provider dropped the rest, or renamed them), it is shown whole,
+    /// since a card with nothing on it looks broken.
+    func hiding(_ hidden: [String]?) -> UsageSnapshot {
+        guard let hidden, !hidden.isEmpty else { return self }
+        let kept = windows.filter { !hidden.contains($0.id) }
+        guard !kept.isEmpty, kept.count != windows.count else { return self }
+        var copy = self
+        copy.windows = kept
+        return copy
+    }
+}
+
 // MARK: - Window choices across a language switch
 
 public enum WindowRename {

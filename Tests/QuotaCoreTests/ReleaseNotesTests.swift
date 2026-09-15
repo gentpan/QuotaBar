@@ -55,6 +55,14 @@ final class ReleaseNotesTests: XCTestCase {
         XCTAssertEqual(notes.groups.first?.items.count, 2)
     }
 
+    func testIssueNumbersBecomeLinks() {
+        let item = "DeepSeek could not be parsed (#1); hide a limit (#2, #13)."
+        let links = ReleaseNotes.issueLinks(in: item)
+        XCTAssertEqual(links.map { String(item[$0.range]) }, ["#1", "#2", "#13"])
+        XCTAssertEqual(links.first?.url.absoluteString, "https://github.com/gentpan/QuotaBar/issues/1")
+        XCTAssertTrue(ReleaseNotes.issueLinks(in: "see quota.bar/changelog.html#top, &#39; and C#9").isEmpty)
+    }
+
     func testNoBodyIsEmpty() {
         XCTAssertTrue(ReleaseNotes.parse(nil).isEmpty)
         XCTAssertTrue(ReleaseNotes.parse("  \n").isEmpty)

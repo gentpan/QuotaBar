@@ -181,7 +181,7 @@ def readme_block(releases, en):
         for g in day["groups"]:
             lines.append(f"**{KIND_EN.get(g['kind'], g['kind']) if en else g['kind']}**")
             lines.append("")
-            lines += [f"- {item}" for item in g["items"]]
+            lines += [f"- {issue_links(item, lambda n: f'[#{n}]({REPO}/issues/{n})')}" for item in g["items"]]
             lines.append("")
         lines.append("</details>")
         lines.append("")
@@ -204,8 +204,18 @@ def replace_block(path, block, start="<!-- changelog:start -->", end="<!-- chang
 # ── Website ───────────────────────────────────────────────────────────────
 
 def inline(text):
-    """Escapes an entry and turns `code` into <code>."""
-    return re.sub(r"`([^`]+)`", r"<code>\1</code>", html.escape(text, quote=False))
+    """Escapes an entry, turns `code` into <code> and #12 into a link to the issue."""
+    escaped = re.sub(r"`([^`]+)`", r"<code>\1</code>", html.escape(text, quote=False))
+    return issue_links(escaped, lambda n: f'<a href="{REPO}/issues/{n}">#{n}</a>')
+
+
+# "#12" in an entry is the GitHub issue it fixes; the logs write it bare. Not
+# the # of an HTML entity or a URL fragment. Same rule as ReleaseNotes.issueLinks.
+ISSUE = re.compile(r"(?<![\w&/])#(\d+)\b")
+
+
+def issue_links(text, link):
+    return ISSUE.sub(lambda m: link(m.group(1)), text)
 
 
 def pick(en, zh, lang):

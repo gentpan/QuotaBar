@@ -87,6 +87,20 @@ public struct ReleaseNotes: Equatable, Sendable {
         return notes
     }
 
+    /// "#12" in an entry: the GitHub issue the change fixes or answers. The
+    /// changelogs write the number bare and each reader links it — GitHub's
+    /// release page by itself, the site and the READMEs through
+    /// Scripts/sync_changelog.py, the update card here. Not the `#` of an
+    /// HTML entity or a URL fragment.
+    public static func issueLinks(in item: String) -> [(range: Range<String.Index>, url: URL)] {
+        // Swift's regexes have no lookbehind: the character before is matched
+        // and left out of the link.
+        item.matches(of: #/(?:^|[^\w&/])(#(\d+))\b/#).compactMap { match in
+            URL(string: "https://github.com/gentpan/QuotaBar/issues/\(match.2)")
+                .map { (match.1.startIndex..<match.1.endIndex, $0) }
+        }
+    }
+
     static func kind(of heading: String) -> Kind {
         switch heading.lowercased() {
         case "新增", "added", "new": .added

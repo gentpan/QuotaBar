@@ -431,9 +431,32 @@ struct ProviderQuickMenus: View {
     var body: some View {
         if let snapshot = store.states[id]?.snapshot, !snapshot.windows.isEmpty {
             windowsMenu(snapshot)
+            if store.reportedWindows(for: id).count > 1 { hideMenu }
             ringMenu(snapshot)
         }
         placesMenu
+    }
+
+    /// Windows taken out altogether: off the card and from under its arrow,
+    /// and left out of what the ring, the island and the menu bar follow.
+    /// Lists every window reported, so a hidden one can come back.
+    private var hideMenu: some View {
+        let windows = store.reportedWindows(for: id)
+        let showing = windows.filter { !store.isWindowHidden($0.id, for: id) }.count
+        return Menu(L10n.t("Hide Limits", "隐藏额度")) {
+            ForEach(windows) { window in
+                let hidden = store.isWindowHidden(window.id, for: id)
+                Toggle(window.title, isOn: Binding(
+                    get: { hidden },
+                    set: { on in withAnimation(Motion.animation(Motion.spring)) { store.setWindowHidden(window.id, on, for: id) } }))
+                    .disabled(!hidden && showing == 1)
+            }
+            Divider()
+            Button(L10n.t("Show All", "全部显示")) {
+                withAnimation(Motion.animation(Motion.spring)) { store.showAllWindows(for: id) }
+            }
+            .disabled(store.experience.hiddenWindows[id.rawValue] == nil)
+        }
     }
 
     /// Which windows the card shows before it is expanded. The last one

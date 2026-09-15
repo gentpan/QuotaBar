@@ -90,6 +90,17 @@ final class GrokBillingTests: XCTestCase {
         XCTAssertEqual(Set(snapshot.windows.map(\.id)).count, snapshot.windows.count, "ids collide in ForEach otherwise")
     }
 
+    /// Only Grok Build used: its bar would repeat the credits' own (issue #2).
+    func testAProductHoldingTheWholePoolIsNotShownTwice() throws {
+        let only = body
+            .replacingOccurrences(of: #""creditUsagePercent":11.0"#, with: #""creditUsagePercent":1.0"#)
+            .replacingOccurrences(of: #"{"product":"GrokImagine","usagePercent":10.0},"#, with: "")
+        let snapshot = try GrokProvider.parse(Data(only.utf8))
+        XCTAssertEqual(snapshot.windows.count, 1)
+        XCTAssertNil(snapshot.windows[0].scope)
+        XCTAssertEqual(snapshot.windows[0].usedPercent, 1)
+    }
+
     func testAZeroOnDemandCapAddsNoWindow() throws {
         let snapshot = try GrokProvider.parse(Data(body.utf8))
         XCTAssertEqual(snapshot.windows.count, 3)

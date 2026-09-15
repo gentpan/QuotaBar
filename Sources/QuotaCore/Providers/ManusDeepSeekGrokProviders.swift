@@ -68,32 +68,56 @@ public struct DeepSeekProvider: QuotaProvider {
         }
         let url = URL(string: "https://api.deepseek.com/user/balance")!
         let response = try await HTTP.get(url, headers: [
-            "Authorization": "Bearer \(key)",
+            "Authorization": "Bearer \(key.trimmingCharacters(in: .whitespacesAndNewlines))",
             "Accept": "application/json",
         ]).requireOK()
+        return try Self.parse(response.data)
+    }
 
-        struct Info: Decodable {
-            let totalBalance: String?
-            let grantedBalance: String?
-            let toppedUpBalance: String?
-            let currency: String?
-        }
-        struct Body: Decodable {
-            let balanceInfos: [Info]?
+    /// `{"is_available":true,"balance_infos":[{"currency":"CNY","total_balance":"110.00",
+    /// "granted_balance":"10.00","topped_up_balance":"100.00"}]}` — snake_case,
+    /// amounts as strings. The keys were once read camel-cased, so every
+    /// account failed to parse. An account can hold CNY and USD side by side,
+    /// and a new one with nothing topped up may list no entry at all.
+    static func parse(_ data: Data) throws -> UsageSnapshot {
+        guard let body = ProviderJSON.object(data) as? [String: Any],
+              let infos = body["balance_infos"] as? [[String: Any]]
+        else { throw ProviderError.badResponse }
+
+        func money(_ value: Double, _ currency: String) -> String {
+            let symbol = switch currency { case "CNY": "¥"; case "USD": "$"; default: "\(currency) " }
+            return "\(symbol)\(String(format: "%.2f", value))"
         }
 
-        let body = try response.json(Body.self)
-        guard let info = body.balanceInfos?.first else { throw ProviderError.badResponse }
-        let currency = info.currency ?? "CNY"
-        let total = Double(info.totalBalance ?? "") ?? 0
-        let granted = Double(info.grantedBalance ?? "") ?? 0
-        let topped = Double(info.toppedUpBalance ?? "") ?? 0
-        let window = UsageWindow(
-            title: L10n.t("Balance", "余额"),
-            detail: String(
-                format: "%.2f %@ (%.2f paid + %.2f granted)",
-                total, currency, topped, granted))
-        return UsageSnapshot(windows: [window])
+        let entries = infos.compactMap { info -> (currency: String, total: Double, granted: Double, topped: Double)? in
+            guard let total = QwenProvider.number(info["total_balance"]) else { return nil }
+            return ((info["currency"] as? String) ?? "CNY",
+                    total,
+                    QwenProvider.number(info["granted_balance"]) ?? 0,
+                    QwenProvider.number(info["topped_up_balance"]) ?? 0)
+        }
+        guard !infos.isEmpty else {
+            return UsageSnapshot(
+                planName: L10n.t("Pay as you go", "按量付费"),
+                windows: [UsageWindow(title: L10n.t("Balance", "余额"), detail: L10n.t("Balance ¥0.00", "余额 ¥0.00"))])
+        }
+        guard !entries.isEmpty else { throw ProviderError.badResponse }
+
+        let windows = entries.map { entry in
+            var detail = L10n.t("Balance \(money(entry.total, entry.currency))", "余额 \(money(entry.total, entry.currency))")
+            if entry.granted > 0 {
+                detail += L10n.t(
+                    " · \(money(entry.topped, entry.currency)) paid + \(money(entry.granted, entry.currency)) granted",
+                    " · 充值 \(money(entry.topped, entry.currency)) + 赠送 \(money(entry.granted, entry.currency))")
+            }
+            if body["is_available"] as? Bool == false {
+                detail += L10n.t(" · not enough for API calls", " · 余额不足，无法调用 API")
+            }
+            // `UsageWindow.id` is the title, so a second currency needs its own.
+            let title = entries.count > 1 ? "\(L10n.t("Balance", "余额")) · \(entry.currency)" : L10n.t("Balance", "余额")
+            return UsageWindow(title: title, detail: detail)
+        }
+        return UsageSnapshot(planName: L10n.t("Pay as you go", "按量付费"), windows: windows)
     }
 }
 
@@ -173,6 +197,10 @@ public struct GrokProvider: QuotaProvider {
         }
         for product in configBody.productUsage ?? [] {
             guard let raw = product.product, let percent = product.usagePercent else { continue }
+            // The products split the one credit pool. A product holding all of
+            // it — only Grok Build used this week — is the same bar a second
+            // time: same figure, same reset (issue #2).
+            if let total = configBody.creditUsagePercent, abs(percent - total) < 0.05 { continue }
             let name = productName(raw)
             // `UsageWindow.id` is the title, so a scoped window needs its own.
             windows.append(UsageWindow(

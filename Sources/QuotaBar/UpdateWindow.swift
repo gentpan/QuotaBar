@@ -197,7 +197,7 @@ struct UpdateCard: View {
                     ForEach(Array(items.enumerated()), id: \.offset) { _, item in
                         HStack(alignment: .firstTextBaseline, spacing: 6) {
                             Text("•").foregroundStyle(.tertiary)
-                            Text(Self.plain(item))
+                            Text(Self.linked(item))
                                 .lineLimit(showsAll ? nil : 3)
                                 .fixedSize(horizontal: false, vertical: true)
                         }
@@ -227,6 +227,20 @@ struct UpdateCard: View {
     /// Backticks are for Markdown readers; the card shows the words.
     static func plain(_ item: String) -> String {
         item.replacingOccurrences(of: "`", with: "")
+    }
+
+    /// The words, with "#12" opening that issue on GitHub.
+    static func linked(_ item: String) -> AttributedString {
+        let words = plain(item)
+        var text = AttributedString(words)
+        for link in ReleaseNotes.issueLinks(in: words) {
+            let start = words.distance(from: words.startIndex, to: link.range.lowerBound)
+            let length = words.distance(from: link.range.lowerBound, to: link.range.upperBound)
+            let lower = text.characters.index(text.startIndex, offsetBy: start)
+            let upper = text.characters.index(lower, offsetBy: length)
+            text[lower..<upper].link = link.url
+        }
+        return text
     }
 
     // MARK: Progress and buttons

@@ -50,9 +50,24 @@ English and Simplified Chinese and follows the system language unless you pick o
 <!-- changelog:start -->
 <!-- Generated from CHANGELOG.en.md by Scripts/sync_changelog.py. Do not edit by hand. -->
 
-Latest release **0.5.3** (2026-09-13) · **20** changes in development · [full changelog](CHANGELOG.en.md)
+Latest release **0.5.3** (2026-09-13) · **24** changes in development · [full changelog](CHANGELOG.en.md)
 
 <details open>
+<summary><b>2026-09-15</b> · Unreleased · 2 added · 2 fixed</summary>
+
+**Added**
+
+- Copy as Image now shows the signed-in account on a provider card as mosaic tiles, so the email address stays out of the picture. The tiles are one fixed pattern that says nothing about the account, not even its length. Turn it off under Settings → General → Privacy with "Hide the account in copied images"; the panel itself still shows the address.
+- A provider card's right-click menu has Hide Limits, for a limit you never use, such as Codex's GPT-5.3-Codex-Spark. A hidden limit is gone from the card and from under its arrow; the ring, the notch island, desktop cards and the menu bar stop following it, and it sends no almost-out alerts. Each provider remembers its own, a language switch keeps them, and Show All brings them back; the last limit cannot be hidden. The dock ring's right-click menu has it too. The local `/v1/limits` endpoint still returns every limit. ([#2](https://github.com/gentpan/QuotaBar/issues/2))
+
+**Fixed**
+
+- DeepSeek said "Provider response could not be parsed" on every API key and never showed a balance. The account balance now shows, split into paid and granted when there is a grant; an account holding both CNY and USD gets a row for each, and a balance too low for API calls says so. ([#1](https://github.com/gentpan/QuotaBar/issues/1))
+- Grok showed Weekly credits and Grok Build as two identical bars. When the week's credits all went to one product, that product's bar had the same figure and reset as the total; it is no longer shown twice. Credits spread over several products are still listed one by one. ([#2](https://github.com/gentpan/QuotaBar/issues/2))
+
+</details>
+
+<details>
 <summary><b>2026-09-14</b> · Unreleased · 2 added</summary>
 
 **Added**
@@ -91,19 +106,6 @@ Latest release **0.5.3** (2026-09-13) · **20** changes in development · [full 
 - Switching the interface language lost the choices of what the ring follows and which limits a card shows: they are kept by window name, and window names change with the language ("周窗口" and "Weekly window"). The reread in the new language now carries each choice over to the same window's new name.
 - The local API (127.0.0.1:6736) answers only requests addressed to 127.0.0.1 or localhost and refuses cross-site origins, so a web page cannot read the figures through DNS rebinding; anything else gets 403.
 - After switching Codex, Claude or another CLI to a different account, the next reading could pass for a reset — the other account's usage is lower and its reset time different — with a reset banner and notification, and the trend line joined the two accounts. A reading from a different account than last time is no longer a reset, and that provider's trend starts afresh.
-
-</details>
-
-<details>
-<summary><b>2026-09-13</b> · 0.5.3 · 1 added · 1 fixed</summary>
-
-**Added**
-
-- The menu bar icon's right-click menu is redone. A new "Show in Menu Bar" submenu offers "Automatic (fullest limit)" or any enabled provider, each with its mark and the figure the icon would show (left or used), the current choice ticked; the choice is the menu bar's own, and the dock, notch island and desktop cards keep theirs. The menu also gains "Check for Updates…" (which reads "Update to x.y.z…" when one is available and "Restart to Update to x.y.z" once downloaded), "Feedback…" and "About QuotaBar", alongside Refresh Now (⌘R), Settings (⌘,) and Quit (⌘Q).
-
-**Fixed**
-
-- With automatic update checks turned off, "Check now" on the Updates page and "Check for Updates…" in the panel's options menu did nothing; a check you ask for now runs regardless of that switch.
 
 </details>
 

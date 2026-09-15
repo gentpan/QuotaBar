@@ -248,6 +248,10 @@ public struct ExperiencePrefs: Codable, Equatable, Sendable {
     /// is expanded, where the owner chose them from the card's menu. Absent
     /// means the card's own choice (`UsageSnapshot.upFrontWindows`).
     public var cardWindows: [String: [String]] = [:]
+    /// Provider raw value → the ids of the windows the owner hid from the
+    /// card's menu: not on the card, not under its arrow, not followed by the
+    /// ring anywhere. Still read, cached and served by the local API.
+    public var hiddenWindows: [String: [String]] = [:]
     /// Spend limits per day and per month, and the crossings already notified.
     public var spendBudget: SpendBudget = SpendBudget()
     public var budgetNotified: [String] = []
@@ -279,7 +283,7 @@ public struct ExperiencePrefs: Codable, Equatable, Sendable {
         case reduceMotion, islandGlow, lowPowerGlow, islandAutoPeek, islandChart, widgetSortsByUrgency
         case deskCards, deskCardsMigrated
         case hideWhenSharing, hotkey, paceAlerts, localAPI, proxy, betaUpdates
-        case resetEffects, resetNotify, hiddenProviders, cardWindows
+        case resetEffects, resetNotify, hiddenProviders, cardWindows, hiddenWindows
         case spendBudget, budgetNotified, weeklyDigest, weeklyDigestSent
         case shareSignature, shareShowsSignature, shareMasksAccount, shareCardShownForVersion
     }
@@ -324,6 +328,7 @@ public struct ExperiencePrefs: Codable, Equatable, Sendable {
         resetNotify = choice(.resetNotify, d.resetNotify)
         hiddenProviders = value(.hiddenProviders, d.hiddenProviders)
         cardWindows = value(.cardWindows, d.cardWindows)
+        hiddenWindows = value(.hiddenWindows, d.hiddenWindows)
         spendBudget = value(.spendBudget, d.spendBudget)
         budgetNotified = value(.budgetNotified, d.budgetNotified)
         weeklyDigest = value(.weeklyDigest, d.weeklyDigest)

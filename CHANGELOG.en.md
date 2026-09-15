@@ -10,6 +10,12 @@ Server moves, the website, and build or release scripts don't change the app its
 #### Added
 
 - Copy as Image now shows the signed-in account on a provider card as mosaic tiles, so the email address stays out of the picture. The tiles are one fixed pattern that says nothing about the account, not even its length. Turn it off under Settings → General → Privacy with "Hide the account in copied images"; the panel itself still shows the address.
+- A provider card's right-click menu has Hide Limits, for a limit you never use, such as Codex's GPT-5.3-Codex-Spark. A hidden limit is gone from the card and from under its arrow; the ring, the notch island, desktop cards and the menu bar stop following it, and it sends no almost-out alerts. Each provider remembers its own, a language switch keeps them, and Show All brings them back; the last limit cannot be hidden. The dock ring's right-click menu has it too. The local `/v1/limits` endpoint still returns every limit. (#2)
+
+#### Fixed
+
+- DeepSeek said "Provider response could not be parsed" on every API key and never showed a balance. The account balance now shows, split into paid and granted when there is a grant; an account holding both CNY and USD gets a row for each, and a balance too low for API calls says so. (#1)
+- Grok showed Weekly credits and Grok Build as two identical bars. When the week's credits all went to one product, that product's bar had the same figure and reset as the total; it is no longer shown twice. Credits spread over several products are still listed one by one. (#2)
 
 ### 2026-09-14
 

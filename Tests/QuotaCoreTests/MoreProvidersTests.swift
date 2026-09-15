@@ -42,6 +42,31 @@ final class MoreProvidersTests: XCTestCase {
         XCTAssertNil(snapshot.windows[0].usedPercent)
     }
 
+    /// The documented reply of GET api.deepseek.com/user/balance (issue #1).
+    func testDeepSeekBalanceIsReadSnakeCased() throws {
+        let snapshot = try DeepSeekProvider.parse(json(#"{"is_available":true,"balance_infos":[{"currency":"CNY","total_balance":"110.00","granted_balance":"10.00","topped_up_balance":"100.00"}]}"#))
+        XCTAssertEqual(snapshot.windows.count, 1)
+        XCTAssertNil(snapshot.windows[0].usedPercent)
+        XCTAssertTrue(snapshot.windows[0].detail?.contains("110.00") == true)
+        XCTAssertTrue(snapshot.windows[0].detail?.contains("10.00") == true)
+    }
+
+    func testDeepSeekTwoCurrenciesGetTheirOwnWindows() throws {
+        let snapshot = try DeepSeekProvider.parse(json(#"{"is_available":true,"balance_infos":[{"currency":"CNY","total_balance":"5.00","granted_balance":"0.00","topped_up_balance":"5.00"},{"currency":"USD","total_balance":"2.50","granted_balance":"0.00","topped_up_balance":"2.50"}]}"#))
+        XCTAssertEqual(snapshot.windows.count, 2)
+        XCTAssertEqual(Set(snapshot.windows.map(\.id)).count, 2)
+        XCTAssertTrue(snapshot.windows[1].detail?.contains("$2.50") == true)
+    }
+
+    func testDeepSeekEmptyAccountShowsZero() throws {
+        let snapshot = try DeepSeekProvider.parse(json(#"{"is_available":false,"balance_infos":[]}"#))
+        XCTAssertEqual(snapshot.windows.count, 1)
+    }
+
+    func testDeepSeekUnrelatedReplyIsABadResponse() {
+        XCTAssertThrowsError(try DeepSeekProvider.parse(json(#"{"error":{"message":"nope"}}"#)))
+    }
+
     func testCopilotPremiumAndChat() throws {
         let data = json(#"{"login":"octo","copilot_plan":"individual","access_type_sku":"monthly_subscriber","quota_reset_date":"2026-10-01","quota_snapshots":{"premium_interactions":{"entitlement":300,"remaining":210,"percent_remaining":70,"unlimited":false},"chat":{"entitlement":0,"remaining":0,"percent_remaining":100,"unlimited":true}}}"#)
         let snapshot = try CopilotProvider.parse(data)

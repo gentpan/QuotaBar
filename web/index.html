@@ -534,9 +534,19 @@
     <div class="shell">
       <div class="section-head">
         <h2>Changelog</h2>
-        <p>Current version 0.5.3 · last updated 2026-09-14. What changed, day by day.</p>
+        <p>Current version 0.5.3 · last updated 2026-09-15. What changed, day by day.</p>
       </div>
       <div class="log">
+        <article class="log__day">
+          <header class="log__head"><time datetime="2026-09-15">2026-09-15</time><span class="log__tag">Unreleased</span></header>
+          <p class="log__counts">2 added · 2 fixed</p>
+          <ul class="log__list">
+            <li><span class="badge badge--add">Added</span>Copy as Image now shows the signed-in account on a provider card as mosaic tiles, so the email address stays out of the picture. The tiles are one fixed pattern that says nothing about the account, not even its length. Turn it off under Settings → General → Privacy with "Hide the account in copied images"; the panel itself still shows the address.</li>
+            <li><span class="badge badge--add">Added</span>A provider card's right-click menu has Hide Limits, for a limit you never use, such as Codex's GPT-5.3-Codex-Spark. A hidden limit is gone from the card and from under its arrow; the ring, the notch island, desktop cards and the menu bar stop following it, and it sends no almost-out alerts. Each provider remembers its own, a language switch keeps them, and Show All brings them back; the last limit cannot be hidden. The dock ring's right-click menu has it too. The local <code>/v1/limits</code> endpoint still returns every limit. (<a href="https://github.com/gentpan/QuotaBar/issues/2">#2</a>)</li>
+            <li><span class="badge badge--fix">Fixed</span>DeepSeek said "Provider response could not be parsed" on every API key and never showed a balance. The account balance now shows, split into paid and granted when there is a grant; an account holding both CNY and USD gets a row for each, and a balance too low for API calls says so. (<a href="https://github.com/gentpan/QuotaBar/issues/1">#1</a>)</li>
+            <li><span class="badge badge--fix">Fixed</span>Grok showed Weekly credits and Grok Build as two identical bars. When the week's credits all went to one product, that product's bar had the same figure and reset as the total; it is no longer shown twice. Credits spread over several products are still listed one by one. (<a href="https://github.com/gentpan/QuotaBar/issues/2">#2</a>)</li>
+          </ul>
+        </article>
         <article class="log__day">
           <header class="log__head"><time datetime="2026-09-14">2026-09-14</time><span class="log__tag">Unreleased</span></header>
           <p class="log__counts">2 added</p>
@@ -556,14 +566,6 @@
             <li><span class="badge badge--add">Added</span>Weekly digest: after 9 on Monday morning, a notification with last week's spend, token count and the busiest CLI's share; nothing is sent for a week without usage. It can be turned off under Settings → Alerts → Spend.</li>
           </ul>
           <a class="log__more" href="changelog.html#d-2026-09-13">13 more →</a>
-        </article>
-        <article class="log__day">
-          <header class="log__head"><time datetime="2026-09-13">2026-09-13</time><span class="log__tag">0.5.3</span></header>
-          <p class="log__counts">1 added · 1 fixed</p>
-          <ul class="log__list">
-            <li><span class="badge badge--add">Added</span>The menu bar icon's right-click menu is redone. A new "Show in Menu Bar" submenu offers "Automatic (fullest limit)" or any enabled provider, each with its mark and the figure the icon would show (left or used), the current choice ticked; the choice is the menu bar's own, and the dock, notch island and desktop cards keep theirs. The menu also gains "Check for Updates…" (which reads "Update to x.y.z…" when one is available and "Restart to Update to x.y.z" once downloaded), "Feedback…" and "About QuotaBar", alongside Refresh Now (⌘R), Settings (⌘,) and Quit (⌘Q).</li>
-            <li><span class="badge badge--fix">Fixed</span>With automatic update checks turned off, "Check now" on the Updates page and "Check for Updates…" in the panel's options menu did nothing; a check you ask for now runs regardless of that switch.</li>
-          </ul>
         </article>
       </div>
       <p class="log__all"><a href="changelog.html">Full changelog →</a></p>
